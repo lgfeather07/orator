@@ -372,3 +372,38 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
   .team-ballot-list article > button { grid-template-columns: minmax(0, 1fr) auto 20px; }
   .team-ballot-list article > button > span:nth-child(2) { display: none; }
 }
+
+/* ── Top bar: the scanner preview reuses .preview-actions as a grid; keep the bar's own on one row ── */
+.prototype-nav .preview-actions { display: flex; align-items: center; gap: 8px; margin-top: 0; }
+.prototype-nav { min-height: 54px; }
+.account-nav { grid-template-columns: auto 1fr auto; }
+.account-nav .preview-brand span { font-size: 15px; }
+.sample-notice { margin: 14px 32px 0; padding: 10px 13px; display: flex; align-items: flex-start; gap: 8px; color: var(--indigo); background: var(--indigo-soft); border-radius: 10px; font-size: 12px; line-height: 1.45; }
+.sample-notice svg { flex: none; margin-top: 2px; }
+.sample-notice span { color: var(--ink); }
+@media (max-width: 900px) { .sample-notice { margin: 12px 14px 0; } }
+
+/* ── Ballot footer: rating, time and disqualification, laid out like the bottom of the paper ballot ── */
+.jb-foot { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.jb-general { min-height: 120px; }
+.jb-rating-value { display: flex; align-items: baseline; gap: 9px; }
+.jb-rating-value strong { font-size: 30px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--indigo); }
+.jb-rating-value span { color: var(--muted); font-size: 12px; font-weight: 650; }
+.jb-rating-scale { margin-top: 10px; display: grid; grid-template-columns: 6fr 5fr 5fr; gap: 6px; }
+.jb-rating-scale > div > div { display: flex; gap: 2px; }
+.jb-rating-scale i { flex: 1; height: 24px; display: grid; place-items: center; color: var(--muted); background: var(--surface-2); border-radius: 5px; font-size: 10px; font-style: normal; font-weight: 650; font-variant-numeric: tabular-nums; }
+.jb-rating-scale i.on { color: white; background: var(--indigo); }
+.jb-rating-scale small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .04em; }
+.jb-time-card .jb-time { gap: 6px; }
+.jb-time-label { margin-right: 4px; font-size: 12px; font-weight: 700; }
+.jb-time-card .jb-time input { width: 42px; height: 34px; font-size: 15px; border-radius: 7px; }
+.jb-time-card .jb-time b { font-size: 15px; }
+.jb-time-card .jb-time .badge { margin-left: 0; flex-basis: 100%; width: fit-content; }
+.jb-lowered { margin-top: 9px; display: flex; align-items: flex-start; gap: 8px; font-size: 11px; line-height: 1.4; }
+.jb-lowered input { margin-top: 1px; }
+.team-ballot-text { margin-bottom: 10px; }
+.team-ballot-text small { display: block; margin-bottom: 3px; font-weight: 700; }
+@media (max-width: 900px) { .jb-foot { grid-template-columns: 1fr; } }
+.jb-foot { grid-column: 1 / -1; margin-top: 0; }
+.jb-foot .field-label { gap: 8px; }
+.jb-foot .field-label small { text-align: right; }

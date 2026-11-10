@@ -152,6 +152,14 @@ function MobileTab({ active }: { active: string }) {
 
 type Persona = 'student' | 'judge' | 'coach' | 'director';
 
+/** "Good afternoon, Logan" for signed-in users; the demo keeps its sample persona. */
+function useGreeting(sampleName: string) {
+  const { profile } = useAuth();
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  return `Good ${profile ? part : 'morning'}, ${profile ? profile.name.split(' ')[0] : sampleName}`;
+}
+
 const personaDetails: Record<Persona, { name: string; detail: string; initials: string }> = {
   student: { name: 'Maya Rodriguez', detail: 'Student · Lincoln HS', initials: 'MR' },
   judge: { name: 'Judge Leather', detail: 'Community judge', initials: 'JL' },
@@ -192,8 +200,9 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       </nav>
       <div className="sidebar-bottom"><div className="save-chip"><Icon name="check"/> All changes saved</div><button className="profile" onClick={() => navigate('signin')}><Avatar initials={profile.initials}/><span><strong>{profile.name}</strong><small>{profile.detail}</small></span><Icon name="chevron" size={15}/></button></div>
     </aside>
-    <main className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button><Avatar initials={profile.initials}/></div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
+    <main className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
       <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{sidebarItems[persona].map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
+      {account && <div className="sample-notice"><Icon name="info" size={15}/><span><strong>Sample tournament shown.</strong> Team numbers, schedules, and names on this page are example data. {persona === 'judge' ? 'Your ballot is real: it saves to your account.' : persona === 'coach' ? 'Real ballots for your school are under Ballot review.' : 'Live data for this workspace is coming next.'}</span></div>}
       {showingPrimary ? children : <SidebarTopicView topic={section} persona={persona}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} onClose={() => setHelpModal(null)}/>}
   </div>;
@@ -341,6 +350,9 @@ function JudgeAssignments() {
 }
 
 function CoachPage() {
+  const greeting = useGreeting('Erin');
+  const { profile: account } = useAuth();
+  const teamName = account ? (account.school || 'Your team') : 'Lincoln Speech';
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student'>('team');
   const [selectedStudent, setSelectedStudent] = useState('Maya Rodriguez');
@@ -350,9 +362,9 @@ function CoachPage() {
     ['Maya Rodriguez','David Ross','Informative','Norfolk Invitational','2nd','Oct 05'],
     ['Nora Patel','Alyssa Ford','Original Oratory','Lincoln East Open','1st','Sep 28'],
   ].filter(row => row.join(' ').toLowerCase().includes(query.toLowerCase()));
-  return <DesktopShell active="Overview" title="Good morning, Erin" subtitle="Your team, ballots, and coaching priorities are ready." persona="coach">
+  return <DesktopShell active="Overview" title={greeting} subtitle="Your team, ballots, and coaching priorities are ready." persona="coach">
     <div className="role-dashboard">
-      <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>Lincoln Speech is on track</h2><p>Gothenburg Invitational · Round 2 underway · 18 students competing</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="upload" onClick={() => setView('import')}>Import student CSV</Button></div></div><div className="hero-stat"><span>Team win rate</span><strong>68%</strong><small>up 6% this season</small></div></section>
+      <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>{teamName} is on track</h2><p>Gothenburg Invitational · Round 2 underway · 18 students competing</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="upload" onClick={() => setView('import')}>Import student CSV</Button></div></div><div className="hero-stat"><span>Team win rate</span><strong>68%</strong><small>up 6% this season</small></div></section>
       <div className="metric-grid"><Metric label="Active students" value="46" note="+8 this season" icon="users"/><Metric label="Ballots received" value="128" note="92% useful feedback" icon="ballot"/><Metric label="Students competing" value="18" note="6 events today" icon="sparkle"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
       <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
       {view === 'team' ? <div className="role-grid">
@@ -390,6 +402,7 @@ function CoachPage() {
 }
 
 function StudentPage() {
+  const greeting = useGreeting('Maya');
   const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep'>('today');
   const [prepSection, setPrepSection] = useState('Opening');
   const store = useStore();
@@ -403,7 +416,7 @@ function StudentPage() {
     Evidence: 'Emphasize the date and source for each statistic.\n\nConnect the Ogallala example back to the thesis.',
     Closing: 'Return to the image of the empty well.\n\nHold eye contact on the final sentence.',
   };
-  return <DesktopShell active="Overview" title="Good morning, Maya" subtitle="Your rounds, feedback, and progress are ready in one place." persona="student">
+  return <DesktopShell active="Overview" title={greeting} subtitle="Your rounds, feedback, and progress are ready in one place." persona="student">
     <div className="role-dashboard">
       <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Varsity Informative</h2><p>Room 214 · Speak third · Code V42</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>8.6</strong><small>out of 10 · up 1.2</small></div></section>
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'After Round 1' : `Shown ${releaseLabels[store.rankRelease].short}`} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments today' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
@@ -424,11 +437,12 @@ function StudentPage() {
 }
 
 function JudgePage() {
+  const greeting = useGreeting('Judge Leather');
   const [action, setAction] = useState<'assignments' | 'ballots' | 'preferences' | 'mobileBallot' | 'competitors'>('assignments');
   const [judgeEvents, setJudgeEvents] = useState(prefEvents);
   const [draggedPreference, setDraggedPreference] = useState<number | null>(null);
   const [preferencesSaved, setPreferencesSaved] = useState(true);
-  return <DesktopShell active="Overview" title="Welcome back, Judge Leather" subtitle="Your assignments and ballots are ready for today." persona="judge">
+  return <DesktopShell active="Overview" title={greeting} subtitle="Your assignments and ballots are ready for today." persona="judge">
     <div className="role-dashboard">
       <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction('mobileBallot')}>Open e-ballot</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
       <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value="INFO" note="Strong event fit" icon="sparkle"/></div>

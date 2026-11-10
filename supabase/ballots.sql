@@ -40,6 +40,9 @@ create table if not exists public.ballot_entries (
   constraint ballot_entries_no_ties unique (ballot_id, rank) deferrable initially deferred
 );
 
+-- General comments, added after the first version of this script.
+alter table public.ballot_entries add column if not exists comments text not null default '';
+
 create table if not exists public.ballot_private_notes (
   ballot_id uuid not null references public.ballots (id) on delete cascade,
   speaker_code text not null,
@@ -107,9 +110,11 @@ begin
     select case
       when count(*) = 0 then 'The ballot has no speakers.'
       when bool_or(e.present is null) then 'Every speaker must be marked present or no-show.'
-      when bool_or(e.present and (e.rating is null or e.time_seconds is null)) then 'Every speaker needs a rating and a time.'
-      when bool_or(e.present and char_length(btrim(e.reason)) < 40) then 'Every speaker needs a reason for decision of at least 40 characters.'
+      when bool_or(e.present and e.time_seconds is null) then 'Every speaker needs a time.'
+      when bool_or(e.present and char_length(btrim(e.comments)) + char_length(btrim(e.reason)) < 40) then 'Every speaker needs at least 40 characters of comments and reason for decision.'
       when bool_or(e.present and (cardinality(e.section_marks) <> 5 or exists (select 1 from unnest(e.section_marks) m where m is null or m < 1 or m > 10))) then 'Every speaker needs five section marks from 1 to 10.'
+      -- The rating is the total of the section marks, and the NSAA scale starts at 35.
+      when bool_or(e.present and e.rating is distinct from greatest(35, (select sum(m) from unnest(e.section_marks) m)::int)) then 'Each rating must equal the total of its section marks.'
       when bool_or(e.present and e.rank is null) then 'Every speaker who performed needs a rank.'
       when count(*) filter (where e.present) <> count(distinct e.rank) filter (where e.present) then 'There may be no ties in rank.'
       when coalesce(max(e.rank) filter (where e.present), 0) <> count(*) filter (where e.present) then 'Ranks must run from 1 with no gaps.'

@@ -17,6 +17,8 @@ export const RATING_BANDS = [
   { label: 'Excellent', values: [44, 43, 42, 41, 40] },
   { label: 'Good', values: [39, 38, 37, 36, 35] },
 ];
+/** The lowest rating on the NSAA ballot. */
+export const RATING_MIN = 35;
 /** Section marks run from 1 to this value. */
 export const MARK_MAX = 10;
 /** Going over (or under) the limit by more than this many seconds lowers the entry one rank. */

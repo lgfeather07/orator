@@ -6,7 +6,7 @@ export type BallotKey = { tournament: string; round: number; room: string };
 export type EntryInput = {
   code: string; name: string; school: string;
   present: boolean | null; rank: number | null; rating: number | null; timeSeconds: number | null;
-  timePenalty: boolean; marks: number[]; reason: string; disqualifications: string[]; note: string;
+  timePenalty: boolean; marks: number[]; comments: string; reason: string; disqualifications: string[]; note: string;
 };
 
 export type SavedBallot = {
@@ -14,7 +14,11 @@ export type SavedBallot = {
   entries: EntryInput[];
 };
 
-const fail = (message: string): never => { throw new Error(message); };
+const fail = (message: string): never => {
+  // A column the app expects is missing: the project's database is behind the code.
+  if (/could not find|schema cache|does not exist/i.test(message)) throw new Error('The database needs an update. Run supabase/ballots.sql again in the Supabase SQL Editor.');
+  throw new Error(message);
+};
 
 /** The signed-in judge's saved ballot for this round, or null if they have not started one. */
 export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
@@ -24,7 +28,7 @@ export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
   if (error) fail(error.message);
   if (!ballot) return null;
   const [entries, notes] = await Promise.all([
-    db.from('ballot_entries').select('speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, reason, disqualifications').eq('ballot_id', ballot.id),
+    db.from('ballot_entries').select('speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications').eq('ballot_id', ballot.id),
     db.from('ballot_private_notes').select('speaker_code, note').eq('ballot_id', ballot.id),
   ]);
   if (entries.error) fail(entries.error.message);
@@ -34,7 +38,7 @@ export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
     id: ballot.id, eventId: ballot.event_id, classA: ballot.class_a, status: ballot.status,
     entries: (entries.data ?? []).map(row => ({
       code: row.speaker_code, name: row.speaker_name, school: row.school, present: row.present, rank: row.rank, rating: row.rating,
-      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], reason: row.reason,
+      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], comments: row.comments ?? '', reason: row.reason,
       disqualifications: row.disqualifications ?? [], note: noteFor.get(row.speaker_code) ?? '',
     })),
   };
@@ -57,7 +61,7 @@ export async function saveBallot(key: BallotKey, id: string | null, eventId: str
   }
   const saved = await db.from('ballot_entries').upsert(entries.map(entry => ({
     ballot_id: ballotId, speaker_code: entry.code, speaker_name: entry.name, school: entry.school, present: entry.present, rank: entry.rank,
-    rating: entry.rating, time_seconds: entry.timeSeconds, time_penalty: entry.timePenalty, section_marks: entry.marks, reason: entry.reason,
+    rating: entry.rating, time_seconds: entry.timeSeconds, time_penalty: entry.timePenalty, section_marks: entry.marks, comments: entry.comments, reason: entry.reason,
     disqualifications: entry.disqualifications,
   })), { onConflict: 'ballot_id,speaker_code' });
   if (saved.error) fail(saved.error.message);
@@ -73,7 +77,7 @@ export async function saveBallot(key: BallotKey, id: string | null, eventId: str
 
 export type TeamBallotRow = {
   key: string; speaker: string; school: string; rank: number | null; rating: number | null; timeSeconds: number | null; timePenalty: boolean;
-  marks: number[]; reason: string; disqualifications: string[]; present: boolean | null;
+  marks: number[]; comments: string; reason: string; disqualifications: string[]; present: boolean | null;
   judge: string; tournament: string; round: number; eventId: string; submittedAt: string | null;
 };
 
@@ -81,7 +85,7 @@ export type TeamBallotRow = {
 export async function loadTeamBallots(school: string): Promise<TeamBallotRow[]> {
   const db = supabase ?? fail('Accounts are not connected.');
   const { data, error } = await db.from('ballot_entries')
-    .select('ballot_id, speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, reason, disqualifications, ballots!inner(judge_name, tournament, round, event_id, status, submitted_at)')
+    .select('ballot_id, speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications, ballots!inner(judge_name, tournament, round, event_id, status, submitted_at)')
     .eq('ballots.status', 'submitted').ilike('school', school.replace(/[%_\\]/g, '\\$&'));
   if (error) fail(error.message);
   type Parent = { judge_name: string; tournament: string; round: number; event_id: string; submitted_at: string | null };
@@ -89,7 +93,7 @@ export async function loadTeamBallots(school: string): Promise<TeamBallotRow[]> 
     const parent = (Array.isArray(row.ballots) ? row.ballots[0] : row.ballots) as Parent;
     return {
       key: `${row.ballot_id}-${row.speaker_code}`, speaker: row.speaker_name, school: row.school, rank: row.rank, rating: row.rating,
-      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], reason: row.reason,
+      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], comments: row.comments ?? '', reason: row.reason,
       disqualifications: row.disqualifications ?? [], present: row.present,
       judge: parent.judge_name, tournament: parent.tournament, round: parent.round, eventId: parent.event_id, submittedAt: parent.submitted_at,
     };

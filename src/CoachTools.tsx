@@ -107,7 +107,8 @@ export function TeamBallots() {
         </button>
         {open === row.key && row.present !== false && <div className="team-ballot-detail">
           <div className="team-ballot-flags">{row.timeSeconds !== null && <Badge tone={row.timePenalty ? 'danger' : 'neutral'} icon="clock">{clock(row.timeSeconds)}{row.timePenalty ? ' · lowered one rank' : ''}</Badge>}{row.disqualifications.map(reason => <Badge key={reason} tone="danger" icon="warning">DQ reported: {reason}</Badge>)}</div>
-          <p>{row.reason}</p>
+          {row.comments && <div className="team-ballot-text"><small>Comments</small><p>{row.comments}</p></div>}
+          {row.reason && <div className="team-ballot-text"><small>Reason for decision</small><p>{row.reason}</p></div>}
           <dl>{(event?.criteria ?? []).map((item, index) => <div key={item.name}><dt>{item.name}</dt><dd>{row.marks[index] ?? '—'}<small>/{MARK_MAX}</small></dd></div>)}</dl>
         </div>}
       </article>;
