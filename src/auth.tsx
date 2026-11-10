@@ -141,6 +141,16 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
   return <div className="signin-page auth-page">
     <header className="signin-header"><Logo/>{!authConfigured && <div><Badge tone="warning" icon="info">Demo mode · accounts not connected</Badge></div>}</header>
     <main className="auth-main">
+      <aside className="auth-pitch">
+        <span className="eyebrow">Speech tournament software</span>
+        <h2>Every round, every ballot, <em>one place.</em></h2>
+        <p>Orator runs the tournament day for students, judges, coaches, and directors, on the official NSAA ballot.</p>
+        <ul>
+          <li><b>01</b><span>E-ballots with criteria, timing, and ranking built in</span></li>
+          <li><b>02</b><span>Check-in for judges and speakers, live for the tab room</span></li>
+          <li><b>03</b><span>Feedback and growth that follow each student all season</span></li>
+        </ul>
+      </aside>
       <section className="auth-card">
         <h1>{titles[current][0]}</h1><p className="auth-lead">{titles[current][1]}</p>
         {current === 'sent-confirm' || current === 'sent-reset' ? <div className="auth-sent"><span className="success-icon"><Icon name="check" size={26}/></span><p>Didn’t get it? Check your spam folder, or go back and try again.</p><Button variant="secondary" onClick={() => go('signin')}>Back to sign in</Button></div> : <form onSubmit={submit} noValidate={false}>

@@ -1,0 +1,238 @@
+/*
+ * Orator visual theme. Loaded last, so it restyles the components defined in index.css and features.css.
+ * Direction: a tab room's ballot paper. Warm paper surfaces, deep navy ink, one marigold accent,
+ * hairline rules instead of heavy cards, serif display type, and monospace for anything you count.
+ */
+
+/* ── Type ─────────────────────────────────────────────────────── */
+body { font-family: var(--font-body); font-feature-settings: 'ss01', 'cv11'; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+.desktop-header h1, .role-hero h2, .topic-hero h2, .signin-intro h1, .auth-card h1, .auth-pitch h2, .docs-header h1, .jb-speaker h2, .section-heading h2, .jb-done h2, .jb-rank-head h2, .display-type {
+  font-family: var(--font-display); font-weight: 400; letter-spacing: -.01em; line-height: 1.05;
+}
+.desktop-header h1 { font-size: 34px; }
+.role-hero h2 { font-size: 44px; margin: 14px 0 8px; }
+.topic-hero h2 { font-size: 36px; }
+.jb-speaker h2 { font-size: 30px; }
+.jb-rank-head h2, .jb-done h2 { font-size: 28px; }
+.signin-intro h1 { font-size: 50px; }
+.panel-head h2, .builder-head h2, .assignment-head h2 { font-size: 17px; font-weight: 650; letter-spacing: -.015em; }
+
+/* Labels and anything numeric read as data. */
+.eyebrow, .sidebar-section-label, .workspace-context, .card-label small, .role-switcher > span, .metric small, .hero-stat span, .jb-rank-labels, .jb-strip small, .jb-rating-scale small, .stepper button small, .preview-menu > span {
+  font-family: var(--font-mono); font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+}
+.eyebrow { font-size: 11px; color: var(--brand); }
+.metric small, .hero-stat span { font-size: 10.5px; }
+.metric strong, .hero-stat strong, .jb-rating-value strong, .jb-time input, .jb-rank-number, .jb-rank-row > span:nth-child(4), .jb-rank-row > span:nth-child(5), .event-code, .tiny-logo, .score-summary strong, .score-list b, .team-ballot-detail dd, .checkin-room strong, .jb-strip strong, .jb-final small, .timeline-row small, .ring, .progress-ring, .speaker-order {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+
+/* ── Atmosphere ───────────────────────────────────────────────── */
+.app { background:
+  radial-gradient(900px 520px at 100% -8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+  radial-gradient(760px 520px at -6% 28%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 60%),
+  var(--canvas); background-attachment: fixed; }
+.desktop-shell, .signin-page { background: transparent; }
+.panel, .jb-card, .record-card, .criteria-card, .embedded-ballot, .upload-card, .parsed-card, .stepper, .progress-card, .state-card, .doc-section {
+  border: 1px solid var(--border); box-shadow: 0 1px 0 color-mix(in srgb, white 55%, transparent) inset, var(--shadow-sm);
+}
+.panel, .embedded-ballot { border-radius: 14px; }
+.panel-head { border-bottom: 1px solid var(--border); background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 70%, transparent), transparent); border-radius: 14px 14px 0 0; }
+.card-label { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+
+/* ── Top bar ──────────────────────────────────────────────────── */
+.prototype-nav { background: var(--night); border-bottom: 1px solid rgba(255, 255, 255, .09); color: #b9c1d6; }
+.prototype-nav button { transition: background .16s ease, color .16s ease; }
+.prototype-nav button:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+.prototype-nav button.active { color: #fff; background: rgba(255, 255, 255, .09); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 8px 8px 3px 3px; }
+.preview-brand span { font-family: var(--font-display); font-size: 21px; font-weight: 400; letter-spacing: 0; }
+.account-nav .preview-brand span { font-size: 22px; }
+.preview-brand small { font-family: var(--font-mono); font-size: 10px; color: #7f89a3; letter-spacing: .04em; }
+.preview-menu { background: #18223d; border-color: rgba(255, 255, 255, .12); }
+.account-signout { border-color: rgba(255, 255, 255, .2); transition: border-color .16s, color .16s; }
+.account-signout:hover { color: #fff; border-color: var(--accent); }
+
+/* ── Sidebar: a navy rail. The tokens are re-pointed so everything inside inherits it. ── */
+.sidebar {
+  --ink: #f2f4fa; --muted: #a3adc5; --border: rgba(255, 255, 255, .12); --surface: rgba(255, 255, 255, .09); --surface-2: rgba(255, 255, 255, .045);
+  --brand: #ffffff; --brand-soft: rgba(255, 255, 255, .09); --green: #86d9ae; --green-soft: rgba(134, 217, 174, .11); --shadow-sm: none;
+  color: var(--ink); border-right: 0;
+  background:
+    radial-gradient(420px 260px at 0% 0%, rgba(242, 176, 30, .13), transparent 70%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 30px),
+    linear-gradient(180deg, #16203b, var(--night));
+}
+.sidebar .logo strong { font-family: var(--font-display); font-weight: 400; font-size: 27px; letter-spacing: 0; }
+.logo strong { font-family: var(--font-display); font-weight: 400; font-size: 26px; letter-spacing: 0; }
+.logo-mark { color: var(--accent-ink); background: var(--accent); border-radius: 9px 9px 9px 2px; }
+.sidebar nav button { position: relative; transition: background .16s ease, color .16s ease, padding .16s ease; }
+.sidebar nav button:hover { color: var(--ink); background: var(--surface-2); }
+.sidebar nav button.active { color: #fff; background: var(--brand-soft); }
+.sidebar nav button.active::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.sidebar .tiny-logo { color: var(--accent-ink); background: var(--accent); }
+.sidebar .avatar { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.sidebar .role-switcher button.active { color: var(--accent-ink); background: var(--accent); }
+.sidebar .profile { color: var(--ink); }
+
+/* ── Page header ──────────────────────────────────────────────── */
+.desktop-header { min-height: 116px; background: transparent; border-bottom: 1px solid var(--border); }
+.desktop-header p { font-size: 14px; margin-top: 7px; }
+.workspace-context { font-size: 10.5px; color: var(--muted); }
+.header-tool { background: var(--surface); font-size: 12.5px; transition: border-color .16s, color .16s, transform .16s; }
+.header-tool:hover { color: var(--ink); border-color: var(--brand); transform: translateY(-1px); }
+.sample-notice { background: transparent; border: 1px dashed var(--border); color: var(--muted); }
+
+/* ── Hero: ruled ballot paper at night ────────────────────────── */
+.role-hero, .topic-hero, .student-hero, .judge-hero, .coach-hero {
+  color: #fff; border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; box-shadow: var(--shadow);
+  background:
+    radial-gradient(560px 320px at 88% -10%, rgba(242, 176, 30, .30), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 32px),
+    linear-gradient(120deg, var(--night) 10%, #1d2f5c 70%, #27448a);
+}
+.role-hero { min-height: 232px; padding: 34px 38px; }
+.role-hero::after { width: 1px; height: auto; top: 26px; bottom: 26px; right: 236px; border: 0; border-radius: 0; box-shadow: none; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .22), transparent); }
+.role-hero p, .topic-hero p { color: rgba(255, 255, 255, .74); font-size: 14px; }
+.role-hero .badge { color: var(--accent-ink); background: var(--accent); }
+.role-hero .button-primary, .topic-hero .button, .judge-hero .button-primary, .coach-hero .button-primary { color: var(--accent-ink); background: var(--accent); box-shadow: 0 6px 18px rgba(242, 176, 30, .28); }
+.role-hero .button-secondary { color: #fff; background: transparent; border-color: rgba(255, 255, 255, .34); }
+.role-hero .button-secondary:hover { background: rgba(255, 255, 255, .08); }
+.topic-hero .eyebrow { color: var(--accent); }
+.hero-stat { min-width: 168px; padding: 6px 0 6px 28px; text-align: left; background: transparent; border: 0; border-radius: 0; backdrop-filter: none; }
+.hero-stat strong { margin: 8px 0 6px; font-size: 54px; font-weight: 500; color: var(--accent); line-height: 1; }
+.hero-stat span, .hero-stat small { color: rgba(255, 255, 255, .72); }
+.hero-stat small { font-size: 12px; }
+
+/* ── Stats: one ruled strip instead of four equal cards ───────── */
+.metric-grid { grid-template-columns: 1.55fr 1fr 1fr 1fr; gap: 0; margin: 18px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.metric { min-height: 104px; padding: 18px 20px; background: transparent; border: 0; border-left: 1px solid var(--border); border-radius: 0; align-items: center; transition: background .18s ease; }
+.metric:first-child { border-left: 0; background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 15%, transparent), transparent 70%); }
+.metric:hover { background-color: var(--surface-2); }
+.metric strong { font-size: 25px; font-weight: 600; margin: 6px 0 4px; }
+.metric:first-child strong { font-size: 38px; }
+.metric div span { font-size: 12px; color: var(--muted); }
+.metric-icon { width: 34px; height: 34px; color: var(--brand); background: transparent; border: 1px solid var(--border); border-radius: 50%; }
+.metric:first-child .metric-icon { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
+.role-tabs { padding: 0; gap: 22px; background: transparent; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; width: 100%; margin: 6px 0 18px; }
+.role-tabs button { min-height: 42px; padding: 0 2px; border-radius: 0; font-size: 13.5px; font-weight: 650; position: relative; background: transparent; transition: color .16s ease; }
+.role-tabs button::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--brand); transform: scaleX(0); transform-origin: left; transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.role-tabs button:hover { color: var(--ink); }
+.role-tabs button.active { color: var(--ink); background: transparent; }
+.role-tabs button.active::after { transform: scaleX(1); }
+.director-tabs { margin: 18px 32px 6px; width: auto; }
+.segmented { background: var(--surface-2); }
+.segmented button { transition: color .16s, background .16s, box-shadow .16s; }
+
+/* ── Buttons, badges, inputs ──────────────────────────────────── */
+.button { border-radius: 10px; font-weight: 650; letter-spacing: -.005em; transition: transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease; }
+.button-primary { color: #fff; background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, white), var(--brand)); box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 6px 16px color-mix(in srgb, var(--brand) 26%, transparent); }
+.dark .button-primary { color: var(--night); }
+.button-primary:hover:not(:disabled) { box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 10px 22px color-mix(in srgb, var(--brand) 32%, transparent); }
+.button-secondary:hover:not(:disabled) { border-color: var(--brand); }
+.button:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.button:disabled { color: var(--muted); background: var(--surface-2); border-color: var(--border); box-shadow: none; opacity: .75; }
+.badge { border-radius: 6px; font-weight: 650; letter-spacing: 0; font-size: 12px; }
+:where(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+textarea, .search-box, .auth-field input, .details-grid input { transition: border-color .16s ease, box-shadow .16s ease; }
+textarea { font-size: 14px; line-height: 1.55; }
+
+/* ── Lists: rows respond to the pointer ───────────────────────── */
+.coach-student-list > button, .coach-priorities > button, .entry-table > button, .topic-row, .assignment-desktop > button, .team-ballot-list article > button, .review-list > button, .checkin-list > div, .jb-rank-row[draggable='true'] { transition: background .16s ease; }
+.coach-student-list > button:hover, .coach-priorities > button:hover, .entry-table > button:hover, .topic-row:hover, .assignment-desktop > button:hover, .team-ballot-list article > button:hover, .review-list > button:hover, .jb-rank-row[draggable='true']:hover { background: var(--surface-2); }
+.coach-student-list > button > svg:last-child, .coach-priorities > button > svg:last-child, .entry-table > button > svg:last-child, .topic-row > svg:last-child, .assignment-desktop > button > svg:last-child, .review-list > button > svg:last-child, .auth-demo > svg:last-child { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.coach-student-list > button:hover > svg:last-child, .coach-priorities > button:hover > svg:last-child, .entry-table > button:hover > svg:last-child, .topic-row:hover > svg:last-child, .assignment-desktop > button:hover > svg:last-child, .review-list > button:hover > svg:last-child, .auth-demo:hover > svg:last-child { transform: translateX(4px); }
+.timeline-row.current { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.timeline-row.current .timeline-dot { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+/* ── Ballot ───────────────────────────────────────────────────── */
+.criterion-trigger { transition: background .16s ease; }
+.criterion-trigger:hover { background: var(--surface-2); }
+.criterion-trigger > svg { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.criterion-name strong { font-size: 15px; }
+.rating button, .jb-arrows button, .jb-strip button, .jb-chips button { transition: transform .12s ease, background .16s ease, border-color .16s ease, color .16s ease; }
+.rating button:hover, .jb-strip button:hover { border-color: var(--brand); }
+.rating button:active { transform: scale(.92); }
+.rating button.selected { color: #fff; background: var(--brand); border-color: var(--brand); box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 30%, transparent); }
+.dark .rating button.selected { color: var(--night); }
+.rating button { font-family: var(--font-mono); font-size: 13px; }
+.jb-strip button.active { border-color: var(--brand); box-shadow: inset 0 -3px 0 var(--accent); }
+.jb-rating-card { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface) 62%); }
+.jb-rating-value strong { font-size: 46px; font-weight: 600; color: var(--ink); line-height: 1; }
+.jb-rating-scale i { font-family: var(--font-mono); transition: background .2s ease, color .2s ease, transform .2s ease; }
+.jb-rating-scale i.on { color: var(--accent-ink); background: var(--accent); transform: scale(1.14); }
+.jb-rank-number { color: #fff; background: var(--brand); border-radius: 8px; }
+.dark .jb-rank-number { color: var(--night); }
+.jb-rank-row:nth-child(2) .jb-rank-number { color: var(--accent-ink); background: var(--accent); }
+.jb-nav, .submit-bar { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(10px); }
+.status-dot.complete { background: var(--green); }
+
+/* ── Sign in: a pitch beside the form ─────────────────────────── */
+.signin-header { background: transparent; border-bottom: 1px solid var(--border); }
+.auth-main { width: min(1040px, 100%); padding: 44px 20px 56px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 440px); gap: 0; align-items: stretch; }
+.auth-pitch { padding: 40px 38px; display: flex; flex-direction: column; color: #fff; border-radius: 20px 0 0 20px; border: 1px solid rgba(255, 255, 255, .08);
+  background:
+    radial-gradient(520px 320px at 100% 0%, rgba(242, 176, 30, .32), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 32px),
+    linear-gradient(150deg, var(--night), #1d2f5c 75%, #27448a); }
+.auth-pitch .eyebrow { color: var(--accent); }
+.auth-pitch h2 { margin: 16px 0 14px; font-size: 54px; line-height: 1; }
+.auth-pitch h2 em { color: var(--accent); }
+.auth-pitch > p { max-width: 38ch; color: rgba(255, 255, 255, .76); font-size: 15px; line-height: 1.6; }
+.auth-pitch ul { list-style: none; margin: auto 0 0; padding: 26px 0 0; display: grid; gap: 0; }
+.auth-pitch li { padding: 13px 0; display: grid; grid-template-columns: 54px 1fr; gap: 12px; align-items: baseline; border-top: 1px solid rgba(255, 255, 255, .14); font-size: 14px; color: rgba(255, 255, 255, .86); }
+.auth-pitch li b { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--accent); letter-spacing: .04em; }
+.auth-form { display: flex; flex-direction: column; }
+.auth-card { flex: 1; padding: 34px 32px; border-radius: 0 20px 20px 0; border-left: 0; box-shadow: var(--shadow); }
+.auth-card h1 { font-size: 36px; }
+.auth-lead { font-size: 14px; }
+.auth-field { font-size: 13px; }
+.auth-demo { background: var(--surface); border: 1px dashed var(--border); transition: border-color .16s ease, background .16s ease; }
+.auth-demo:hover { border-color: var(--brand); }
+.auth-roles label { transition: border-color .16s ease, background .16s ease; }
+.auth-page .signin-security, .auth-demo { grid-column: 1 / -1; }
+.signin-role-card { transition: transform .2s cubic-bezier(.2, .8, .2, 1), border-color .16s ease, box-shadow .2s ease; }
+.signin-role-card.selected { border-color: var(--brand); box-shadow: 0 12px 30px color-mix(in srgb, var(--brand) 16%, transparent), inset 0 -4px 0 var(--accent); }
+.signin-role-icon { color: var(--brand); background: transparent; border: 1px solid var(--border); border-radius: 50%; }
+.role-check { color: var(--accent-ink); background: var(--accent); }
+.signin-page { background: transparent; }
+
+/* ── Entrance: content settles in once per page ───────────────── */
+@keyframes settle { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.role-dashboard > *, .topic-page > *, .auth-main > *, .jb > * { animation: settle .42s cubic-bezier(.2, .8, .2, 1) both; }
+.role-dashboard > :nth-child(2), .topic-page > :nth-child(2), .auth-main > :nth-child(2) { animation-delay: .06s; }
+.role-dashboard > :nth-child(3), .topic-page > :nth-child(3) { animation-delay: .12s; }
+.role-dashboard > :nth-child(n + 4), .topic-page > :nth-child(n + 4) { animation-delay: .18s; }
+.jb > .jb-nav { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+}
+
+/* ── Narrow screens ───────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+  .metric:nth-child(3) { border-left: 0; }
+  .metric:nth-child(n + 3) { border-top: 1px solid var(--border); }
+  .role-hero h2 { font-size: 34px; }
+  .role-hero::after { display: none; }
+}
+@media (max-width: 900px) {
+  .auth-main { grid-template-columns: 1fr; padding: 22px 14px 40px; }
+  .auth-pitch { padding: 26px 22px; border-radius: 18px 18px 0 0; }
+  .auth-pitch h2 { font-size: 38px; }
+  .auth-pitch ul { display: none; }
+  .auth-card { border-radius: 0 0 18px 18px; border-left: 1px solid var(--border); border-top: 0; padding: 26px 22px; }
+  .director-tabs { margin: 14px 14px 4px; }
+  .desktop-header h1 { font-size: 26px; }
+}
+@media (max-width: 560px) {
+  .metric-grid { grid-template-columns: 1fr; }
+  .metric { border-left: 0; border-top: 1px solid var(--border); }
+  .metric:first-child { border-top: 0; }
+  .role-hero { padding: 24px 20px; flex-direction: column; align-items: flex-start; gap: 20px; }
+  .hero-stat { padding-left: 0; }
+  .hero-stat strong { font-size: 40px; }
+  .signin-intro h1 { font-size: 36px; }
+  .role-tabs { gap: 16px; overflow-x: auto; }
+}
