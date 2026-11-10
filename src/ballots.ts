@@ -6,7 +6,8 @@
 export type BallotEvent = {
   id: string; name: string; short: string;
   /** Speaking time limits in seconds. `min` is only set for events with an undertime penalty. */
-  time: { min?: number; max: number; note?: string };
+  /** `classAMax` is set where Class A schools have a shorter limit. */
+  time: { min?: number; max: number; classAMax?: number; note?: string };
   criteria: { name: string; questions: string[] }[];
   disqualifications: string[];
 };
@@ -16,6 +17,8 @@ export const RATING_BANDS = [
   { label: 'Excellent', values: [44, 43, 42, 41, 40] },
   { label: 'Good', values: [39, 38, 37, 36, 35] },
 ];
+/** Section marks run from 1 to this value. */
+export const MARK_MAX = 10;
 /** Going over (or under) the limit by more than this many seconds lowers the entry one rank. */
 export const TIME_GRACE_SECONDS = 30;
 
@@ -74,7 +77,7 @@ export const ballotEvents: BallotEvent[] = [
       { name: 'Delivery', questions: ['Is the delivery appropriate to the purpose?', 'Is the delivery direct and extemporaneous?', 'Is the delivery polished, poised, and conversational?', 'Does the delivery include effective eye contact, gestures, movement, timing, volume, poise, and pace?'] },
     ],
     disqualifications: ['Obviously not having an original performance.', 'Using more than one 4” x 6” notecard.', 'Using a notecard larger than 4” x 6”.', 'Use of costumes or make-up.'] },
-  { id: 'oid', name: 'Oral Interpretation of Drama', short: 'OID', time: { max: 900, note: '15 minutes (10 minutes for Class A).' },
+  { id: 'oid', name: 'Oral Interpretation of Drama', short: 'OID', time: { max: 900, classAMax: 600 },
     criteria: [
       { name: 'Selection', questions: ['Is the selection suitable for this group and the event?', 'Is the selection arranged well?'] },
       { name: 'Presentation', questions: ['Is there an introduction that prepares listeners for the reading?', 'Does the selection build to a climax?', 'Is there unity in the whole presentation?', 'Does it sustain a mood?'] },
