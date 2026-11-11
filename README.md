@@ -2,6 +2,8 @@
 
 Tournament software for high school speech: e-ballots that follow the NSAA ballot, judge and speaker check-in, coach tools, and student feedback.
 
+**Live site:** https://orator-1rab.vercel.app/ (rebuilds automatically from the `main` branch)
+
 ## Run it
 
 ```bash
