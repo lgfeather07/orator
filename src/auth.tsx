@@ -5,7 +5,7 @@ import { Badge, Button, Icon, Logo, type IconName } from './ui';
 export type Role = 'student' | 'judge' | 'coach' | 'director';
 export const allRoles: Role[] = ['student', 'judge', 'coach', 'director'];
 
-export type Profile = { name: string; email: string; school: string; roles: Role[]; initials: string };
+export type Profile = { id: string; name: string; email: string; school: string; roles: Role[]; initials: string };
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -38,7 +38,7 @@ async function loadProfile(session: Session): Promise<Profile> {
   // The profiles table is the source of truth once supabase/schema.sql has been run.
   const { data } = await supabase!.from('profiles').select('full_name, school, roles').eq('id', user.id).maybeSingle();
   if (data) { name = data.full_name || name; school = data.school ?? school; roles = cleanRoles(data.roles); }
-  return { name, email: user.email ?? '', school, roles: roles.length ? roles : ['student'], initials: initialsOf(name) };
+  return { id: user.id, name, email: user.email ?? '', school, roles: roles.length ? roles : ['student'], initials: initialsOf(name) };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

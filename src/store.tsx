@@ -1,5 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { buildSchedule, defaultTournament, judgePool, seedEntries, type Entry, type Issue, type IssueKind, type Section, type Tournament } from './tournament';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useAuth } from './auth';
+import * as api from './tournamentApi';
+import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
+import { buildSchedule, defaultTournament, judgePool, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Section, type Tournament } from './tournament';
 
 export type Presence = 'present' | 'absent';
 
@@ -38,6 +41,17 @@ type Store = {
   /** Coaches release rankings and comments to their students, and only once the tournament is over. */
   resultsReleased: boolean; releaseResults: () => void;
   resetDemo: () => void;
+  /** Signed-in users work on a real tournament in the database; the demo keeps everything in the browser. */
+  live: boolean;
+  liveState: 'idle' | 'loading' | 'ready' | 'failed';
+  syncError: string; clearSyncError: () => void;
+  tournamentId: string | null; isDirector: boolean;
+  tournaments: TournamentRow[]; myMemberships: Member[]; members: Member[];
+  judges: Judge[];
+  createLiveTournament: (tournament: Tournament) => Promise<void>;
+  requestJoin: (tournamentId: string, role: MemberRole, school: string) => Promise<void>;
+  decideMember: (member: Member, status: MemberStatus) => Promise<void>;
+  refresh: () => Promise<void>;
   speakerPresence: Record<string, Presence | undefined>; setSpeakerPresence: (code: string, p: Presence | undefined) => void;
   judgeCheckedIn: Record<string, boolean>; toggleJudge: (id: string) => void;
   focusNotes: FocusNote[]; sendFocusNote: (text: string, urgent: boolean) => void; markNoteSeen: (id: number) => void;
@@ -94,6 +108,77 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   ]);
   const [reminders, setReminders] = useState({ text: true, email: false });
 
+  // ── Live mode: the signed-in user's real tournament ──
+  const { profile } = useAuth();
+  const live = profile !== null;
+  const userId = profile?.id ?? '';
+  const [liveState, setLiveState] = useState<Store['liveState']>('idle');
+  const [syncError, setSyncError] = useState('');
+  const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
+  const [myMemberships, setMyMemberships] = useState<Member[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
+  const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
+  const [liveSections, setLiveSections] = useState<Section[]>([]);
+  const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
+
+  const refresh = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const [all, mine] = await Promise.all([api.listTournaments(), api.listMyMemberships(userId)]);
+      // Prefer the tournament this user directs, then one they are approved for, then one they have asked to join.
+      const active = all.find(item => item.directorId === userId)
+        ?? all.find(item => mine.some(member => member.tournamentId === item.id && member.status === 'approved'))
+        ?? all.find(item => mine.some(member => member.tournamentId === item.id));
+      setTournaments(all); setMyMemberships(mine); setTournamentId(active?.id ?? null);
+      if (active) {
+        const [entryRows, sectionRows, memberRows] = await Promise.all([api.listEntries(active.id), api.listSections(active.id), api.listMembers(active.id)]);
+        setLiveEntries(entryRows); setLiveSections(sectionRows); setMembers(memberRows);
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); }
+      setLiveState('ready');
+    } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) { setLiveState('idle'); setTournamentId(null); setTournaments([]); setMyMemberships([]); setMembers([]); setLiveEntries([]); setLiveSections([]); return; }
+    setLiveState('loading'); refresh();
+    // Other people change this data too, so look again whenever the user comes back to the tab.
+    const onFocus = () => { refresh(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [userId, refresh]);
+
+  const liveTournament = tournaments.find(item => item.id === tournamentId) ?? null;
+  const isDirector = live && liveTournament !== null && liveTournament.directorId === userId;
+  const liveJudges: Judge[] = members.filter(member => member.role === 'judge' && member.status === 'approved').map(member => ({ id: member.userId, name: member.name || 'Judge', school: member.school }));
+  const patchLiveTournament = (patch: Partial<Tournament>) => setTournaments(list => list.map(item => item.id === tournamentId ? { ...item, ...patch } : item));
+
+  const liveStore: Partial<Store> = !live ? {} : {
+    tournament: liveTournament ?? { ...defaultTournament, name: 'No tournament yet', date: '', host: '' },
+    updateTournament: patch => {
+      if (!tournamentId) return;
+      patchLiveTournament(patch);
+      if (patch.status && patch.status !== 'finished') setResultsReleased(false);
+      api.saveTournament(tournamentId, patch).catch(caught => { report(caught); refresh(); });
+    },
+    entries: liveEntries,
+    addEntry: (student, school, eventId) => { if (tournamentId) api.insertEntry(tournamentId, student, school, eventId).then(entry => setLiveEntries(list => [...list, entry])).catch(report); },
+    removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).catch(caught => { report(caught); refresh(); }); },
+    submittedSchools: members.filter(member => member.role === 'coach' && member.entriesSent).map(member => member.school),
+    submitSchool: () => { if (tournamentId) api.markEntriesSent(tournamentId, userId).then(refresh).catch(report); },
+    sections: liveSections,
+    generateSchedule: () => {
+      if (!tournamentId || !liveTournament) return;
+      api.replaceSections(tournamentId, buildSchedule(liveTournament, liveEntries, liveJudges), liveJudges).then(setLiveSections).catch(caught => { report(caught); refresh(); });
+    },
+    assignJudge: (sectionId, judgeId) => {
+      const judge = liveJudges.find(item => item.id === judgeId) ?? null;
+      setLiveSections(list => list.map(section => section.id === sectionId ? { ...section, judgeId: judge?.id ?? null, judgeName: judge?.name ?? '' } : section));
+      api.saveSectionJudge(sectionId, judge).catch(caught => { report(caught); refresh(); });
+    },
+    resetDemo: () => undefined,
+  };
+
   const store: Store = {
     tournament,
     updateTournament: patch => {
@@ -123,6 +208,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addChecklist: label => setChecklist(current => [...current, { id: Date.now(), label, done: false }]),
     practiceLog, addPractice: text => setPracticeLog(current => [{ id: Date.now(), date: 'Today · Practice', text }, ...current]),
     reminders, setReminders,
+    live, liveState, syncError, clearSyncError: () => setSyncError(''),
+    tournamentId: live ? tournamentId : null, isDirector, tournaments, myMemberships, members,
+    judges: live ? liveJudges : judgePool,
+    createLiveTournament: async tournament => { try { const created = await api.createTournament(tournament); setTournaments(list => [created, ...list]); await refresh(); } catch (caught) { report(caught); } },
+    requestJoin: async (id, role, school) => { try { await api.requestToJoin(id, role, school); await refresh(); } catch (caught) { report(caught); } },
+    decideMember: async (member, status) => { try { await api.decideMember(member, status); await refresh(); } catch (caught) { report(caught); } },
+    refresh,
+    ...liveStore,
   };
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Avatar, Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { entryLoad, judgePool, loadLabel, roundTimes, sameSchool } from './tournament';
+import { entryLoad, loadLabel, roundTimes, sameSchool } from './tournament';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 
 /** A coach enters their students into the tournament, then sees where each one speaks once the schedule is out. */
 export function TeamEntries({ school, onBack }: { school: string; onBack?: () => void }) {
-  const { tournament, entries, addEntry, removeEntry, submittedSchools, submitSchool, sections } = useStore();
+  const { tournament, entries, addEntry, removeEntry, submittedSchools, submitSchool, sections, judges: judgePool } = useStore();
   const [student, setStudent] = useState('');
   const [eventId, setEventId] = useState(tournament.eventIds[0] ?? 'info');
   const mine = entries.filter(entry => sameSchool(entry.school, school));
@@ -41,7 +41,7 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
           <Avatar initials={initials(entry.student)} size="sm"/>
           <strong>{entry.student}{loadLabel(entryLoad(entries, entry.student, school)) && <Badge tone="info">{loadLabel(entryLoad(entries, entry.student, school))}</Badge>}</strong>
           <span>{eventName(entry.eventId)}</span>
-          <span className="entry-rounds">{published ? rounds.map(section => <small key={section.id}><b>R{section.round}</b> {roundTimes[section.round - 1]} · {section.room} · speaks {section.entryIds.indexOf(entry.id) + 1} of {section.entryIds.length}{section.judgeId ? ` · ${judgePool.find(judge => judge.id === section.judgeId)?.name}` : ''}</small>) : null}</span>
+          <span className="entry-rounds">{published ? rounds.map(section => <small key={section.id}><b>R{section.round}</b> {roundTimes[section.round - 1]} · {section.room} · speaks {section.entryIds.indexOf(entry.id) + 1} of {section.entryIds.length}{section.judgeId ? ` · ${section.judgeName || judgePool.find(judge => judge.id === section.judgeId)?.name || 'Judge assigned'}` : ''}</small>) : null}</span>
           {open ? <button className="icon-button" aria-label={`Remove ${entry.student} from ${eventName(entry.eventId)}`} onClick={() => removeEntry(entry.id)}><Icon name="close" size={16}/></button> : <span/>}
         </div>;
       })}

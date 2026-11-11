@@ -16,7 +16,7 @@ export type Entry = { id: string; student: string; school: string; eventId: stri
 export type Judge = { id: string; name: string; school: string };
 
 /** One room in one round: a judge hears these entries, in this speaking order. */
-export type Section = { id: string; round: number; eventId: string; label: string; room: string; judgeId: string | null; entryIds: string[] };
+export type Section = { id: string; round: number; eventId: string; label: string; room: string; judgeId: string | null; judgeName?: string; entryIds: string[] };
 
 export type IssueKind = 'no-judge' | 'disruption' | 'injury' | 'schedule' | 'ballot' | 'other';
 export type Issue = {
