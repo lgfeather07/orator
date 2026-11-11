@@ -6,6 +6,8 @@ export type TournamentStatus = 'registration' | 'scheduled' | 'running' | 'finis
 
 export type Tournament = {
   name: string; date: string; host: string; rounds: number; sectionSize: number;
+  /** The most events one student may enter. A student may enter each event once. */
+  maxEntries: number;
   eventIds: string[]; status: TournamentStatus;
 };
 
@@ -31,7 +33,7 @@ export const issueKinds: Record<IssueKind, { label: string; hint: string; urgent
   other: { label: 'Something else', hint: 'Anything the tab room should know.', urgent: false },
 };
 
-export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118', 'Room 120', 'Room 305'];
+export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118', 'Room 120', 'Room 305', 'Room 307', 'Room 309', 'Cafeteria'];
 
 export const judgePool: Judge[] = [
   { id: 'jl', name: 'Judge Leather', school: '' },
@@ -49,31 +51,40 @@ export const judgePool: Judge[] = [
   { id: 'co', name: 'Carl Osei', school: '' },
   { id: 'nw', name: 'Nell Ward', school: 'Bellevue West' },
   { id: 'jh', name: 'Jon Hale', school: '' },
+  { id: 'sv', name: 'Sara Vance', school: '' },
+  { id: 'mo', name: 'Marcus Odom', school: '' },
+  { id: 'ek', name: 'Ellen Kraft', school: '' },
+  { id: 'dp', name: 'Dev Patil', school: '' },
+  { id: 'rb', name: 'Ruth Baines', school: '' },
 ];
 
 export const defaultTournament: Tournament = {
-  name: 'Gothenburg Invitational', date: 'October 19, 2026', host: 'Gothenburg High School', rounds: 3, sectionSize: 6,
+  name: 'Gothenburg Invitational', date: 'October 19, 2026', host: 'Gothenburg High School', rounds: 3, sectionSize: 6, maxEntries: 4,
   eventIds: ['info', 'persuasive', 'extemp', 'entertainment', 'poetry', 'serious', 'humorous'], status: 'registration',
 };
 
-const seedRows: [string, string, string][] = [
-  // Lincoln High's students are each entered in three events.
-  ['Maya Rodriguez', 'Lincoln High', 'info'], ['Maya Rodriguez', 'Lincoln High', 'persuasive'], ['Maya Rodriguez', 'Lincoln High', 'poetry'],
-  ['Eli Thompson', 'Lincoln High', 'extemp'], ['Eli Thompson', 'Lincoln High', 'info'], ['Eli Thompson', 'Lincoln High', 'entertainment'],
-  ['Nora Patel', 'Lincoln High', 'persuasive'], ['Nora Patel', 'Lincoln High', 'serious'], ['Nora Patel', 'Lincoln High', 'extemp'],
-  ['Sam Wilson', 'Lincoln High', 'poetry'], ['Sam Wilson', 'Lincoln High', 'humorous'], ['Sam Wilson', 'Lincoln High', 'serious'],
-  ['Iris Chen', 'Lincoln High', 'serious'], ['Iris Chen', 'Lincoln High', 'poetry'], ['Iris Chen', 'Lincoln High', 'entertainment'],
-  ['Leo Brooks', 'Creighton Prep', 'info'], ['Ava Kim', 'Creighton Prep', 'persuasive'], ['Noah Reyes', 'Creighton Prep', 'humorous'], ['Zoe Hart', 'Creighton Prep', 'extemp'], ['Mila Stone', 'Creighton Prep', 'entertainment'],
-  ['Owen Burke', 'Millard West', 'info'], ['Ruby Lang', 'Millard West', 'info'], ['Cole Avery', 'Millard West', 'extemp'], ['Tess Nolan', 'Millard West', 'serious'], ['Jude Park', 'Millard West', 'humorous'], ['Piper Dunn', 'Millard West', 'poetry'],
-  ['Ivy Marsh', 'Norfolk High', 'info'], ['Dean Rowe', 'Norfolk High', 'persuasive'], ['Lila Voss', 'Norfolk High', 'poetry'], ['Max Pruitt', 'Norfolk High', 'entertainment'], ['Elle Tran', 'Norfolk High', 'serious'],
-  ['Finn Carter', 'Lincoln East', 'info'], ['Hazel Byrd', 'Lincoln East', 'extemp'], ['Miles Okoye', 'Lincoln East', 'persuasive'], ['June Salas', 'Lincoln East', 'humorous'], ['Theo Grant', 'Lincoln East', 'entertainment'],
-  ['Cara Mills', 'Gothenburg High', 'info'], ['Wyatt Sims', 'Gothenburg High', 'info'], ['Nina Flores', 'Gothenburg High', 'serious'], ['Reid Adler', 'Gothenburg High', 'extemp'], ['Skye Ellis', 'Gothenburg High', 'poetry'], ['Beau Lin', 'Gothenburg High', 'humorous'],
-  ['Eden Cole', 'Aurora', 'info'], ['Kai Benton', 'Aurora', 'persuasive'], ['Remy Shaw', 'Aurora', 'extemp'], ['Luz Ortega', 'Aurora', 'poetry'], ['Gus Whitman', 'Aurora', 'entertainment'],
-  ['Tara Quinn', 'Minden', 'info'], ['Abel Frost', 'Minden', 'persuasive'], ['Dara Holt', 'Minden', 'serious'], ['Ezra Pike', 'Minden', 'humorous'], ['Wren Abbott', 'Minden', 'poetry'],
-];
-export const seedEntries: Entry[] = seedRows.map(([student, school, eventId], index) => ({ id: `e${index + 1}`, student, school, eventId }));
+// A realistic field: most students are in one or two events, many in three, and one in four.
+const seedTeams: Record<string, [string, string[]][]> = {
+  'Lincoln High': [['Maya Rodriguez', ['info', 'persuasive', 'poetry']], ['Eli Thompson', ['extemp', 'info']], ['Nora Patel', ['persuasive', 'serious', 'extemp']], ['Sam Wilson', ['poetry', 'humorous']], ['Iris Chen', ['serious']]],
+  'Creighton Prep': [['Leo Brooks', ['info', 'extemp']], ['Ava Kim', ['persuasive']], ['Noah Reyes', ['humorous', 'entertainment', 'poetry']], ['Zoe Hart', ['extemp']], ['Mila Stone', ['entertainment', 'humorous']]],
+  'Millard West': [['Owen Burke', ['info', 'persuasive', 'extemp']], ['Ruby Lang', ['info']], ['Cole Avery', ['extemp', 'entertainment']], ['Tess Nolan', ['serious', 'poetry']], ['Jude Park', ['humorous']], ['Piper Dunn', ['poetry', 'serious', 'humorous', 'entertainment']]],
+  'Norfolk High': [['Ivy Marsh', ['info', 'poetry']], ['Dean Rowe', ['persuasive', 'extemp', 'info']], ['Lila Voss', ['poetry']], ['Max Pruitt', ['entertainment']], ['Elle Tran', ['serious', 'persuasive']]],
+  'Lincoln East': [['Finn Carter', ['info']], ['Hazel Byrd', ['extemp', 'persuasive']], ['Miles Okoye', ['persuasive', 'info', 'serious']], ['June Salas', ['humorous']], ['Theo Grant', ['entertainment', 'humorous']]],
+  'Gothenburg High': [['Cara Mills', ['info', 'serious']], ['Wyatt Sims', ['info']], ['Nina Flores', ['serious', 'poetry', 'persuasive']], ['Reid Adler', ['extemp']], ['Skye Ellis', ['poetry', 'entertainment']], ['Beau Lin', ['humorous', 'extemp', 'entertainment']]],
+  Aurora: [['Eden Cole', ['info']], ['Kai Benton', ['persuasive', 'serious']], ['Remy Shaw', ['extemp', 'humorous', 'info']], ['Luz Ortega', ['poetry']], ['Gus Whitman', ['entertainment']]],
+  Minden: [['Tara Quinn', ['info', 'persuasive']], ['Abel Frost', ['persuasive']], ['Dara Holt', ['serious', 'humorous', 'poetry']], ['Ezra Pike', ['humorous']], ['Wren Abbott', ['poetry', 'serious']]],
+};
+export const seedEntries: Entry[] = Object.entries(seedTeams).flatMap(([school, students]) => students.flatMap(([student, events]) => events.map(eventId => ({ student, school, eventId }))))
+  .map((entry, index) => ({ id: `e${index + 1}`, ...entry }));
 
 export const sameSchool = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameStudent = (a: Entry, student: string, school: string) => sameSchool(a.school, school) && a.student.trim().toLowerCase() === student.trim().toLowerCase();
+
+/** How many events a student is entered in. Worked out from the entries, so nobody has to mark it by hand. */
+export const entryLoad = (entries: Entry[], student: string, school: string) => entries.filter(entry => sameStudent(entry, student, school)).length;
+/** Same, when only the name is known (the judge's sample round). */
+export const entryLoadByName = (entries: Entry[], student: string) => { const first = entries.find(entry => entry.student.toLowerCase() === student.toLowerCase()); return first ? entryLoad(entries, student, first.school) : 1; };
+export const loadLabel = (count: number) => count === 2 ? 'Double entered' : count === 3 ? 'Triple entered' : count >= 4 ? `Entered in ${count} events` : '';
 
 /**
  * Build every round. Each event is split into sections of at most `sectionSize`; speakers are dealt

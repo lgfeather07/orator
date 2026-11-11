@@ -283,3 +283,19 @@ textarea { font-size: 14px; line-height: 1.55; }
 @media (max-width: 720px) { .growth-events { grid-template-columns: 1fr; } }
 .embedded-pref-grid .event-row, .pref-groups .event-row { grid-template-columns: 20px 52px minmax(0, 1fr) auto; gap: 10px; }
 .event-row strong { font-size: 13px; }
+
+/* ── Growth: rating and rank charts ───────────────────────────── */
+.growth-charts { padding: 6px 0 4px; }
+.growth-charts figure { margin: 0; padding: 12px 0 0; }
+.growth-charts figure + figure { margin-top: 4px; border-top: 1px solid var(--border); }
+.growth-charts figcaption { padding: 0 17px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.growth-charts figcaption strong { font-size: 14px; }
+.growth-charts figcaption span { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+.growth-note { margin: 0 17px 16px; display: flex; gap: 6px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.growth-note svg { flex: none; margin-top: 2px; }
+.hero-stat strong { font-size: 48px; }
+/* The student's growth panel is full width, so its two charts sit side by side. */
+@media (min-width: 1000px) {
+  .my-growth .growth-charts { display: grid; grid-template-columns: 1fr 1fr; }
+  .my-growth .growth-charts figure + figure { margin-top: 0; border-top: 0; border-left: 1px solid var(--border); }
+}

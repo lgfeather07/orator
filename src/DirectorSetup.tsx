@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
-import { judgePool, roundTimes, sameSchool, type Section } from './tournament';
+import { entryLoad, judgePool, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -36,6 +36,9 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
   const outsideEvents = entries.filter(entry => !offered.includes(entry.eventId));
   const shown = entries.filter(entry => `${entry.student} ${entry.school} ${eventName(entry.eventId)}`.toLowerCase().includes(search.toLowerCase()));
   const roundSections = sections.filter(section => section.round === round);
+  // Count each student once, by how many events they are in.
+  const loads = [...new Map(entries.map(entry => [`${entry.school}|${entry.student}`.toLowerCase(), entryLoad(entries, entry.student, entry.school)])).values()];
+  const loadCount = (count: number) => loads.filter(load => count === 4 ? load >= 4 : load === count).length;
   const built = sections.length > 0;
   const editable = tournament.status === 'registration';
   const toggleEvent = (id: string) => updateTournament({ eventIds: offered.includes(id) ? offered.filter(item => item !== id) : ballotEvents.map(event => event.id).filter(item => item === id || offered.includes(item)) });
@@ -52,6 +55,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Tournament name</span><input value={tournament.name} onChange={event => updateTournament({ name: event.target.value })}/></label>
         <label><span>Date</span><input value={tournament.date} onChange={event => updateTournament({ date: event.target.value })}/></label>
         <label><span>Host school</span><input value={tournament.host} onChange={event => updateTournament({ host: event.target.value })}/></label>
+        <label><span>Most events per student</span><select value={tournament.maxEntries} disabled={!editable} onChange={event => updateTournament({ maxEntries: Number(event.target.value) })}>{[1, 2, 3, 4].map(count => <option key={count} value={count}>{count === 1 ? '1 event' : `${count} events`}</option>)}</select></label>
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
       <div className="events-offered">
@@ -65,16 +69,17 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
     </section>}
 
     {step === 1 && <section className="panel setup-step">
-      <div className="panel-head"><div><h2>Entries from coaches</h2><p>{entries.length} entries from {schools.length} schools. Coaches add these from their own workspace.</p></div><Badge tone={editable ? 'info' : 'success'} icon={editable ? 'clock' : 'lock'}>{editable ? 'Registration open' : 'Registration closed'}</Badge></div>
+      <div className="panel-head"><div><h2>Entries from coaches</h2><p>{entries.length} entries for {loads.length} students from {schools.length} schools. Coaches add these from their own workspace.</p></div><Badge tone={editable ? 'info' : 'success'} icon={editable ? 'clock' : 'lock'}>{editable ? 'Registration open' : 'Registration closed'}</Badge></div>
       <div className="school-grid">{schools.map(school => { const count = entries.filter(entry => entry.school === school).length; const done = !waiting.includes(school); return <div key={school} className={done ? '' : 'waiting'}>
         <strong>{school}</strong><span>{count} {count === 1 ? 'entry' : 'entries'}</span><Badge tone={done ? 'success' : 'warning'} icon={done ? 'check' : 'clock'}>{done ? 'Sent' : 'Still editing'}</Badge>
       </div>; })}</div>
       {waiting.length > 0 && <div className="setup-note warn"><Icon name="warning"/><span><strong>{waiting.join(', ')} {waiting.length === 1 ? 'hasn’t' : 'haven’t'} sent final entries.</strong> You can still build the schedule, but late changes will mean rebuilding it. Try it: open the <strong>Coach</strong> workspace, add a student under Entries, and send them.</span></div>}
       {outsideEvents.length > 0 && <div className="setup-note warn"><Icon name="warning"/><span><strong>{outsideEvents.length} {outsideEvents.length === 1 ? 'entry is' : 'entries are'} in an event you no longer offer</strong> and will be left off the schedule: {[...new Set(outsideEvents.map(entry => eventName(entry.eventId)))].join(', ')}.</span></div>}
+      <div className="load-mix"><span className="eyebrow">Entered in</span>{[[1, 'One event'], [2, 'Double entered'], [3, 'Triple entered'], [4, 'Four events']].map(([count, label]) => <span key={label}><b>{loadCount(count as number)}</b>{label}</span>)}<small>Worked out from the entries. Multi-entered students choose which room to go to first.</small></div>
       <div className="entry-counts">{offered.map(id => { const count = entries.filter(entry => entry.eventId === id).length; return <span key={id} className={count ? '' : 'empty'}><b>{count}</b>{eventName(id)}<small>{count ? `${Math.ceil(count / tournament.sectionSize)} room${Math.ceil(count / tournament.sectionSize) > 1 ? 's' : ''}` : 'no entries'}</small></span>; })}</div>
       <div className="entry-browser">
         <label className="search-box"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search student, school, or event"/></label>
-        <div className="entry-browser-list">{shown.map(entry => <div key={entry.id}><strong>{entry.student}</strong><span>{entry.school}</span><span>{eventName(entry.eventId)}</span></div>)}{shown.length === 0 && <p>No entries match “{search}”.</p>}</div>
+        <div className="entry-browser-list">{shown.map(entry => <div key={entry.id}><strong>{entry.student}{entryLoad(entries, entry.student, entry.school) > 1 && <em className="load-tag" title={loadLabel(entryLoad(entries, entry.student, entry.school))}>{entryLoad(entries, entry.student, entry.school)}×</em>}</strong><span>{entry.school}</span><span>{eventName(entry.eventId)}</span></div>)}{shown.length === 0 && <p>No entries match “{search}”.</p>}</div>
       </div>
     </section>}
 
@@ -87,13 +92,14 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       {!built ? <div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>No schedule yet</h3><p>Orator splits each event into rooms of up to {tournament.sectionSize}, spreads teammates across rooms, mixes the rooms each round, and assigns judges with no school conflicts.</p><Button icon="plus" onClick={() => store.generateSchedule()}>Build schedule</Button></div> : <>
         <div className="schedule-tools"><div className="segmented">{Array.from({ length: tournament.rounds }, (_, index) => index + 1).map(number => <button key={number} className={round === number ? 'active' : ''} onClick={() => setRound(number)}>Round {number} · {roundTimes[number - 1]}</button>)}</div>
           <Badge tone={problems.length ? 'warning' : 'success'} icon={problems.length ? 'warning' : 'check'}>{problems.length ? `${problems.length} room${problems.length > 1 ? 's need' : ' needs'} attention` : 'Every room has a judge'}</Badge></div>
+        <p className="schedule-hint"><Icon name="info" size={14}/> Students tagged double or triple entered are in more than one room this round. They choose which to go to first, so judges see the same tag and know to expect them late or let them leave early.</p>
         <div className="section-grid">{roundSections.map(section => {
           const flagged = !section.judgeId || conflict(section) || doubleBooked(section);
           return <article key={section.id} className={flagged ? 'flagged' : ''}>
             <header><div><span className="eyebrow">{section.room}</span><strong>{eventName(section.eventId)}</strong><small>{section.label} · {section.entryIds.length} speakers</small></div>
               <label><span>Judge</span><select aria-label={`Judge for ${eventName(section.eventId)} ${section.label}`} value={section.judgeId ?? ''} onChange={event => store.assignJudge(section.id, event.target.value || null)}><option value="">Needs a judge</option>{judgePool.map(judge => <option key={judge.id} value={judge.id}>{judge.name}{judge.school ? ` · ${judge.school}` : ''}</option>)}</select></label></header>
             {flagged && <p className="section-flag"><Icon name="warning" size={14}/> {!section.judgeId ? 'No judge is free for this room. Pick one or add judges.' : conflict(section) ? 'This judge is from the same school as a speaker here.' : 'This judge is already in another room this round.'}</p>}
-            <ol>{section.entryIds.map(id => { const entry = entries.find(item => item.id === id); return entry ? <li key={id}><span>{entry.student}</span><small>{entry.school}</small></li> : null; })}</ol>
+            <ol>{section.entryIds.map(id => { const entry = entries.find(item => item.id === id); const load = entryLoad(entries, entry?.student ?? '', entry?.school ?? ''); return entry ? <li key={id}><span>{entry.student}</span><small>{entry.school}</small>{load > 1 && <em className="load-tag" title={loadLabel(load)}>{loadLabel(load)}</em>}</li> : null; })}</ol>
           </article>;
         })}</div>
       </>}

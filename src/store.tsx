@@ -46,7 +46,7 @@ type Store = {
   reminders: { text: boolean; email: boolean }; setReminders: (r: { text: boolean; email: boolean }) => void;
 };
 
-const STORAGE_KEY = 'orator-demo-v2';
+const STORAGE_KEY = 'orator-demo-v3';
 const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincoln East', 'Gothenburg High', 'Aurora', 'Minden'];
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },

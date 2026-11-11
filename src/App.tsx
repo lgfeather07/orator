@@ -6,7 +6,9 @@ import { ballotEvents } from './ballots';
 import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
 import { IssueBoard, ReportIssueModal } from './Issues';
 import { TeamEntries } from './TeamEntries';
-import { StudentGrowth } from './Growth';
+import { StudentGrowth, MyGrowth } from './Growth';
+import { entryLoadByName, loadLabel, roundTimes } from './tournament';
+import { ballotEvents as nsaaEvents } from './ballots';
 import { EventPreferences, allEventPreferences } from './Preferences';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults } from './CoachTools';
@@ -340,7 +342,7 @@ function CoachPage() {
           ['comment','Low-comment ballot','Sam · Poetry'],
           ['upload','CSV ready to import','12 new students'],
         ].map(([icon,title,note],i) => <button key={title} onClick={() => i < 2 ? setView('ballots') : setView('import')}><span><Icon name={icon as IconName}/></span><span><strong>{title}</strong><small>{note}</small></span><Icon name="arrow"/></button>)}</aside>
-      </div> : view === 'entries' ? <TeamEntries school={account ? (account.school || 'Your school') : 'Lincoln High'} onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Lincoln High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>8.6</strong><small>Season average / 10</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <section className="panel action-workspace"><div className="panel-head"><div><h2>Import student CSV</h2><p>Add or update team entries from PowerSchool or your roster file.</p></div><Button variant="secondary" icon="close" onClick={() => setView('team')}>Cancel</Button></div>
+      </div> : view === 'entries' ? <TeamEntries school={account ? (account.school || 'Your school') : 'Lincoln High'} onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Lincoln High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>43.0</strong><small>Season average / 50</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <section className="panel action-workspace"><div className="panel-head"><div><h2>Import student CSV</h2><p>Add or update team entries from PowerSchool or your roster file.</p></div><Button variant="secondary" icon="close" onClick={() => setView('team')}>Cancel</Button></div>
         <div className="csv-import"><span className="upload-illustration"><Icon name="upload" size={30}/></span><h3>Drop your student CSV here</h3><p>We’ll preview every change before anything is added. Required columns: student name, graduation year, and event.</p><label className="dropzone"><input type="file" accept=".csv" onChange={() => setView('entries')}/><Icon name="file" size={25}/><strong>Choose CSV file</strong><small>CSV only · up to 10 MB</small></label><div className="import-actions"><Badge tone="info" icon="info">No changes are made without review</Badge><Button icon="arrow" onClick={() => setView('entries')}>Use sample file</Button></div></div>
       </section> : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
        : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
@@ -351,9 +353,22 @@ function CoachPage() {
   </DesktopShell>;
 }
 
+/** What the student is entered in today. Double and triple entry is worked out from the coach's entries. */
+function MyEntries() {
+  const { entries, sections, tournament } = useStore();
+  const mine = entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Lincoln High');
+  if (mine.length === 0) return null;
+  const round = Math.min(2, tournament.rounds);
+  const published = tournament.status !== 'registration' && sections.length > 0;
+  return <section className="my-entries">
+    <div><Badge tone="info" icon="users">{loadLabel(mine.length) || 'One event'}</Badge><strong>{mine.length > 1 ? `You’re in ${mine.length} events this round. You choose which room to go to first.` : 'You’re in one event this round.'}</strong>{mine.length > 1 && <small>Tell each judge you’re {loadLabel(mine.length).toLowerCase()} when you arrive. They can see it on their ballot too.</small>}</div>
+    <ul>{mine.map(entry => { const section = sections.find(item => item.round === round && item.entryIds.includes(entry.id)); return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && section ? `Round ${round} · ${roundTimes[round - 1]} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}` : 'Room posted when the schedule is published'}</small></li>; })}</ul>
+  </section>;
+}
+
 function StudentPage() {
   const greeting = useGreeting('Maya');
-  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep'>('today');
+  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep' | 'growth'>('today');
   const [prepSection, setPrepSection] = useState('Opening');
   const store = useStore();
   const rankVisible = store.resultsReleased;
@@ -368,10 +383,11 @@ function StudentPage() {
   };
   return <DesktopShell active="Overview" title={greeting} subtitle="Your rounds, feedback, and progress are ready in one place." persona="student">
     <div className="role-dashboard">
-      <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Varsity Informative</h2><p>Room 214 · Speak third · Code V42</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>8.6</strong><small>out of 10 · up 1.2</small></div></section>
+      <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Gothenburg Invitational</h2><p>Lincoln High · Code V42 · {store.entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Lincoln High').map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') || 'No events entered'} today</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>43.0</strong><small>out of 50 · up 6.0</small></div></section>
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'Released by your coach' : 'Until your coach releases it'} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments released' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
-      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button></div>
-      {view === 'today' ? <div className="role-grid">
+      <MyEntries/>
+      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
+      {view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'today' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Gothenburg Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>
           <div className="timeline-list">{[['8:00 AM','Round 1','Room 108','Completed'],['9:30 AM','Round 2','Room 214','Up next'],['11:00 AM','Round 3','Room 301','Scheduled'],['1:30 PM','Round 4','Room 122','Scheduled']].map(([time,round,room,status],i)=><div className={`timeline-row ${i===1?'current':''}`} key={round}><span className="timeline-dot">{i<1?<Icon name="check" size={14}/>:i+1}</span><span><small>{time}</small><strong>{round}</strong></span><span>{room}</span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge></div>)}</div>
         </section>
@@ -388,6 +404,7 @@ function StudentPage() {
 
 function JudgePage() {
   const greeting = useGreeting('Judge Leather');
+  const store = useStore();
   const [action, setAction] = useState<'assignments' | 'ballots' | 'preferences' | 'mobileBallot' | 'competitors'>('assignments');
   const [judgeEvents, setJudgeEvents] = useState(allEventPreferences);
   const [preferencesSaved, setPreferencesSaved] = useState(true);
@@ -409,7 +426,7 @@ function JudgePage() {
           ['C4','Maya Rodriguez','Lincoln High','“When the well runs dry”'],
           ['C5','Iris Chen','Gothenburg High','“Designed to disappear”'],
           ['C6','Leo Brooks','Creighton Prep','“The quiet infrastructure”'],
-        ].map(([code,name,school,title],index) => <article key={code}><span className="speaker-order">{index + 1}</span><Avatar initials={name.split(' ').map(part => part[0]).join('')} size="sm"/><span><strong>{name}</strong><small>{code} · {school}</small></span><span className="speech-title">{title}</span><SpeakerCheckIn code={code} compact/></article>)}</div>
+        ].map(([code,name,school,title],index) => <article key={code}><span className="speaker-order">{index + 1}</span><Avatar initials={name.split(' ').map(part => part[0]).join('')} size="sm"/><span><strong>{name}{loadLabel(entryLoadByName(store.entries, name)) && <Badge tone="info">{loadLabel(entryLoadByName(store.entries, name))}</Badge>}</strong><small>{code} · {school}</small></span><span className="speech-title">{title}</span><SpeakerCheckIn code={code} compact/></article>)}</div>
       </section> : action === 'ballots' ? <section className="panel ballot-desk"><div className="panel-head"><div><h2>Round 2 ballot desk</h2><p>Varsity Informative · 6 competitors · Room 214</p></div><Badge tone="warning" icon="edit">2 drafts</Badge></div>
         <div className="ballot-desk-grid">{['C1','C2','C3','C4','C5','C6'].map((code,i)=><article key={code}><div><span className={`status-dot ${i<3?'complete':''}`}/><Badge tone={i<3?'success':i<5?'warning':'danger'}>{i<3?'Submitted':i<5?'Draft':'Missing'}</Badge></div><strong>{code}</strong><p>{['Nora Patel','Eli Thompson','Sam Wilson','Maya Rodriguez','Iris Chen','Leo Brooks'][i]}</p><Button variant={i<3?'secondary':'primary'} icon={i<3?'archive':'edit'} onClick={() => setAction('mobileBallot')}>{i<3?'View ballot':'Continue ballot'}</Button></article>)}</div>
       </section> : action === 'preferences' ? <section className="panel embedded-preferences"><div className="panel-head"><div><h2>Event preferences</h2><p>Sort all 11 events by how confident you feel judging them.</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>

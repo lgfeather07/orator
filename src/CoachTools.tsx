@@ -29,11 +29,11 @@ export function ReminderSettings() {
 }
 
 const seasonBallots = [
-  { tournament: 'Gothenburg Invitational', judge: 'Judge Leather', score: 9.2, outlier: false },
-  { tournament: 'Millard West Classic', judge: 'Maria Chen', score: 9.0, outlier: false },
-  { tournament: 'Millard West Classic', judge: 'Tom Becker', score: 4.8, outlier: true },
-  { tournament: 'Norfolk Invitational', judge: 'David Ross', score: 8.8, outlier: false },
-  { tournament: 'Lincoln East Open', judge: 'Alyssa Ford', score: 8.6, outlier: false },
+  { tournament: 'Gothenburg Invitational', judge: 'Judge Leather', score: 46, outlier: false },
+  { tournament: 'Millard West Classic', judge: 'Maria Chen', score: 45, outlier: false },
+  { tournament: 'Millard West Classic', judge: 'Tom Becker', score: 36, outlier: true },
+  { tournament: 'Norfolk Invitational', judge: 'David Ross', score: 44, outlier: false },
+  { tournament: 'Lincoln East Open', judge: 'Alyssa Ford', score: 43, outlier: false },
 ];
 const average = (rows: typeof seasonBallots) => (rows.reduce((sum, row) => sum + row.score, 0) / rows.length).toFixed(1);
 
@@ -64,7 +64,7 @@ export function StudentRecordExtras({ student }: { student: string }) {
     <section className="record-card"><PracticeChecklist canAdd/></section>
 
     <section className="record-card">
-      <div className="field-label"><span><Icon name="growth" size={14}/> Season scores</span><small>Average section mark out of 10</small></div>
+      <div className="field-label"><span><Icon name="growth" size={14}/> Season scores</span><small>Average rating out of 50</small></div>
       <div className="score-summary"><strong>{average(counted)}</strong><span>{excludeOutliers ? 'average without the outlier ballot' : 'average across all ballots'}</span></div>
       <label className="urgent-toggle"><input type="checkbox" checked={excludeOutliers} onChange={event => setExcludeOutliers(event.target.checked)}/> Leave outlier ballots out of the average</label>
       <ul className="score-list">{seasonBallots.map(row => <li key={row.tournament + row.judge} className={row.outlier && excludeOutliers ? 'excluded' : ''}><span><strong>{row.tournament}</strong><small>{row.judge}</small></span>{row.outlier && <Badge tone="warning" icon="warning">Outlier</Badge>}<b>{row.score.toFixed(1)}</b></li>)}</ul>

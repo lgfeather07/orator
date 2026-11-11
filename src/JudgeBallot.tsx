@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, useStore, type Presence } from './store';
+import { entryLoadByName, loadLabel } from './tournament';
 import { ballotEvents, MARK_MAX, RATING_BANDS, RATING_MIN, TIME_GRACE_SECONDS, type BallotEvent } from './ballots';
 import { useAuth } from './auth';
 import { loadBallot, saveBallot, type BallotKey, type EntryInput } from './ballotApi';
@@ -58,8 +59,9 @@ export function SpeakerCheckIn({ code, compact = false, onChange }: { code: stri
 }
 
 export function JudgeBallot() {
-  const { speakerPresence, setSpeakerPresence } = useStore();
+  const { speakerPresence, setSpeakerPresence, entries } = useStore();
   const { profile } = useAuth();
+  const loadOf = (name: string) => loadLabel(entryLoadByName(entries, name));
   /** Signed-in judges save to the database; the demo keeps everything in the browser. */
   const remote = profile !== null;
   const [eventId, setEventId] = useState('info');
@@ -213,12 +215,12 @@ export function JudgeBallot() {
         const data = ballots[item.code];
         const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.marks.some(Boolean) ? 'draft' : 'empty';
         return <button key={item.code} role="tab" aria-selected={current === item.code} className={`${current === item.code ? 'active' : ''} ${state}`} onClick={() => goTo(item.code)}>
-          <small>{index + 1}</small><strong>{item.code}</strong><span>{state === 'done' ? `Rated ${ratingOf(data)}` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
+          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.code}</strong><span>{state === 'done' ? `Rated ${ratingOf(data)}` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
         </button>;
       })}</div>
 
       <div className="jb-speaker">
-        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF 6 · {speaker.code}</span><h2>{speaker.name}</h2><p>{speaker.title} · {speaker.school}</p></div>
+        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF 6 · {speaker.code}</span><h2>{speaker.name}</h2><p>{speaker.title} · {speaker.school}</p>{loadOf(speaker.name) && <p className="jb-load"><Badge tone="info" icon="users">{loadOf(speaker.name)}</Badge> In more than one room this round. They may arrive late or need to leave early.</p>}</div>
         <SpeakerCheckIn code={current} onChange={() => { dirty.current = true; }}/>
       </div>
 

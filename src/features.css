@@ -574,3 +574,26 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
   .issue-list li > .button, .issue-list li > .badge, .release-card > .button, .release-card > .badge, .run-steps > div > .button, .run-steps > div > .badge { grid-column: 2; justify-self: start; }
   .header-tool.report-tool { width: auto; padding: 0 10px; display: flex; }
 }
+
+/* ── Double and triple entry ──────────────────────────────────── */
+.entry-row strong { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.entry-row strong .badge, .competitor-roster strong .badge { min-height: 20px; padding: 2px 7px; font-size: 11px; }
+.competitor-roster strong { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.entry-add .entry-hint { color: var(--muted); }
+.load-tag { margin-left: 8px; padding: 2px 7px; color: var(--brand); background: var(--brand-soft); border-radius: 6px; font-size: 11px; font-style: normal; font-weight: 700; white-space: nowrap; }
+.load-mix { margin: 0 18px 14px; padding: 12px 14px; display: flex; align-items: baseline; gap: 8px 18px; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; font-size: 13px; }
+.load-mix > span:not(.eyebrow) { display: inline-flex; align-items: baseline; gap: 6px; }
+.load-mix b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.load-mix small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.schedule-hint { margin: 12px 18px 0; display: flex; gap: 6px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.schedule-hint svg { flex: none; margin-top: 2px; }
+.jb-load { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12.5px; }
+.my-entries { margin: 16px 0 4px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow-sm); }
+.my-entries > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.my-entries > div strong { font-size: 14px; line-height: 1.4; }
+.my-entries small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.my-entries ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.my-entries li { padding: 8px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border); }
+.my-entries li:first-child { border-top: 0; }
+.my-entries li strong { font-size: 13.5px; }
+@media (max-width: 900px) { .my-entries { grid-template-columns: 1fr; } }
