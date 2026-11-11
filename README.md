@@ -14,6 +14,8 @@ npm run dev
 
 Without any configuration the app runs as a demo with sample data.
 
+The demo includes a full tournament setup: a coach enters students, the director builds the schedule, publishes it, runs the day, and ends it; the coach then releases results to students. That setup state is kept in the browser (not the database) and can be reset from the director's Details step.
+
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
@@ -27,6 +29,10 @@ Without any configuration the app runs as a demo with sample data.
 - `src/JudgeBallot.tsx` — the e-ballot
 - `src/ballots.ts` — NSAA ballot criteria, time limits, and disqualification grounds for 11 events
 - `src/DirectorSetup.tsx` — tournament setup and check-in board
+- `src/TeamEntries.tsx` — a coach's entries for the tournament
+- `src/tournament.ts` — demo tournament data and the schedule builder
+- `src/Issues.tsx` — issue reporting and the director's issue board
+- `src/theme.css` — the visual theme
 - `src/CoachTools.tsx` — focus notes, practice log, checklist
 - `src/auth.tsx` — sign in, sign up, password reset
 - `src/ballotApi.ts` — saving and loading ballots

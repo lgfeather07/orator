@@ -115,3 +115,15 @@ export function TeamBallots() {
     })}</div>}
   </section>;
 }
+
+/** Coaches decide when their students see rankings and comments, and only once the tournament has ended. */
+export function ReleaseResults() {
+  const { tournament, resultsReleased, releaseResults } = useStore();
+  const finished = tournament.status === 'finished';
+  return <div className={`release-card ${resultsReleased ? 'released' : ''}`}>
+    <span className="release-icon"><Icon name={resultsReleased ? 'eye' : 'lock'}/></span>
+    <div><strong>{resultsReleased ? 'Results are released to your students' : 'Your students can’t see rankings or comments yet'}</strong>
+      <small>{resultsReleased ? 'Each student now sees their own rankings and judge comments from this tournament.' : finished ? 'The tournament has ended. Release results when you are ready to talk them through with your team.' : 'Results stay hidden for the whole tournament. You can release them once the director ends it.'}</small></div>
+    {resultsReleased ? <Badge tone="success" icon="check">Released</Badge> : <Button icon="eye" disabled={!finished} onClick={releaseResults}>Release to students</Button>}
+  </div>;
+}

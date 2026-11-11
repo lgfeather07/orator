@@ -72,6 +72,15 @@ export function Progress({ value }: { value: number }) {
   return <div className="progress" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }}/></div>;
 }
 
+/** The Orator mark: the letter O drawn as a watching eye. */
+export function OratorMark({ size = 24 }: { size?: number }) {
+  return <svg className="orator-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+    <circle cx="16" cy="16" r="12.4" fill="none" stroke="currentColor" strokeWidth="4.4"/>
+    <g className="orator-pupil"><circle cx="17.4" cy="15.2" r="5.1" fill="var(--accent)"/><circle cx="19.4" cy="13.2" r="1.55" fill="#fff"/></g>
+  </svg>;
+}
+
+/** Wordmark: the eye stands in for the O of "Orator". */
 export function Logo() {
-  return <div className="logo"><span className="logo-mark"><Icon name="comment" size={19}/></span><strong>Orator</strong></div>;
+  return <div className="logo" role="img" aria-label="Orator"><OratorMark/><strong aria-hidden="true">rator</strong></div>;
 }

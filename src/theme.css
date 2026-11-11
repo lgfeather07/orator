@@ -1,6 +1,6 @@
 /*
  * Orator visual theme. Loaded last, so it restyles the components defined in index.css and features.css.
- * Direction: a tab room's ballot paper. Warm paper surfaces, deep navy ink, one marigold accent,
+ * Direction: a tab room's ballot paper. Warm paper surfaces, violet ink, one coral accent,
  * hairline rules instead of heavy cards, serif display type, and monospace for anything you count.
  */
 
@@ -48,23 +48,32 @@ body { font-family: var(--font-body); font-feature-settings: 'ss01', 'cv11'; -we
 .preview-brand span { font-family: var(--font-display); font-size: 21px; font-weight: 400; letter-spacing: 0; }
 .account-nav .preview-brand span { font-size: 22px; }
 .preview-brand small { font-family: var(--font-mono); font-size: 10px; color: #7f89a3; letter-spacing: .04em; }
-.preview-menu { background: #18223d; border-color: rgba(255, 255, 255, .12); }
+.preview-menu { background: #271d4d; border-color: rgba(255, 255, 255, .12); }
 .account-signout { border-color: rgba(255, 255, 255, .2); transition: border-color .16s, color .16s; }
 .account-signout:hover { color: #fff; border-color: var(--accent); }
 
-/* ── Sidebar: a navy rail. The tokens are re-pointed so everything inside inherits it. ── */
+/* ── Sidebar: a deep violet rail. The tokens are re-pointed so everything inside inherits it. ── */
 .sidebar {
   --ink: #f2f4fa; --muted: #a3adc5; --border: rgba(255, 255, 255, .12); --surface: rgba(255, 255, 255, .09); --surface-2: rgba(255, 255, 255, .045);
   --brand: #ffffff; --brand-soft: rgba(255, 255, 255, .09); --green: #86d9ae; --green-soft: rgba(134, 217, 174, .11); --shadow-sm: none;
   color: var(--ink); border-right: 0;
   background:
-    radial-gradient(420px 260px at 0% 0%, rgba(242, 176, 30, .13), transparent 70%),
+    radial-gradient(420px 260px at 0% 0%, rgba(255, 138, 102, .13), transparent 70%),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 30px),
-    linear-gradient(180deg, #16203b, var(--night));
+    linear-gradient(180deg, #261b4d, var(--night));
 }
-.sidebar .logo strong { font-family: var(--font-display); font-weight: 400; font-size: 27px; letter-spacing: 0; }
-.logo strong { font-family: var(--font-display); font-weight: 400; font-size: 26px; letter-spacing: 0; }
-.logo-mark { color: var(--accent-ink); background: var(--accent); border-radius: 9px 9px 9px 2px; }
+.sidebar .logo strong { color: #fff; }
+.logo { gap: 1px; align-items: center; color: var(--brand-strong); }
+.dark .logo { color: var(--ink); }
+.sidebar .logo { color: #fff; }
+.logo strong { font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: 0; line-height: 1; color: var(--ink); }
+.logo .orator-mark { margin-top: 3px; }
+.orator-mark { flex: none; overflow: visible; }
+.orator-pupil { transform-box: fill-box; transform-origin: center; transition: transform .35s cubic-bezier(.2, .8, .2, 1); animation: orator-blink 7s infinite; }
+.logo:hover .orator-pupil, .preview-brand:hover .orator-pupil { transform: translate(-2.2px, 1.4px); animation: none; }
+@keyframes orator-blink { 0%, 93%, 100% { transform: scaleY(1); } 96.5% { transform: scaleY(.08); } }
+.preview-brand span { display: inline-flex; align-items: center; gap: 1px; }
+.preview-brand .orator-mark { margin-top: 2px; }
 .sidebar nav button { position: relative; transition: background .16s ease, color .16s ease, padding .16s ease; }
 .sidebar nav button:hover { color: var(--ink); background: var(--surface-2); }
 .sidebar nav button.active { color: #fff; background: var(--brand-soft); }
@@ -86,15 +95,15 @@ body { font-family: var(--font-body); font-feature-settings: 'ss01', 'cv11'; -we
 .role-hero, .topic-hero, .student-hero, .judge-hero, .coach-hero {
   color: #fff; border: 1px solid rgba(255, 255, 255, .08); border-radius: 18px; box-shadow: var(--shadow);
   background:
-    radial-gradient(560px 320px at 88% -10%, rgba(242, 176, 30, .30), transparent 62%),
+    radial-gradient(560px 320px at 88% -10%, rgba(255, 138, 102, .30), transparent 62%),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 32px),
-    linear-gradient(120deg, var(--night) 10%, #1d2f5c 70%, #27448a);
+    linear-gradient(120deg, var(--night) 10%, var(--night-mid) 68%, #5a3dd4);
 }
 .role-hero { min-height: 232px; padding: 34px 38px; }
 .role-hero::after { width: 1px; height: auto; top: 26px; bottom: 26px; right: 236px; border: 0; border-radius: 0; box-shadow: none; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .22), transparent); }
 .role-hero p, .topic-hero p { color: rgba(255, 255, 255, .74); font-size: 14px; }
 .role-hero .badge { color: var(--accent-ink); background: var(--accent); }
-.role-hero .button-primary, .topic-hero .button, .judge-hero .button-primary, .coach-hero .button-primary { color: var(--accent-ink); background: var(--accent); box-shadow: 0 6px 18px rgba(242, 176, 30, .28); }
+.role-hero .button-primary, .topic-hero .button, .judge-hero .button-primary, .coach-hero .button-primary { color: var(--accent-ink); background: var(--accent); box-shadow: 0 6px 18px rgba(255, 138, 102, .28); }
 .role-hero .button-secondary { color: #fff; background: transparent; border-color: rgba(255, 255, 255, .34); }
 .role-hero .button-secondary:hover { background: rgba(255, 255, 255, .08); }
 .topic-hero .eyebrow { color: var(--accent); }
@@ -173,9 +182,9 @@ textarea { font-size: 14px; line-height: 1.55; }
 .auth-main { width: min(1040px, 100%); padding: 44px 20px 56px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 440px); gap: 0; align-items: stretch; }
 .auth-pitch { padding: 40px 38px; display: flex; flex-direction: column; color: #fff; border-radius: 20px 0 0 20px; border: 1px solid rgba(255, 255, 255, .08);
   background:
-    radial-gradient(520px 320px at 100% 0%, rgba(242, 176, 30, .32), transparent 62%),
+    radial-gradient(520px 320px at 100% 0%, rgba(255, 138, 102, .32), transparent 62%),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 32px),
-    linear-gradient(150deg, var(--night), #1d2f5c 75%, #27448a); }
+    linear-gradient(150deg, var(--night), var(--night-mid) 75%, #5a3dd4); }
 .auth-pitch .eyebrow { color: var(--accent); }
 .auth-pitch h2 { margin: 16px 0 14px; font-size: 54px; line-height: 1; }
 .auth-pitch h2 em { color: var(--accent); }
@@ -236,3 +245,8 @@ textarea { font-size: 14px; line-height: 1.55; }
   .signin-intro h1 { font-size: 36px; }
   .role-tabs { gap: 16px; overflow-x: auto; }
 }
+
+/* ── Wordmark spacing ─────────────────────────────────────────── */
+.signin-header > .logo, .docs-header .logo { gap: 1px; }
+.prototype-nav { grid-template-columns: auto 1fr auto; }
+.preview-brand small { white-space: nowrap; }

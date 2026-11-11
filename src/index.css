@@ -1,19 +1,20 @@
 @import 'tailwindcss';
 
 :root {
-  /* Varsity palette: warm ballot paper, deep navy ink, one marigold accent. */
-  --brand: #23407a;
-  --brand-strong: #14254a;
-  --brand-soft: #e2e8f4;
-  --accent: #f2b01e;
-  --accent-ink: #1a2440;
-  --night: #121a30;
-  --ink: #171d2b;
-  --muted: #5c6373;
-  --border: #d8d0bd;
-  --surface: #fcf9f2;
-  --surface-2: #f5f0e4;
-  --canvas: #ede6d6;
+  /* Violet ink on warm paper, with a single coral accent. */
+  --brand: #5a3dd4;
+  --brand-strong: #3a2499;
+  --brand-soft: #ece7fb;
+  --accent: #ff8a66;
+  --accent-ink: #3b1407;
+  --night: #1b1436;
+  --night-mid: #33217f;
+  --ink: #1c1830;
+  --muted: #625d75;
+  --border: #dcd5cf;
+  --surface: #fdfbf8;
+  --surface-2: #f6f2ed;
+  --canvas: #efe9e3;
   --green: #1c7250;
   --green-soft: #dcefe2;
   --pink: #a23a63;
@@ -22,9 +23,9 @@
   --amber-soft: #fbeecb;
   --red: #b3372f;
   --red-soft: #f9e4e0;
-  --blue-soft: #e2e8f4;
-  --shadow: 0 18px 44px rgba(18, 26, 48, .12);
-  --shadow-sm: 0 2px 10px rgba(18, 26, 48, .06);
+  --blue-soft: #ece7fb;
+  --shadow: 0 18px 44px rgba(27, 20, 54, .13);
+  --shadow-sm: 0 2px 10px rgba(27, 20, 54, .06);
   --font-display: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
   --font-body: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -40,10 +41,10 @@
 
 .app { min-height: 100vh; background: var(--canvas); color: var(--ink); transition: background .2s, color .2s; }
 .app.dark {
-  --ink: #eef0f6; --muted: #9ba5bb; --border: #2b3554; --surface: #161d31; --surface-2: #1b2440; --canvas: #0d1222;
-  --brand: #9bb8f7; --brand-strong: #c7d7ff; --brand-soft: #212e52; --accent-ink: #1a2440; --green: #6fd0a2; --green-soft: #173a2e;
-  --pink: #ef8caf; --pink-soft: #472b37; --amber: #f0c36a; --amber-soft: #40351b; --red: #f08a80; --red-soft: #47262a; --blue-soft: #212e52;
-  --shadow: 0 18px 44px rgba(0, 0, 0, .4); --shadow-sm: 0 2px 10px rgba(0, 0, 0, .3);
+  --ink: #f1eefb; --muted: #a8a1c0; --border: #352d57; --surface: #1b1630; --surface-2: #221c3d; --canvas: #110d21;
+  --brand: #ab98ff; --brand-strong: #d2c8ff; --brand-soft: #2a2250; --green: #6fd0a2; --green-soft: #173a2e;
+  --pink: #ef8caf; --pink-soft: #472b37; --amber: #f0c36a; --amber-soft: #40351b; --red: #f08a80; --red-soft: #47262a; --blue-soft: #2a2250;
+  --shadow: 0 18px 44px rgba(0, 0, 0, .42); --shadow-sm: 0 2px 10px rgba(0, 0, 0, .3);
 }
 
 .prototype-nav { height: 54px; padding: 0 14px; background: #1e1d25; color: #ccc8d7; display: grid; grid-template-columns: 180px 1fr auto; align-items: center; gap: 15px; position: sticky; top: 0; z-index: 50; border-bottom: 1px solid #32303b; }
