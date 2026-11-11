@@ -62,6 +62,8 @@ export function JudgeBallot() {
   const { speakerPresence, setSpeakerPresence, entries } = useStore();
   const { profile } = useAuth();
   const loadOf = (name: string) => loadLabel(entryLoadByName(entries, name));
+  const firstName = (code: string) => roundSpeakers.find(item => item.code === code)!.name.split(' ')[0];
+  const firstNames = (codes: string[]) => codes.map(firstName).join(', ');
   /** Signed-in judges save to the database; the demo keeps everything in the browser. */
   const remote = profile !== null;
   const [eventId, setEventId] = useState('info');
@@ -92,11 +94,17 @@ export function JudgeBallot() {
   const noShows = order.filter(absent);
   const unfinished = ranked.filter(code => !isScored(ballots[code]));
   const notCheckedIn = ranked.filter(code => !speakerPresence[code]);
-  // A speaker may not be ranked above someone the judge gave a higher rating.
+  const timePenalty = (code: string) => timeStatus(secondsOf(ballots[code]), event, classA).penalty;
+  // A speaker may not be ranked above someone the judge gave a higher rating, unless that
+  // higher-rated speaker has a time penalty: being lowered for time is allowed, not an error.
   const outOfOrder = new Set<string>();
   ranked.forEach((code, index) => {
-    if (index > 0 && ratingOf(ballots[code]) > ratingOf(ballots[ranked[index - 1]])) { outOfOrder.add(code); outOfOrder.add(ranked[index - 1]); }
+    if (timePenalty(code)) return;
+    // Compare with everyone ranked above, not just the neighbour, so a penalized speaker in between can't hide a mismatch.
+    ranked.slice(0, index).forEach(above => { if (ratingOf(ballots[code]) > ratingOf(ballots[above])) { outOfOrder.add(code); outOfOrder.add(above); } });
   });
+  /** True when the judge has already placed a penalized speaker below someone with a lower rating. */
+  const loweredByJudge = (code: string) => { const index = ranked.indexOf(code); return timePenalty(code) && index > 0 && ratingOf(ballots[code]) > ratingOf(ballots[ranked[index - 1]]); };
   const canSubmit = unfinished.length === 0 && notCheckedIn.length === 0 && outOfOrder.size === 0;
 
   const move = (code: string, direction: -1 | 1) => {
@@ -120,9 +128,18 @@ export function JudgeBallot() {
   const goTo = (code: string) => { setCurrent(code); setOpen(0); };
   const flagsFor = (code: string) => { const data = ballots[code]; return { penalty: timeStatus(secondsOf(data), event, classA).penalty, dq: data.dq.length > 0 }; };
 
+  // The judge ranks on performance. Anyone with a time penalty is then placed one rank lower
+  // automatically, unless the judge has already put them below a lower-rated speaker.
+  const finalRanked = [...ranked];
+  for (let index = finalRanked.length - 2; index >= 0; index--) {
+    const code = finalRanked[index];
+    if (timePenalty(code) && !loweredByJudge(code)) [finalRanked[index], finalRanked[index + 1]] = [finalRanked[index + 1], finalRanked[index]];
+  }
+  const lowered = (code: string) => timePenalty(code) && (loweredByJudge(code) || finalRanked.indexOf(code) > ranked.indexOf(code));
+
   const toEntries = (): EntryInput[] => roundSpeakers.map(item => {
     const data = ballots[item.code]; const presence = speakerPresence[item.code];
-    const place = ranked.indexOf(item.code);
+    const place = finalRanked.indexOf(item.code);
     return {
       code: item.code, name: item.name, school: item.school, present: presence ? presence === 'present' : null,
       rank: place >= 0 ? place + 1 : null, rating: ratingOf(data) || null, timeSeconds: secondsOf(data), timePenalty: flagsFor(item.code).penalty,
@@ -150,6 +167,11 @@ export function JudgeBallot() {
         });
         setBallots(next);
         const byRank = [...saved.entries].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map(entry => entry.code).filter(code => next[code]);
+        const penalized = new Set(saved.entries.filter(entry => entry.timePenalty).map(entry => entry.code));
+        for (let index = 1; index < byRank.length; index++) {
+          // Only a tie needs undoing; a penalized speaker below a lower-rated one is recognised as already lowered.
+          if (penalized.has(byRank[index]) && ratingOf(next[byRank[index]]) === ratingOf(next[byRank[index - 1]])) [byRank[index - 1], byRank[index]] = [byRank[index], byRank[index - 1]];
+        }
         setOrder([...byRank, ...roundSpeakers.map(item => item.code).filter(code => !byRank.includes(code))]);
       } else {
         roundSpeakers.forEach(item => setSpeakerPresence(item.code, undefined));
@@ -191,7 +213,7 @@ export function JudgeBallot() {
     <span className="success-icon"><Icon name="check" size={26}/></span>
     <h2>Round 2 ballot submitted</h2>
     <p>Ranks, ratings, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
-    <ol className="jb-final">{ranked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{roundSpeakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
+    <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{roundSpeakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
       <div className="field-label"><span>How is this tournament running?</span><small>Optional · goes to the director</small></div>
       {feedbackSent ? <p className="jb-sent"><Icon name="check" size={15}/> Thanks. Your feedback was sent to the tournament director.</p> : <>
@@ -215,7 +237,7 @@ export function JudgeBallot() {
         const data = ballots[item.code];
         const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.marks.some(Boolean) ? 'draft' : 'empty';
         return <button key={item.code} role="tab" aria-selected={current === item.code} className={`${current === item.code ? 'active' : ''} ${state}`} onClick={() => goTo(item.code)}>
-          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.code}</strong><span>{state === 'done' ? `Rated ${ratingOf(data)}` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
+          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.name}</strong><span>{state === 'done' ? `Rated ${ratingOf(data)}` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
         </button>;
       })}</div>
 
@@ -296,29 +318,29 @@ export function JudgeBallot() {
         {speakerIndex < roundSpeakers.length - 1 ? <Button icon="arrow" onClick={() => goTo(roundSpeakers[speakerIndex + 1].code)}>Next speaker</Button> : <Button icon="arrow" onClick={() => setTab('rank')}>Rank the round</Button>}
       </div>
     </> : <>
-      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>Sort by rating</Button></div>
+      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>Sort by rating</Button></div>
       <div className="jb-rank-list">
         <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>Rating</span><span/></div>
-        {ranked.map((code, index) => {
+        {finalRanked.map((code, index) => {
           const item = roundSpeakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
           return <div key={code} className={`jb-rank-row ${outOfOrder.has(code) ? 'conflict' : ''} ${dragged === code ? 'dragging' : ''}`} draggable onDragStart={() => setDragged(code)} onDragEnd={() => setDragged(null)} onDragOver={drag => drag.preventDefault()} onDrop={() => dropOn(code)}>
             <span className="jb-grip"><Icon name="drag"/></span>
             <span className="jb-rank-number">{index + 1}</span>
-            <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">Lowered one rank</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small></span>
+            <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">{lowered(code) ? 'Lowered one rank for time' : 'Time penalty · already last'}</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small></span>
             <span className={flags.penalty ? 'jb-over' : ''}>{seconds === null ? '—' : clock(seconds)}</span>
             <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span>
-            <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={index === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={index === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
+            <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={ranked.indexOf(code) === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={ranked.indexOf(code) === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
           </div>;
         })}
         {noShows.map(code => <div key={code} className="jb-rank-row no-show"><span/><span className="jb-rank-number">–</span><span className="jb-rank-name"><strong>{roundSpeakers.find(entry => entry.code === code)!.name}</strong><small>{code} · No-show, not ranked</small></span><span>—</span><span>—</span><span/></div>)}
       </div>
 
       <div className="jb-checks">
-        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? 'Ranks don’t match ratings' : 'Ranks follow ratings'}</strong><small>{outOfOrder.size ? 'A speaker with a lower rating is ranked above one with a higher rating. Reorder the highlighted rows or adjust their section marks.' : 'No speaker is ranked above someone with a higher rating.'}</small></span></div>
-        <div className={unfinished.length ? 'bad' : 'ok'}><Icon name={unfinished.length ? 'warning' : 'check'}/><span><strong>{unfinished.length ? `${unfinished.length} speaker${unfinished.length > 1 ? 's still need' : ' still needs'} scoring` : 'Every speaker is scored'}</strong><small>{unfinished.length ? `${unfinished.join(', ')} need all five section marks, a time, and written feedback.` : 'Section marks, times, and written feedback are complete.'}</small></span>{unfinished.length > 0 && <button onClick={() => { goTo(unfinished[0]); setTab('score'); }}>Finish {unfinished[0]}</button>}</div>
-        <div className={notCheckedIn.length ? 'bad' : 'ok'}><Icon name={notCheckedIn.length ? 'warning' : 'check'}/><span><strong>{notCheckedIn.length ? `${notCheckedIn.length} speaker${notCheckedIn.length > 1 ? 's' : ''} not checked in` : 'Attendance recorded'}</strong><small>{notCheckedIn.length ? `Mark ${notCheckedIn.join(', ')} as present or no-show.` : 'Everyone is marked present or no-show.'}</small></span>{notCheckedIn.length > 0 && <button onClick={() => { goTo(notCheckedIn[0]); setTab('score'); }}>Check in {notCheckedIn[0]}</button>}</div>
+        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? 'Ranks don’t match ratings' : 'Ranks follow ratings'}</strong><small>{outOfOrder.size ? 'A speaker with a lower rating is ranked above one with a higher rating. Reorder the highlighted rows or adjust their section marks.' : finalRanked.some(lowered) ? 'Time penalties are applied for you; no speaker is otherwise ranked above someone with a higher rating.' : 'No speaker is ranked above someone with a higher rating.'}</small></span></div>
+        <div className={unfinished.length ? 'bad' : 'ok'}><Icon name={unfinished.length ? 'warning' : 'check'}/><span><strong>{unfinished.length ? `${unfinished.length} speaker${unfinished.length > 1 ? 's still need' : ' still needs'} scoring` : 'Every speaker is scored'}</strong><small>{unfinished.length ? `${firstNames(unfinished)} ${unfinished.length > 1 ? 'need' : 'needs'} all five section marks, a time, and written feedback.` : 'Section marks, times, and written feedback are complete.'}</small></span>{unfinished.length > 0 && <button onClick={() => { goTo(unfinished[0]); setTab('score'); }}>Finish {firstName(unfinished[0])}</button>}</div>
+        <div className={notCheckedIn.length ? 'bad' : 'ok'}><Icon name={notCheckedIn.length ? 'warning' : 'check'}/><span><strong>{notCheckedIn.length ? `${notCheckedIn.length} speaker${notCheckedIn.length > 1 ? 's' : ''} not checked in` : 'Attendance recorded'}</strong><small>{notCheckedIn.length ? `Mark ${firstNames(notCheckedIn)} as present or no-show.` : 'Everyone is marked present or no-show.'}</small></span>{notCheckedIn.length > 0 && <button onClick={() => { goTo(notCheckedIn[0]); setTab('score'); }}>Check in {firstName(notCheckedIn[0])}</button>}</div>
       </div>
-      <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Time penalties are recorded on the ballot and the tab room lowers those entries one rank.</p>
+      <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Anyone more than 30 seconds outside the time limit is placed one rank lower automatically, so they can finish below a speaker with a lower rating.</p>
 
       <div className="jb-nav"><Button variant="secondary" onClick={() => setTab('score')}>Back to scoring</Button>{saveLine}<Button disabled={!canSubmit || submitting} onClick={submit}>{submitting ? 'Submitting…' : 'Submit ballot'}</Button></div>
     </>}

@@ -299,3 +299,7 @@ textarea { font-size: 14px; line-height: 1.55; }
   .my-growth .growth-charts { display: grid; grid-template-columns: 1fr 1fr; }
   .my-growth .growth-charts figure + figure { margin-top: 0; border-top: 0; border-left: 1px solid var(--border); }
 }
+
+/* Speaker strip shows names, so let them wrap rather than clip. */
+.jb-strip button { padding: 8px 6px; min-height: 74px; }
+.jb-strip strong { font-family: var(--font-body); font-size: 13px; letter-spacing: -.01em; line-height: 1.2; text-align: center; text-wrap: balance; }

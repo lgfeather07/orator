@@ -122,7 +122,7 @@ begin
     from public.ballot_entries e where e.ballot_id = new.id;
     if problem is null and exists (
       select 1 from public.ballot_entries a join public.ballot_entries b on b.ballot_id = a.ballot_id
-      where a.ballot_id = new.id and a.present and b.present and a.rank < b.rank and a.rating < b.rating
+      where a.ballot_id = new.id and a.present and b.present and a.rank < b.rank and a.rating < b.rating and not b.time_penalty  -- a time penalty lowers an entry one rank
     ) then problem := 'A speaker with a lower rating is ranked above one with a higher rating.'; end if;
     if problem is not null then raise exception '%', problem using errcode = 'check_violation'; end if;
     new.submitted_at := now();
