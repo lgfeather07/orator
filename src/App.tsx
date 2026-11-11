@@ -482,6 +482,8 @@ function Workspace() {
   const { loading, profile, recovering } = useAuth();
   const [page, setPage] = useState<Page>('auth');
   const [dark, setDark] = useState(false);
+  /** Visitors can explore every role with sample data without an account, even when accounts are connected. */
+  const [demo, setDemo] = useState(false);
   const signedIn = authConfigured && profile !== null && !recovering;
   // Signed-in users land on their workspace, or the role chooser if they have several, and can only open their own roles.
   const allowed = (target: Page) => !signedIn || target === 'signin' || profile!.roles.includes(target as Role);
@@ -489,14 +491,14 @@ function Workspace() {
   const current = signedIn && (page === 'auth' || !allowed(page)) ? home : page;
   const navigate = (target: Page) => setPage(allowed(target) ? target : home);
   const content = useMemo(() => ({
-    auth: <AuthPage onDemo={authConfigured ? undefined : () => setPage('signin')}/>,
+    auth: <AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>,
     signin: <SignInPage/>,
     student: <StudentPage/>, judge: <JudgePage/>, coach: <CoachPage/>,
     director: <DirectorPage/>,
     components: <ComponentsPage/>, styles: <StylesPage/>, states: <StatesPage/>
   })[current], [current]);
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
-  if (authConfigured && !signedIn) return <div className={dark ? 'app dark' : 'app'}><AuthPage/></div>;
+  if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}><AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/></div>;
   return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}</div></NavigationContext.Provider>;
 }
 
