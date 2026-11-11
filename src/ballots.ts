@@ -17,6 +17,8 @@ export const RATING_BANDS = [
   { label: 'Excellent', values: [44, 43, 42, 41, 40] },
   { label: 'Good', values: [39, 38, 37, 36, 35] },
 ];
+/** Three-letter event codes for tight spaces. */
+export const eventCodes: Record<string, string> = { info: 'INF', persuasive: 'PER', extemp: 'EXT', entertainment: 'ENT', oid: 'OID', poi: 'POI', poetry: 'POE', serious: 'SER', humorous: 'HUM', duet: 'DUT', duo: 'DUO' };
 /** The lowest rating on the NSAA ballot. */
 export const RATING_MIN = 35;
 /** Section marks run from 1 to this value. */

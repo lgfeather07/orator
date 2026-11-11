@@ -19,6 +19,9 @@ export const teamGrowth: { name: string; year: string; events: Record<string, nu
   { name: 'Iris Chen', year: 'Freshman', events: { serious: [5.8, 6.4, 6.9, 7.3, 7.8] }, latest: { serious: 8.1 } },
 ];
 
+/** Finals rounds each student has broken into this season (sample data). */
+export const finalsBreaks: Record<string, number> = { 'Maya Rodriguez': 6, 'Eli Thompson': 4, 'Nora Patel': 2, 'Sam Wilson': 2, 'Iris Chen': 0 };
+
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const initials = (name: string) => name.split(' ').map(part => part[0]).join('').slice(0, 2);
 const change = (values: number[]) => values[values.length - 1] - values[0];

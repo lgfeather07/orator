@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Badge, Icon } from './ui';
-import { ballotEvents } from './ballots';
+import { ballotEvents, eventCodes } from './ballots';
 
 export type Level = 'top' | 'willing' | 'avoid';
 export type EventPreference = { id: string; name: string; code: string; level: Level };
 
-const codes: Record<string, string> = { info: 'INFO', persuasive: 'PERS', extemp: 'EXT', entertainment: 'ENT', oid: 'OID', poi: 'POI', poetry: 'POE', serious: 'SER', humorous: 'HUM', duet: 'DUET', duo: 'DUO' };
 const startingLevels: Record<string, Level> = { info: 'top', persuasive: 'top', extemp: 'top', oid: 'avoid', duet: 'avoid', duo: 'avoid' };
 
 /** Every NSAA event, each sorted into how willing the judge is to judge it. */
-export const allEventPreferences: EventPreference[] = ballotEvents.map(event => ({ id: event.id, name: event.name, code: codes[event.id] ?? event.short.slice(0, 4).toUpperCase(), level: startingLevels[event.id] ?? 'willing' }));
+export const allEventPreferences: EventPreference[] = ballotEvents.map(event => ({ id: event.id, name: event.name, code: eventCodes[event.id] ?? event.short.slice(0, 3).toUpperCase(), level: startingLevels[event.id] ?? 'willing' }));
 
 const levels: { id: Level; label: string; note: string; tone: 'success' | 'neutral' | 'pink' }[] = [
   { id: 'top', label: 'Top choices', note: 'Highly experienced', tone: 'success' },

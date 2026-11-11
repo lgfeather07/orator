@@ -6,9 +6,11 @@ import { ballotEvents } from './ballots';
 import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
 import { IssueBoard, ReportIssueModal } from './Issues';
 import { TeamEntries } from './TeamEntries';
+import { PastBallots } from './PastBallots';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
-import { StudentGrowth, MyGrowth } from './Growth';
-import { entryLoadByName, loadLabel, roundTimes } from './tournament';
+import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
+import { pastBallots } from './PastBallots';
+import { entryLoadByName, loadLabel, roundTimes, sameSchool } from './tournament';
 import { ballotEvents as nsaaEvents } from './ballots';
 import { EventPreferences, allEventPreferences } from './Preferences';
 import { HelpModal, type HelpKind } from './HelpModal';
@@ -175,9 +177,9 @@ const personaDetails: Record<Persona, { name: string; detail: string; initials: 
 };
 
 const sidebarItems: Record<Persona, [IconName, string][]> = {
-  student: [['home','Overview'],['archive','Archive']],
+  student: [['home','Overview'],['archive','Past ballots']],
   judge: [['home','Overview'],['ballot','Ballots'],['archive','Archive']],
-  coach: [['home','Overview'],['users','Entries'],['growth','Analytics'],['archive','Archive']],
+  coach: [['home','Overview'],['users','Entries'],['growth','Analytics'],['archive','Past ballots']],
   director: [['home','Overview'],['settings','Tournament setup']],
 };
 
@@ -205,6 +207,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     Ballots: 'Review assignments, drafts, submissions, and feedback.',
     Analytics: 'Track performance, feedback quality, and tournament trends.',
     Archive: 'Find historical ballots, tournaments, and downloadable records.',
+    'Past ballots': persona === 'student' ? 'Your ballots from finished tournaments. Only you and your coach can see them.' : 'Every ballot your team has received at finished tournaments.',
     'Tournament setup': 'Configure events, rounds, rooms, criteria, and permissions.',
   };
   return <div className="desktop-shell">
@@ -222,7 +225,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
       {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your ballot is real:</strong> it saves to your account. Assignments and names on this page are example data.</> : <><strong>Sample tournament shown.</strong> Live data for this workspace is coming next.</>}</span></div>}
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
-      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : <SidebarTopicView topic={section} persona={persona}/>}</main>
+      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
     {reporting && <ReportIssueModal reporter={profile.name} role={persona} onClose={() => setReporting(false)}/>}
   </div>;
@@ -231,8 +234,8 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
 const topicContent: Record<string, { eyebrow: string; title: string; description: string; metrics: [string,string,string,IconName][]; rows: [string,string,string][] }> = {
   Overview: { eyebrow: 'LIVE TOURNAMENT', title: 'Everything is on track', description: 'Monitor rounds, rooms, entries, and ballots from one place.', metrics: [['Round','2 of 4','In progress','clock'],['Entries','184','6 events','users'],['Ballots','68%','Submitted','ballot'],['Conflicts','2','Need review','warning']], rows: [['Varsity Informative','Round 2 · 12 ballots','On time'],['Original Oratory','Round 2 · 10 ballots','On time'],['Poetry Interpretation','Round 1 · 2 missing','Review']] },
   Entries: { eyebrow: 'REGISTRATION', title: 'Entries and participants', description: 'Search and manage every student, judge, and event registration.', metrics: [['Students','126','4 waitlisted','users'],['Judges','42','39 confirmed','users'],['Schools','18','All checked in','home'],['Imports','12','Ready to review','upload']], rows: [['Maya Rodriguez','Lincoln HS · Informative','Confirmed'],['Eli Thompson','Lincoln HS · Extemp','Confirmed'],['Nora Patel','Lincoln HS · Oratory','Needs form']] },
-  Ballots: { eyebrow: 'BALLOT CONTROL', title: 'Ballots without the paper chase', description: 'Open, review, edit, and follow up on every tournament ballot.', metrics: [['Submitted','82','68% complete','check'],['Drafts','11','Autosaved','edit'],['Missing','4','Need attention','warning'],['Quality','92%','Useful feedback','comment']], rows: [['Round 2 · Informative','Judge Leather · 6 competitors','Open ballot'],['Round 2 · Extemp','Maria Chen · Draft saved','Continue'],['Round 1 · Poetry','David Ross · Submitted','View feedback']] },
-  Analytics: { eyebrow: 'PERFORMANCE', title: 'Trends that lead to better coaching', description: 'Compare event performance and feedback quality across rounds.', metrics: [['Avg. mark','8.4','+0.8 today','growth'],['Top event','Info','4 finalists','sparkle'],['Feedback','146','Comments','comment'],['Win rate','68%','+6% season','growth']], rows: [['Delivery','Average 9.0 of 10','Strongest'],['Organization','Average 8.2 of 10','Improving'],['Thesis','Average 7.4 of 10','Coach next']] },
+  Ballots: { eyebrow: 'BALLOT CONTROL', title: 'Ballots without the paper chase', description: 'Open, review, edit, and follow up on every tournament ballot.', metrics: [['Submitted','82','68% complete','check'],['Drafts','11','Autosaved','edit'],['Missing','4','Need attention','warning'],['Speakers','24','Scored today','users']], rows: [['Round 2 · Informative','Judge Leather · 6 competitors','Open ballot'],['Round 2 · Extemp','Maria Chen · Draft saved','Continue'],['Round 1 · Poetry','David Ross · Submitted','View feedback']] },
+  Analytics: { eyebrow: 'PERFORMANCE', title: 'Trends that lead to better coaching', description: 'Compare event performance across tournaments.', metrics: [['Finals breaks','14','This season','sparkle'],['Avg. rating','43.0','Out of 50','growth'],['Avg. rank','2.6','Last tournament','growth'],['Top event','Informative','4 finals breaks','ballot']], rows: [['Delivery','Average 9.0 of 10','Strongest'],['Organization','Average 8.2 of 10','Improving'],['Thesis','Average 7.4 of 10','Coach next']] },
   Archive: { eyebrow: 'RECORDS', title: 'Every result, ready when you need it', description: 'Search completed tournaments, ballots, and exported records.', metrics: [['Ballots','1,248','Since 2023','archive'],['Tournaments','26','12 wins','ballot'],['Students','84','Historical','users'],['Exports','18','PDF & CSV','download']], rows: [['Millard West Classic','Oct 12 · 48 ballots','Download'],['Norfolk Invitational','Oct 5 · 52 ballots','Open'],['Lincoln East Open','Sep 28 · 44 ballots','Open']] },
   'Tournament setup': { eyebrow: 'CONFIGURATION', title: 'Tournament setup', description: 'Keep events, rooms, rounds, and permissions ready for competition.', metrics: [['Events','10','8 complete','ballot'],['Rooms','24','All assigned','home'],['Rounds','4','Published','clock'],['Criteria','4/10','Needs work','settings']], rows: [['Tournament details','Dates, location, contact','Complete'],['Ballot criteria','4 of 10 events configured','Continue setup'],['Judge permissions','42 judges invited','Complete']] },
 };
@@ -328,6 +331,17 @@ function CoachPage() {
   const greeting = useGreeting('Erin');
   const { profile: account } = useAuth();
   const teamName = account ? (account.school || 'Your team') : 'Lincoln Speech';
+  // Numbers a coach can act on, worked out from the team's entries and ballots rather than typed in.
+  const coachStore = useStore();
+  const coachAccess = useAccess('coach');
+  const teamSchool = coachAccess.state === 'demo' ? 'Lincoln High' : coachAccess.membership?.school ?? '';
+  const teamEntries = coachStore.entries.filter(entry => sameSchool(entry.school, teamSchool));
+  const teamStudents = [...new Set(teamEntries.map(entry => entry.student))];
+  const multiEntered = teamStudents.filter(name => teamEntries.filter(entry => entry.student === name).length > 1).length;
+  const totalFinals = Object.values(finalsBreaks).reduce((sum, count) => sum + count, 0);
+  const finalists = Object.values(finalsBreaks).filter(count => count > 0).length;
+  const lastMeet = pastBallots.filter(ballot => ballot.meetOrder === 4);
+  const lastMeetRank = (lastMeet.reduce((sum, ballot) => sum + ballot.rank, 0) / lastMeet.length).toFixed(1);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student'>('team');
   const [selectedStudent, setSelectedStudent] = useState('Maya Rodriguez');
@@ -339,8 +353,8 @@ function CoachPage() {
   ].filter(row => row.join(' ').toLowerCase().includes(query.toLowerCase()));
   return <DesktopShell active="Overview" title={greeting} subtitle="Your team, ballots, and coaching priorities are ready." persona="coach">
     <div className="role-dashboard">
-      <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>{teamName} is on track</h2><p>Gothenburg Invitational · Round 2 underway · 18 students competing</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="upload" onClick={() => setView('import')}>Import student CSV</Button></div></div><div className="hero-stat"><span>Team win rate</span><strong>68%</strong><small>up 6% this season</small></div></section>
-      <div className="metric-grid"><Metric label="Active students" value="46" note="+8 this season" icon="users"/><Metric label="Ballots received" value="128" note="92% useful feedback" icon="ballot"/><Metric label="Students competing" value="18" note="6 events today" icon="sparkle"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
+      <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>{teamName} is on track</h2><p>{coachStore.tournament.name} · Round 2 underway · {teamStudents.length} students competing in {teamEntries.length} entries</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="upload" onClick={() => setView('import')}>Import student CSV</Button></div></div><div className="hero-stat"><span>Finals breaks</span><strong>{totalFinals}</strong><small>this season · {finalists} of {teamGrowth.length} students</small></div></section>
+      <div className="metric-grid"><Metric label="Students entered" value={String(teamStudents.length)} note={`${teamEntries.length} entries · ${multiEntered} in more than one event`} icon="users"/><Metric label="Average rank" value={lastMeetRank} note={`Last tournament · ${lastMeet.length} ballots`} icon="growth"/><Metric label="Ballots to review" value={String(pastBallots.length)} note="This season, under Past ballots" icon="ballot"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
       <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
       {view === 'team' ? <div className="role-grid">
         <section className="panel coach-team-panel"><div className="panel-head"><div><h2>Team at Gothenburg</h2><p>Live status across all six events</p></div><Badge tone="success" icon="check">18 checked in</Badge></div>
@@ -429,7 +443,7 @@ function JudgePage() {
       <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
       {action === 'assignments' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
-          <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemp','Room 301','Upcoming'],['1:30 PM','Round 4','Oratory','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,4).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
+          <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemporaneous','Room 301','Upcoming'],['1:30 PM','Round 4','Persuasive','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,3).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
         </section>
         <aside className="panel judge-note"><div className="panel-head"><div><h2>Before you judge</h2><p>A quick Round 2 checklist</p></div></div>{[['wifi','Offline backup is ready'],['users','No school conflicts found'],['ballot','Criteria updated for INFO'],['check','Judge philosophy shared']].map(([icon,text])=><div key={text}><span><Icon name={icon as IconName}/></span><strong>{text}</strong><Icon name="check" size={16}/></div>)}</aside>
       </div> : action === 'competitors' ? <section className="panel competitor-panel"><div className="panel-head"><div><h2>Round 2 competitors</h2><p>Varsity Informative · Speaking order · Room 214 · Check speakers in as they arrive</p></div><Button variant="secondary" icon="arrow" onClick={() => setAction('assignments')}>Back to assignments</Button></div>
