@@ -250,3 +250,36 @@ textarea { font-size: 14px; line-height: 1.55; }
 .signin-header > .logo, .docs-header .logo { gap: 1px; }
 .prototype-nav { grid-template-columns: auto 1fr auto; }
 .preview-brand small { white-space: nowrap; }
+
+/* ── Avatars: initials sit dead centre whatever the parent layout does to spans ── */
+.avatar { display: grid !important; place-items: center; place-content: center; padding: 0; line-height: 1; text-align: center; letter-spacing: 0; font-family: var(--font-body); font-size: 12px !important; color: var(--brand) !important; }
+.sidebar .avatar { color: var(--accent-ink) !important; }
+
+/* ── Growth chart ─────────────────────────────────────────────── */
+.growth-events { margin: 12px 17px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.growth-events button { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; color: var(--ink); text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.growth-events button:hover { border-color: var(--brand); }
+.growth-events button.active { border-color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 -3px 0 var(--accent); }
+.growth-events strong { font-size: 13.5px; }
+.growth-events small { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+.growth-chart { display: block; width: 100%; height: auto; padding: 6px 8px 10px; }
+.growth-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 5; }
+.growth-drop { stroke: var(--border); stroke-width: 1; }
+.growth-line { fill: none; stroke: var(--brand); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.growth-dot { fill: var(--surface); stroke: var(--brand); stroke-width: 3; }
+.growth-dot.latest { fill: var(--accent); stroke: var(--accent); }
+.growth-tick, .growth-value { font-family: var(--font-mono); font-size: 12px; fill: var(--muted); }
+.growth-value { fill: var(--ink); font-weight: 600; }
+.growth-meet { font-family: var(--font-body); font-size: 12.5px; font-weight: 600; fill: var(--muted); }
+.student-summary span:not(.avatar):not(.badge) { font-size: 12.5px; }
+
+/* ── Event preferences ────────────────────────────────────────── */
+.event-row { grid-template-columns: 20px 52px minmax(0, 1fr) auto; cursor: grab; transition: border-color .16s ease, opacity .16s ease; }
+.event-row:hover { border-color: var(--brand); }
+.event-row.dragging { opacity: .45; }
+.event-code { width: 52px; font-size: 11px; letter-spacing: 0; }
+.event-row select { min-height: 34px; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; }
+.pref-empty { padding: 14px 12px; color: var(--muted); border: 1px dashed var(--border); border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
+@media (max-width: 720px) { .growth-events { grid-template-columns: 1fr; } }
+.embedded-pref-grid .event-row, .pref-groups .event-row { grid-template-columns: 20px 52px minmax(0, 1fr) auto; gap: 10px; }
+.event-row strong { font-size: 13px; }

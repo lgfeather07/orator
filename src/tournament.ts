@@ -31,7 +31,7 @@ export const issueKinds: Record<IssueKind, { label: string; hint: string; urgent
   other: { label: 'Something else', hint: 'Anything the tab room should know.', urgent: false },
 };
 
-export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118'];
+export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118', 'Room 120', 'Room 305'];
 
 export const judgePool: Judge[] = [
   { id: 'jl', name: 'Judge Leather', school: '' },
@@ -45,6 +45,10 @@ export const judgePool: Judge[] = [
   { id: 'hw', name: 'Hannah Wolfe', school: 'Aurora' },
   { id: 'bs', name: 'Ben Sato', school: '' },
   { id: 'lm', name: 'Lena Morris', school: 'Minden' },
+  { id: 'pg', name: 'Priya Gill', school: '' },
+  { id: 'co', name: 'Carl Osei', school: '' },
+  { id: 'nw', name: 'Nell Ward', school: 'Bellevue West' },
+  { id: 'jh', name: 'Jon Hale', school: '' },
 ];
 
 export const defaultTournament: Tournament = {
@@ -53,7 +57,12 @@ export const defaultTournament: Tournament = {
 };
 
 const seedRows: [string, string, string][] = [
-  ['Maya Rodriguez', 'Lincoln High', 'info'], ['Eli Thompson', 'Lincoln High', 'extemp'], ['Nora Patel', 'Lincoln High', 'persuasive'], ['Sam Wilson', 'Lincoln High', 'poetry'], ['Iris Chen', 'Lincoln High', 'serious'],
+  // Lincoln High's students are each entered in three events.
+  ['Maya Rodriguez', 'Lincoln High', 'info'], ['Maya Rodriguez', 'Lincoln High', 'persuasive'], ['Maya Rodriguez', 'Lincoln High', 'poetry'],
+  ['Eli Thompson', 'Lincoln High', 'extemp'], ['Eli Thompson', 'Lincoln High', 'info'], ['Eli Thompson', 'Lincoln High', 'entertainment'],
+  ['Nora Patel', 'Lincoln High', 'persuasive'], ['Nora Patel', 'Lincoln High', 'serious'], ['Nora Patel', 'Lincoln High', 'extemp'],
+  ['Sam Wilson', 'Lincoln High', 'poetry'], ['Sam Wilson', 'Lincoln High', 'humorous'], ['Sam Wilson', 'Lincoln High', 'serious'],
+  ['Iris Chen', 'Lincoln High', 'serious'], ['Iris Chen', 'Lincoln High', 'poetry'], ['Iris Chen', 'Lincoln High', 'entertainment'],
   ['Leo Brooks', 'Creighton Prep', 'info'], ['Ava Kim', 'Creighton Prep', 'persuasive'], ['Noah Reyes', 'Creighton Prep', 'humorous'], ['Zoe Hart', 'Creighton Prep', 'extemp'], ['Mila Stone', 'Creighton Prep', 'entertainment'],
   ['Owen Burke', 'Millard West', 'info'], ['Ruby Lang', 'Millard West', 'info'], ['Cole Avery', 'Millard West', 'extemp'], ['Tess Nolan', 'Millard West', 'serious'], ['Jude Park', 'Millard West', 'humorous'], ['Piper Dunn', 'Millard West', 'poetry'],
   ['Ivy Marsh', 'Norfolk High', 'info'], ['Dean Rowe', 'Norfolk High', 'persuasive'], ['Lila Voss', 'Norfolk High', 'poetry'], ['Max Pruitt', 'Norfolk High', 'entertainment'], ['Elle Tran', 'Norfolk High', 'serious'],

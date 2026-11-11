@@ -6,6 +6,8 @@ import { ballotEvents } from './ballots';
 import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
 import { IssueBoard, ReportIssueModal } from './Issues';
 import { TeamEntries } from './TeamEntries';
+import { StudentGrowth } from './Growth';
+import { EventPreferences, allEventPreferences } from './Preferences';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
@@ -284,39 +286,14 @@ function DirectorPage() {
   </DesktopShell>;
 }
 
-const prefEvents = [
-  { name: 'Dramatic Interpretation', code: 'DI', level: 'top' },
-  { name: 'Informative Speaking', code: 'INFO', level: 'top' },
-  { name: 'Extemporaneous Speaking', code: 'EXT', level: 'willing' },
-  { name: 'Original Oratory', code: 'OO', level: 'willing' },
-  { name: 'Poetry Interpretation', code: 'POE', level: 'avoid' },
-];
-
 function JudgeAssignments() {
-  const [events, setEvents] = useState(prefEvents);
-  const [dragged, setDragged] = useState<number | null>(null);
+  const [events, setEvents] = useState(allEventPreferences);
   const [autoAssigned, setAutoAssigned] = useState(false);
-  const move = (index: number, dir: -1 | 1) => {
-    const copy = [...events]; const target = index + dir;
-    if (target < 0 || target >= copy.length) return;
-    [copy[index], copy[target]] = [copy[target], copy[index]]; setEvents(copy);
-  };
   return <div className="preferences-layout">
       <section className="preference-builder">
         <div className="builder-head"><div><h2>Judge Leather</h2><p>Lincoln High School · 8 years judging</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
-        <div className="preference-note"><Icon name="drag"/><span>Drag to reorder events. The top of each group is the strongest preference.</span></div>
-        <div className="pref-groups">
-          {(['top','willing','avoid'] as const).map(level => <div className={`pref-group ${level}`} key={level}>
-            <div className="pref-label"><span>{level === 'top' ? 'Top choices' : level === 'willing' ? 'Willing to judge' : 'Prefer to avoid'}</span><Badge tone={level === 'top' ? 'success' : level === 'avoid' ? 'pink' : 'neutral'}>{events.filter(e => e.level === level).length}</Badge></div>
-            {events.map((event,index) => event.level === level && <div className="event-row" key={event.code} draggable onDragStart={() => setDragged(index)} onDragOver={e => e.preventDefault()} onDrop={() => {
-              if (dragged === null || dragged === index) return;
-              const copy = [...events]; const [item] = copy.splice(dragged, 1); copy.splice(index, 0, item); setEvents(copy); setDragged(null);
-            }}>
-              <Icon name="drag"/><span className="event-code">{event.code}</span><span><strong>{event.name}</strong><small>{level === 'avoid' ? 'Low confidence' : level === 'top' ? 'Highly experienced' : 'Comfortable'}</small></span>
-              <div className="reorder"><button aria-label="Move up" onClick={() => move(index,-1)}>↑</button><button aria-label="Move down" onClick={() => move(index,1)}>↓</button></div>
-            </div>)}
-          </div>)}
-        </div>
+        <div className="preference-note"><Icon name="drag"/><span>All 11 events can be ranked. Drag an event between lists or use its menu; the top of each list is the strongest preference.</span></div>
+        <EventPreferences events={events} onChange={setEvents}/>
       </section>
       <section className="assignment-panel">
         <div className="assignment-head"><div><h2>Round 2 assignments</h2><p>42 judges · {autoAssigned ? '2' : '7'} conflicts to resolve</p></div><Button variant="secondary" disabled={autoAssigned} onClick={() => setAutoAssigned(true)}>{autoAssigned ? 'Assignments updated' : 'Auto-assign'}</Button></div>
@@ -365,14 +342,8 @@ function CoachPage() {
         ].map(([icon,title,note],i) => <button key={title} onClick={() => i < 2 ? setView('ballots') : setView('import')}><span><Icon name={icon as IconName}/></span><span><strong>{title}</strong><small>{note}</small></span><Icon name="arrow"/></button>)}</aside>
       </div> : view === 'entries' ? <TeamEntries school={account ? (account.school || 'Your school') : 'Lincoln High'} onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Lincoln High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>8.6</strong><small>Season average / 10</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <section className="panel action-workspace"><div className="panel-head"><div><h2>Import student CSV</h2><p>Add or update team entries from PowerSchool or your roster file.</p></div><Button variant="secondary" icon="close" onClick={() => setView('team')}>Cancel</Button></div>
         <div className="csv-import"><span className="upload-illustration"><Icon name="upload" size={30}/></span><h3>Drop your student CSV here</h3><p>We’ll preview every change before anything is added. Required columns: student name, graduation year, and event.</p><label className="dropzone"><input type="file" accept=".csv" onChange={() => setView('entries')}/><Icon name="file" size={25}/><strong>Choose CSV file</strong><small>CSV only · up to 10 MB</small></label><div className="import-actions"><Badge tone="info" icon="info">No changes are made without review</Badge><Button icon="arrow" onClick={() => setView('entries')}>Use sample file</Button></div></div>
-      </section> : view === 'growth' ? <div className="role-grid">
-        <section className="panel growth-panel"><div className="panel-head"><div><h2>Student growth</h2><p>Average section mark (out of 10) across the last five tournaments</p></div><select><option>Maya Rodriguez</option><option>Eli Thompson</option><option>Nora Patel</option></select></div>
-          <div className="student-summary"><Avatar initials="MR"/><div><strong>Maya Rodriguez</strong><span>Informative · Junior</span></div><Badge tone="success" icon="growth">+18% growth</Badge></div>
-          <div className="chart"><div className="chart-y"><span>10</span><span>8</span><span>6</span><span>4</span></div><svg viewBox="0 0 580 170" preserveAspectRatio="none"><defs><linearGradient id="coach-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--indigo)" stopOpacity=".22"/><stop offset="100%" stopColor="var(--indigo)" stopOpacity="0"/></linearGradient></defs><path className="gridline" d="M0 20H580M0 65H580M0 110H580M0 155H580"/><path className="area coach-area" d="M15 130C75 125 105 115 145 100S220 108 280 78 370 66 425 48 520 36 565 24V170H15Z"/><path className="line" d="M15 130C75 125 105 115 145 100S220 108 280 78 370 66 425 48 520 36 565 24"/>{[[15,130],[145,100],[280,78],[425,48],[565,24]].map(([x,y],i)=><circle key={i} cx={x} cy={y} r="5"/>)}</svg></div>
-          <div className="chart-labels"><span>Lincoln East</span><span>Norfolk</span><span>Millard W.</span><span>Gothenburg</span><span>Creighton</span></div>
-        </section>
-        <aside className="panel focus-panel"><div className="panel-head"><div><h2>Coaching opportunity</h2><p>Suggested from ballot trends</p></div><Icon name="sparkle"/></div><div className="focus-content"><span className="state-icon"><Icon name="growth"/></span><blockquote>Maya’s content scores are rising quickly. Delivery is now the clearest opportunity for targeted practice.</blockquote><div className="focus-tags"><Badge tone="success" icon="check">Content: 9.4</Badge><Badge tone="pink" icon="growth">Delivery: 7.6</Badge></div><Button icon="plus" onClick={() => { setSelectedStudent('Maya Rodriguez'); setView('student'); }}>Create practice goal</Button></div></aside>
-      </div> : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
+      </section> : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
+       : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
         <div className="archive-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search student, judge, event, or tournament"/></label><select aria-label="Filter by event" onChange={event => setQuery(event.target.value)}><option value="">All events</option>{ballotEvents.slice(0,6).map(event => <option value={event.short} key={event.id}>{event.short}</option>)}</select><select aria-label="Filter by season"><option>This season</option><option>Last season</option><option>All time</option></select></div>
         <div className="archive-table"><div className="archive-head"><span>Student</span><span>Judge</span><span>Event & tournament</span><span>Rank</span><span>Date</span><span/></div>{ballots.map(row => <div className="archive-row" key={row.join()}><span><Avatar initials={row[0].split(' ').map(n=>n[0]).join('')} size="sm"/><strong>{row[0]}</strong></span><span>{row[1]}</span><span><strong>{row[2]}</strong><small>{row[3]}</small></span><Badge tone={row[4]==='1st' ? 'success':'neutral'}>{row[4]}</Badge><span>{row[5]}</span><button className="icon-button" aria-label={`Open ${row[0]} record`} onClick={() => { setSelectedStudent(row[0]); setView('student'); }}><Icon name="arrow"/></button></div>)}</div>
       </section></>}
@@ -418,13 +389,12 @@ function StudentPage() {
 function JudgePage() {
   const greeting = useGreeting('Judge Leather');
   const [action, setAction] = useState<'assignments' | 'ballots' | 'preferences' | 'mobileBallot' | 'competitors'>('assignments');
-  const [judgeEvents, setJudgeEvents] = useState(prefEvents);
-  const [draggedPreference, setDraggedPreference] = useState<number | null>(null);
+  const [judgeEvents, setJudgeEvents] = useState(allEventPreferences);
   const [preferencesSaved, setPreferencesSaved] = useState(true);
   return <DesktopShell active="Overview" title={greeting} subtitle="Your assignments and ballots are ready for today." persona="judge">
     <div className="role-dashboard">
       <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction('mobileBallot')}>Open e-ballot</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
-      <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value="INFO" note="Strong event fit" icon="sparkle"/></div>
+      <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Strong event fit" icon="sparkle"/></div>
       <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
       {action === 'assignments' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
@@ -442,15 +412,9 @@ function JudgePage() {
         ].map(([code,name,school,title],index) => <article key={code}><span className="speaker-order">{index + 1}</span><Avatar initials={name.split(' ').map(part => part[0]).join('')} size="sm"/><span><strong>{name}</strong><small>{code} · {school}</small></span><span className="speech-title">{title}</span><SpeakerCheckIn code={code} compact/></article>)}</div>
       </section> : action === 'ballots' ? <section className="panel ballot-desk"><div className="panel-head"><div><h2>Round 2 ballot desk</h2><p>Varsity Informative · 6 competitors · Room 214</p></div><Badge tone="warning" icon="edit">2 drafts</Badge></div>
         <div className="ballot-desk-grid">{['C1','C2','C3','C4','C5','C6'].map((code,i)=><article key={code}><div><span className={`status-dot ${i<3?'complete':''}`}/><Badge tone={i<3?'success':i<5?'warning':'danger'}>{i<3?'Submitted':i<5?'Draft':'Missing'}</Badge></div><strong>{code}</strong><p>{['Nora Patel','Eli Thompson','Sam Wilson','Maya Rodriguez','Iris Chen','Leo Brooks'][i]}</p><Button variant={i<3?'secondary':'primary'} icon={i<3?'archive':'edit'} onClick={() => setAction('mobileBallot')}>{i<3?'View ballot':'Continue ballot'}</Button></article>)}</div>
-      </section> : action === 'preferences' ? <section className="panel embedded-preferences"><div className="panel-head"><div><h2>Event preferences</h2><p>Drag events to rank where you feel most confident judging.</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
+      </section> : action === 'preferences' ? <section className="panel embedded-preferences"><div className="panel-head"><div><h2>Event preferences</h2><p>Sort all 11 events by how confident you feel judging them.</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
         <div className="preference-note"><Icon name="drag"/><span>Your preferences help the director build stronger panels and avoid poor event matches.</span></div>
-        <div className="embedded-pref-grid">{(['top','willing','avoid'] as const).map(level => <div className={`pref-group ${level}`} key={level}>
-          <div className="pref-label"><span>{level === 'top' ? 'Top choices' : level === 'willing' ? 'Willing to judge' : 'Prefer to avoid'}</span><Badge tone={level === 'top' ? 'success' : level === 'avoid' ? 'pink' : 'neutral'}>{judgeEvents.filter(event => event.level === level).length}</Badge></div>
-          {judgeEvents.map((event,index) => event.level === level && <div className="event-row" key={event.code} draggable onDragStart={() => setDraggedPreference(index)} onDragOver={e => e.preventDefault()} onDrop={() => {
-            if (draggedPreference === null || draggedPreference === index) return;
-            const copy = [...judgeEvents]; const [item] = copy.splice(draggedPreference, 1); copy.splice(index, 0, item); setJudgeEvents(copy); setDraggedPreference(null); setPreferencesSaved(false);
-          }}><Icon name="drag"/><span className="event-code">{event.code}</span><span><strong>{event.name}</strong><small>{level === 'avoid' ? 'Low confidence' : level === 'top' ? 'Highly experienced' : 'Comfortable'}</small></span><Badge tone={level === 'top' ? 'success' : level === 'avoid' ? 'pink' : 'neutral'}>{level === 'top' ? 'Top' : level === 'avoid' ? 'Avoid' : 'Willing'}</Badge></div>)}
-        </div>)}</div>
+        <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
         <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => setPreferencesSaved(true)}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
       </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>Edit Round 2 ballot</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => setAction('ballots')}>Back to ballot desk</Button></div><BallotPage/></section>}
     </div>
