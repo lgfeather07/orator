@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useAuth } from './auth';
 import * as api from './tournamentApi';
 import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
+import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
 import { buildSchedule, defaultTournament, judgePool, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Section, type Tournament } from './tournament';
 
 export type Presence = 'present' | 'absent';
@@ -40,6 +41,9 @@ type Store = {
   issues: Issue[]; reportIssue: (issue: { kind: IssueKind; where: string; detail: string; reporter: string; role: string }) => void; resolveIssue: (id: string) => void;
   /** Coaches release rankings and comments to their students, and only once the tournament is over. */
   resultsReleased: boolean; releaseResults: () => void;
+  /** Round results used to work out breaks, placings, and team points. Sample data for now. */
+  prelimResults: PrelimResult[]; finalResults: FinalResult[];
+  fillSamplePrelims: () => void; fillSampleFinals: (eventId: string) => void; clearResults: () => void;
   resetDemo: () => void;
   /** Signed-in users work on a real tournament in the database; the demo keeps everything in the browser. */
   live: boolean;
@@ -60,12 +64,12 @@ type Store = {
   reminders: { text: boolean; email: boolean }; setReminders: (r: { text: boolean; email: boolean }) => void;
 };
 
-const STORAGE_KEY = 'orator-demo-v3';
+const STORAGE_KEY = 'orator-demo-v4';
 const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincoln East', 'Gothenburg High', 'Aurora', 'Minden'];
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean };
+type Saved = { tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -87,10 +91,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sections, setSections] = useState<Section[]>(saved?.sections ?? []);
   const [issues, setIssues] = useState<Issue[]>(saved?.issues ?? seedIssues);
   const [resultsReleased, setResultsReleased] = useState<boolean>(saved?.resultsReleased ?? false);
+  const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
+  const [finalResults, setFinalResults] = useState<FinalResult[]>(saved?.finalResults ?? []);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults]);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
@@ -169,6 +175,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     sections: liveSections,
     generateSchedule: () => {
       if (!tournamentId || !liveTournament) return;
+      setPrelimResults([]); setFinalResults([]);
       api.replaceSections(tournamentId, buildSchedule(liveTournament, liveEntries, liveJudges), liveJudges).then(setLiveSections).catch(caught => { report(caught); refresh(); });
     },
     assignJudge: (sectionId, judgeId) => {
@@ -180,6 +187,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const store: Store = {
+    fillSamplePrelims: () => undefined, fillSampleFinals: () => undefined,
     tournament,
     updateTournament: patch => {
       setTournament(current => ({ ...current, ...patch }));
@@ -191,13 +199,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeEntry: id => { setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) }))); },
     submittedSchools, submitSchool: school => setSubmittedSchools(current => current.includes(school) ? current : [...current, school]),
     sections,
-    generateSchedule: () => setSections(buildSchedule(tournament, entries, judgePool)),
+    generateSchedule: () => { setSections(buildSchedule(tournament, entries, judgePool)); setPrelimResults([]); setFinalResults([]); },
     assignJudge: (sectionId, judgeId) => setSections(current => current.map(section => section.id === sectionId ? { ...section, judgeId } : section)),
     issues,
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); },
+    prelimResults, finalResults,
+    clearResults: () => { setPrelimResults([]); setFinalResults([]); },
     speakerPresence, setSpeakerPresence: (code, p) => setPresence(current => ({ ...current, [code]: p })),
     judgeCheckedIn, toggleJudge: id => setJudgeCheckedIn(current => ({ ...current, [id]: !current[id] })),
     focusNotes,
@@ -216,6 +226,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     decideMember: async (member, status) => { try { await api.decideMember(member, status); await refresh(); } catch (caught) { report(caught); } },
     refresh,
     ...liveStore,
+  };
+  // Sample results are worked out from whichever tournament is showing, so they sit after the live overrides.
+  store.fillSamplePrelims = () => { setPrelimResults(samplePrelims(store.entries, store.sections)); setFinalResults([]); };
+  store.fillSampleFinals = eventId => {
+    const field = store.entries.filter(entry => entry.eventId === eventId);
+    const finalists = prelimStandings(field, store.sections.filter(section => section.eventId === eventId), prelimResults).filter(standing => standing.advances);
+    const ids = new Set(field.map(entry => entry.id));
+    setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalists, store.tournament.finalJudges ?? 2)]);
   };
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

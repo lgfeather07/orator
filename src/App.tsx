@@ -8,6 +8,7 @@ import { IssueBoard, ReportIssueModal } from './Issues';
 import { TeamEntries } from './TeamEntries';
 import { EntryImport } from './EntryImport';
 import { PastBallots } from './PastBallots';
+import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
 import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
 import { pastBallots } from './PastBallots';
@@ -291,15 +292,15 @@ function SignInPage() {
 }
 
 function DirectorPage() {
-  const [view, setView] = useState<'setup' | 'people' | 'checkin' | 'issues' | 'rounds'>('setup');
+  const [view, setView] = useState<'setup' | 'people' | 'results' | 'checkin' | 'issues' | 'rounds'>('setup');
   const store = useStore();
   const openIssues = store.issues.filter(issue => issue.status === 'open').length;
   const waiting = store.members.filter(member => member.status === 'pending').length;
   const needsTournament = store.live && store.liveState === 'ready' && !store.isDirector;
-  const titles = { setup: ['Tournament setup', 'Details, entries, judges, the schedule, and running the day.'], people: ['People', 'Approve the coaches, judges, and students who ask to join.'], checkin: ['Check-in', 'See who has arrived and find any judge, room, or event.'], issues: ['Issues', 'What people at the tournament have reported, and where.'], rounds: ['Round management', 'Monitor ballot completion and make round-level corrections.'] };
+  const titles = { setup: ['Tournament setup', 'Details, entries, judges, the schedule, and running the day.'], people: ['People', 'Approve the coaches, judges, and students who ask to join.'], results: ['Results', 'Who breaks to finals, final placings, and team points.'], checkin: ['Check-in', 'See who has arrived and find any judge, room, or event.'], issues: ['Issues', 'What people at the tournament have reported, and where.'], rounds: ['Round management', 'Monitor ballot completion and make round-level corrections.'] };
   return <DesktopShell active="Tournament setup" title={titles[view][0]} subtitle={titles[view][1]} persona="director">
-    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button><button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button></div>
-    {store.live && store.liveState !== 'ready' ? <div className="issue-board"><section className="access-banner"><span className="spinner"/><div><strong>{store.liveState === 'failed' ? 'We couldn’t load your tournament. Check your connection and reload.' : 'Loading your tournament…'}</strong></div></section></div> : needsTournament ? <div className="issue-board"><CreateTournamentCard/></div> : view === 'people' ? <PeopleBoard/> : view === 'rounds' ? <div className="director-rounds"><RoundsPage director/></div> : view === 'checkin' ? <CheckInBoard/> : view === 'issues' ? <IssueBoard/> : <div className="setup-layout">
+    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>Results</button><button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button><button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button></div>
+    {store.live && store.liveState !== 'ready' ? <div className="issue-board"><section className="access-banner"><span className="spinner"/><div><strong>{store.liveState === 'failed' ? 'We couldn’t load your tournament. Check your connection and reload.' : 'Loading your tournament…'}</strong></div></section></div> : needsTournament ? <div className="issue-board"><CreateTournamentCard/></div> : view === 'people' ? <PeopleBoard/> : view === 'results' ? <ResultsBoard/> : view === 'rounds' ? <div className="director-rounds"><RoundsPage director/></div> : view === 'checkin' ? <CheckInBoard/> : view === 'issues' ? <IssueBoard/> : <div className="setup-layout">
       <DirectorSetup judges={<JudgeAssignments/>}/>
       <SetupSummary/>
     </div>}

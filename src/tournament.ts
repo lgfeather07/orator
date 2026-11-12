@@ -8,6 +8,10 @@ export type Tournament = {
   name: string; date: string; host: string; rounds: number; sectionSize: number;
   /** The most events one student may enter. A student may enter each event once. */
   maxEntries: number;
+  /** Judges in each final round: two at districts, three at state. */
+  finalJudges?: number;
+  /** Team points for 1st to 6th in a final. Defaults to the NSAA scale. */
+  teamPoints?: number[];
   eventIds: string[]; status: TournamentStatus;
 };
 
