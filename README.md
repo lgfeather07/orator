@@ -40,5 +40,9 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/ballotApi.ts` — saving and loading ballots
 - `src/tournamentApi.ts` — tournaments, join requests, entries, and schedules in the database
 - `src/Access.tsx` — creating a tournament, asking to join, and the director's approval list
+- `src/JudgeRooms.tsx` — a judge's assigned rooms
+- `src/results.ts`, `src/Results.tsx` — breaks, finals, and team points following the NSAA manual
+- `src/PastBallots.tsx` — past-tournament ballots for students and coaches
+- `src/EntryImport.tsx` — adding students by hand or from a roster file
 - `supabase/` — database tables and access rules
 - `src/store.tsx` — demo data shared across roles

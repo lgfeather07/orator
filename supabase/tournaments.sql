@@ -221,3 +221,38 @@ create policy "Directors change the schedule" on public.sections for update to a
   using (private.is_director(tournament_id)) with check (private.is_director(tournament_id));
 drop policy if exists "Directors clear the schedule" on public.sections;
 create policy "Directors clear the schedule" on public.sections for delete to authenticated using (private.is_director(tournament_id));
+
+-- Ballots filled in for a scheduled room carry the tournament and room they belong to, so the
+-- director can work out breaks and finals from them. (The ballots table comes from ballots.sql.)
+alter table public.ballots add column if not exists tournament_id uuid references public.tournaments (id) on delete set null;
+alter table public.ballots add column if not exists section_id uuid references public.sections (id) on delete set null;
+
+create or replace function private.directs_ballot(target uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.ballots b join public.tournaments t on t.id = b.tournament_id where b.id = target and t.director_id = (select auth.uid()));
+$$;
+revoke all on function private.directs_ballot(uuid) from public, anon;
+grant execute on function private.directs_ballot(uuid) to authenticated;
+
+-- A judge may only attach a ballot to a room they were assigned in a tournament they were approved for.
+create or replace function public.check_ballot_room() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.section_id is not null and not exists (select 1 from public.sections s where s.id = new.section_id and s.tournament_id = new.tournament_id and s.judge_id = auth.uid()) then
+    raise exception 'You are not the judge assigned to that room.' using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists check_ballot_room on public.ballots;
+create trigger check_ballot_room before insert on public.ballots
+  for each row execute function public.check_ballot_room();
+revoke all on function public.check_ballot_room() from public, anon, authenticated;
+
+-- Directors read submitted ballots for their own tournament. Private notes stay with the judge.
+drop policy if exists "Directors read ballots for their tournament" on public.ballots;
+create policy "Directors read ballots for their tournament" on public.ballots for select to authenticated
+  using (status = 'submitted' and tournament_id is not null and private.is_director(tournament_id));
+drop policy if exists "Directors read entries for their tournament" on public.ballot_entries;
+create policy "Directors read entries for their tournament" on public.ballot_entries for select to authenticated
+  using (private.ballot_is_submitted(ballot_id) and private.directs_ballot(ballot_id));

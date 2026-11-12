@@ -1,7 +1,8 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Avatar, Badge, Button, Icon, Logo, OratorMark, Progress, downloadText, type IconName } from './ui';
 import { StoreProvider, useStore } from './store';
-import { JudgeBallot, SpeakerCheckIn } from './JudgeBallot';
+import { JudgeBallot, SpeakerCheckIn, type BallotRoom } from './JudgeBallot';
+import { MyRooms } from './JudgeRooms';
 import { ballotEvents } from './ballots';
 import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
 import { IssueBoard, ReportIssueModal } from './Issues';
@@ -113,12 +114,12 @@ function PaperBallot() {
   </div>;
 }
 
-function BallotPage() {
+function BallotPage({ room }: { room?: BallotRoom }) {
   const [format, setFormat] = useState<'e' | 'paper'>('e');
   return <MobileFrame>
-    <MobileHeader title="Judge Leather" subtitle="Gothenburg Invitational"/>
+    <MobileHeader title="Judge Leather" subtitle={room?.key.tournament ?? 'Gothenburg Invitational'}/>
     <div className="segmented ballot-toggle"><button className={format === 'e' ? 'active' : ''} onClick={() => setFormat('e')}>E-ballot</button><button className={format === 'paper' ? 'active' : ''} onClick={() => setFormat('paper')}>Paper</button></div>
-    {format === 'e' ? <JudgeBallot/> : <PaperBallot/>}
+    {format === 'e' ? <JudgeBallot key={room?.sectionId ?? 'sample'} room={room}/> : <PaperBallot/>}
   </MobileFrame>;
 }
 
@@ -226,7 +227,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     <main className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
       <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{sidebarItems[persona].map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
-      {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your ballot is real:</strong> it saves to your account. Assignments and names on this page are example data.</> : <><strong>Sample tournament shown.</strong> Live data for this workspace is coming next.</>}</span></div>}
+      {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your rooms and ballots are real</strong> once the director approves you and publishes the schedule. Other numbers on this page are example data.</> : <><strong>Sample tournament shown.</strong> Live data for this workspace is coming next.</>}</span></div>}
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
       {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
@@ -435,15 +436,17 @@ function StudentPage() {
 function JudgePage() {
   const greeting = useGreeting('Judge Leather');
   const store = useStore();
+  const judgeAccess = useAccess('judge');
+  const [openRoom, setOpenRoom] = useState<BallotRoom | undefined>(undefined);
   const [action, setAction] = useState<'assignments' | 'ballots' | 'preferences' | 'mobileBallot' | 'competitors'>('assignments');
   const [judgeEvents, setJudgeEvents] = useState(allEventPreferences);
   const [preferencesSaved, setPreferencesSaved] = useState(true);
   return <DesktopShell active="Overview" title={greeting} subtitle="Your assignments and ballots are ready for today." persona="judge">
     <div className="role-dashboard">
-      <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction('mobileBallot')}>Open e-ballot</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
+      <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction(judgeAccess.state === 'approved' ? 'assignments' : 'mobileBallot')}>{judgeAccess.state === 'approved' ? 'Open my rooms' : 'Open e-ballot'}</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
       <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Strong event fit" icon="sparkle"/></div>
       <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
-      {action === 'assignments' ? <div className="role-grid">
+      {action === 'assignments' && judgeAccess.state === 'approved' ? <MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/> : action === 'assignments' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
           <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemporaneous','Room 301','Upcoming'],['1:30 PM','Round 4','Persuasive','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,3).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
         </section>
@@ -463,7 +466,7 @@ function JudgePage() {
         <div className="preference-note"><Icon name="drag"/><span>Your preferences help the director build stronger panels and avoid poor event matches.</span></div>
         <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
         <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => setPreferencesSaved(true)}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
-      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>Edit Round 2 ballot</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => setAction('ballots')}>Back to ballot desk</Button></div><BallotPage/></section>}
+      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `Round ${openRoom.key.round} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
     </div>
   </DesktopShell>;
 }

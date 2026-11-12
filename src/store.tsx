@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from './auth';
 import * as api from './tournamentApi';
+import { listTournamentResults } from './ballotApi';
 import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
 import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
 import { buildSchedule, defaultTournament, judgePool, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Section, type Tournament } from './tournament';
@@ -41,7 +42,9 @@ type Store = {
   issues: Issue[]; reportIssue: (issue: { kind: IssueKind; where: string; detail: string; reporter: string; role: string }) => void; resolveIssue: (id: string) => void;
   /** Coaches release rankings and comments to their students, and only once the tournament is over. */
   resultsReleased: boolean; releaseResults: () => void;
-  /** Round results used to work out breaks, placings, and team points. Sample data for now. */
+  /** True when the preliminary results come from judges' submitted ballots rather than sample data. */
+  resultsAreReal: boolean;
+  /** Round results used to work out breaks, placings, and team points. */
   prelimResults: PrelimResult[]; finalResults: FinalResult[];
   fillSamplePrelims: () => void; fillSampleFinals: (eventId: string) => void; clearResults: () => void;
   resetDemo: () => void;
@@ -126,6 +129,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
   const [liveSections, setLiveSections] = useState<Section[]>([]);
+  const [liveResults, setLiveResults] = useState<PrelimResult[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -140,7 +144,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (active) {
         const [entryRows, sectionRows, memberRows] = await Promise.all([api.listEntries(active.id), api.listSections(active.id), api.listMembers(active.id)]);
         setLiveEntries(entryRows); setLiveSections(sectionRows); setMembers(memberRows);
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); }
+        // Only the director can read every submitted ballot; for everyone else this stays empty.
+        setLiveResults(active.directorId === userId ? await listTournamentResults(active.id).catch(() => []) : []);
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -184,6 +190,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       api.saveSectionJudge(sectionId, judge).catch(caught => { report(caught); refresh(); });
     },
     resetDemo: () => undefined,
+    // Real submitted ballots take over from sample results as soon as there are any.
+    ...(liveResults.length ? { prelimResults: liveResults } : {}),
   };
 
   const store: Store = {
@@ -218,6 +226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addChecklist: label => setChecklist(current => [...current, { id: Date.now(), label, done: false }]),
     practiceLog, addPractice: text => setPracticeLog(current => [{ id: Date.now(), date: 'Today · Practice', text }, ...current]),
     reminders, setReminders,
+    resultsAreReal: live && liveResults.length > 0,
     live, liveState, syncError, clearSyncError: () => setSyncError(''),
     tournamentId: live ? tournamentId : null, isDirector, tournaments, myMemberships, members,
     judges: live ? liveJudges : judgePool,

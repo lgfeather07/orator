@@ -30,7 +30,11 @@ const ratingOf = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) ? Math.m
 const feedbackLength = (ballot: SpeakerBallot) => ballot.general.trim().length + ballot.comment.trim().length;
 const isScored = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) && secondsOf(ballot) !== null && feedbackLength(ballot) >= MIN_COMMENT;
 const THIS_ROUND: BallotKey = { tournament: 'Gothenburg Invitational', round: 2, room: 'Room 214' };
-const emptyRound = () => Object.fromEntries(roundSpeakers.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
+type Speaker = { code: string; name: string; school: string; title?: string };
+const emptyRound = (list: Speaker[]) => Object.fromEntries(list.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
+
+/** A real room from the director's schedule. Without one, the ballot shows the sample round. */
+export type BallotRoom = { key: BallotKey; tournamentId: string; sectionId: string; eventId: string; time: string; speakers: Speaker[] };
 const bandOf = (rating: number) => RATING_BANDS.find(band => band.values.includes(rating))?.label ?? '';
 const maxFor = (event: BallotEvent, classA: boolean) => classA && event.time.classAMax ? event.time.classAMax : event.time.max;
 const limitText = (event: BallotEvent, classA: boolean) => event.time.min ? `${clock(event.time.min)}–${clock(event.time.max)}` : `${clock(maxFor(event, classA))} maximum`;
@@ -58,15 +62,18 @@ export function SpeakerCheckIn({ code, compact = false, onChange }: { code: stri
   </div>;
 }
 
-export function JudgeBallot() {
+export function JudgeBallot({ room }: { room?: BallotRoom }) {
+  const speakers: Speaker[] = room?.speakers ?? roundSpeakers;
+  const ballotKey = room?.key ?? THIS_ROUND;
+  const link = room ? { tournamentId: room.tournamentId, sectionId: room.sectionId } : undefined;
   const { speakerPresence, setSpeakerPresence, entries } = useStore();
   const { profile } = useAuth();
   const loadOf = (name: string) => loadLabel(entryLoadByName(entries, name));
-  const firstName = (code: string) => roundSpeakers.find(item => item.code === code)!.name.split(' ')[0];
+  const firstName = (code: string) => speakers.find(item => item.code === code)!.name.split(' ')[0];
   const firstNames = (codes: string[]) => codes.map(firstName).join(', ');
   /** Signed-in judges save to the database; the demo keeps everything in the browser. */
   const remote = profile !== null;
-  const [eventId, setEventId] = useState('info');
+  const [eventId, setEventId] = useState(room?.eventId ?? 'info');
   const [classA, setClassA] = useState(false);
   const [ballotId, setBallotId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'failed'>(remote ? 'loading' : 'ready');
@@ -75,17 +82,17 @@ export function JudgeBallot() {
   const [submitting, setSubmitting] = useState(false);
   const dirty = useRef(false);
   const [tab, setTab] = useState<'score' | 'rank'>('score');
-  const [current, setCurrent] = useState(remote ? 'C1' : 'C4');
+  const [current, setCurrent] = useState(remote || room ? speakers[0].code : 'C4');
   const [open, setOpen] = useState(0);
-  const [ballots, setBallots] = useState(remote ? emptyRound : startingBallots);
-  const [order, setOrder] = useState(roundSpeakers.map(speaker => speaker.code));
+  const [ballots, setBallots] = useState(() => remote || room ? emptyRound(speakers) : startingBallots);
+  const [order, setOrder] = useState(speakers.map(speaker => speaker.code));
   const [dragged, setDragged] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [experience, setExperience] = useState('');
 
   const event = ballotEvents.find(item => item.id === eventId) || ballotEvents[0];
-  const speaker = roundSpeakers.find(item => item.code === current)!;
+  const speaker = speakers.find(item => item.code === current)!;
   const ballot = ballots[current];
   const update = (patch: Partial<SpeakerBallot>) => { dirty.current = true; setBallots(all => ({ ...all, [current]: { ...all[current], ...patch } })); };
   const absent = (code: string) => speakerPresence[code] === 'absent';
@@ -124,7 +131,7 @@ export function JudgeBallot() {
   const time = timeStatus(secondsOf(ballot), event, classA);
   const commentProgress = Math.min(100, Math.round((feedbackLength(ballot) / MIN_COMMENT) * 100));
   const rating = ratingOf(ballot);
-  const speakerIndex = roundSpeakers.findIndex(item => item.code === current);
+  const speakerIndex = speakers.findIndex(item => item.code === current);
   const goTo = (code: string) => { setCurrent(code); setOpen(0); };
   const flagsFor = (code: string) => { const data = ballots[code]; return { penalty: timeStatus(secondsOf(data), event, classA).penalty, dq: data.dq.length > 0 }; };
 
@@ -137,7 +144,7 @@ export function JudgeBallot() {
   }
   const lowered = (code: string) => timePenalty(code) && (loweredByJudge(code) || finalRanked.indexOf(code) > ranked.indexOf(code));
 
-  const toEntries = (): EntryInput[] => roundSpeakers.map(item => {
+  const toEntries = (): EntryInput[] => speakers.map(item => {
     const data = ballots[item.code]; const presence = speakerPresence[item.code];
     const place = finalRanked.indexOf(item.code);
     return {
@@ -151,11 +158,11 @@ export function JudgeBallot() {
   useEffect(() => {
     if (!remote) return;
     let active = true;
-    loadBallot(THIS_ROUND).then(saved => {
+    loadBallot(ballotKey).then(saved => {
       if (!active) return;
       if (saved) {
         setBallotId(saved.id); setEventId(saved.eventId); setClassA(saved.classA); setSubmitted(saved.status === 'submitted');
-        const next = emptyRound();
+        const next = emptyRound(speakers);
         saved.entries.forEach(entry => {
           if (!next[entry.code]) return;
           next[entry.code] = {
@@ -172,9 +179,9 @@ export function JudgeBallot() {
           // Only a tie needs undoing; a penalized speaker below a lower-rated one is recognised as already lowered.
           if (penalized.has(byRank[index]) && ratingOf(next[byRank[index]]) === ratingOf(next[byRank[index - 1]])) [byRank[index - 1], byRank[index]] = [byRank[index], byRank[index - 1]];
         }
-        setOrder([...byRank, ...roundSpeakers.map(item => item.code).filter(code => !byRank.includes(code))]);
+        setOrder([...byRank, ...speakers.map(item => item.code).filter(code => !byRank.includes(code))]);
       } else {
-        roundSpeakers.forEach(item => setSpeakerPresence(item.code, undefined));
+        speakers.forEach(item => setSpeakerPresence(item.code, undefined));
       }
       setLoadState('ready');
     }).catch(() => active && setLoadState('failed'));
@@ -187,7 +194,7 @@ export function JudgeBallot() {
     if (!remote || loadState !== 'ready' || submitted || submitting || !dirty.current) return;
     const timer = setTimeout(async () => {
       dirty.current = false; setSaveState('saving');
-      try { setBallotId(await saveBallot(THIS_ROUND, ballotId, eventId, classA, toEntries(), false)); setSaveState('saved'); setSaveError(''); }
+      try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), false, link)); setSaveState('saved'); setSaveError(''); }
       catch (caught) { dirty.current = true; setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not save.'); }
     }, 900);
     return () => clearTimeout(timer);
@@ -197,7 +204,7 @@ export function JudgeBallot() {
   const submit = async () => {
     if (!remote) { setSubmitted(true); return; }
     setSubmitting(true); setSaveError('');
-    try { setBallotId(await saveBallot(THIS_ROUND, ballotId, eventId, classA, toEntries(), true)); dirty.current = false; setSubmitted(true); }
+    try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), true, link)); dirty.current = false; setSubmitted(true); }
     catch (caught) { setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not submit the ballot.'); }
     finally { setSubmitting(false); }
   };
@@ -211,9 +218,9 @@ export function JudgeBallot() {
 
   if (submitted) return <div className="jb jb-done">
     <span className="success-icon"><Icon name="check" size={26}/></span>
-    <h2>Round 2 ballot submitted</h2>
+    <h2>Round {ballotKey.round} ballot submitted</h2>
     <p>Ranks, ratings, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
-    <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{roundSpeakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
+    <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
       <div className="field-label"><span>How is this tournament running?</span><small>Optional · goes to the director</small></div>
       {feedbackSent ? <p className="jb-sent"><Icon name="check" size={15}/> Thanks. Your feedback was sent to the tournament director.</p> : <>
@@ -226,14 +233,14 @@ export function JudgeBallot() {
 
   return <div className="jb">
     <div className="jb-top">
-      <div><span className="jb-badges"><Badge tone="info">Round 2</Badge><Badge tone="success" icon="check">Official NSAA ballot</Badge></span><strong>Varsity {event.name}</strong><span>Room 214 · 9:30 AM · 6 speakers · {limitText(event, classA)}</span></div>
+      <div><span className="jb-badges"><Badge tone="info">Round {ballotKey.round}</Badge><Badge tone="success" icon="check">Official NSAA ballot</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
       <div className="jb-selects">{event.time.classAMax && <label><span>School class</span><select aria-label="School class" value={classA ? 'a' : 'other'} onChange={change => { dirty.current = true; setClassA(change.target.value === 'a'); }}><option value="other">Classes B–D · {clock(event.time.max)}</option><option value="a">Class A · {clock(event.time.classAMax)}</option></select></label>}
-      <label><span>Event</span><select aria-label="Event" value={eventId} onChange={change => { dirty.current = true; setEventId(change.target.value); setOpen(0); }}>{ballotEvents.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+      {!room && <label><span>Event</span><select aria-label="Event" value={eventId} onChange={change => { dirty.current = true; setEventId(change.target.value); setOpen(0); }}>{ballotEvents.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}</div>
     </div>
     <div className="segmented jb-tabs"><button className={tab === 'score' ? 'active' : ''} onClick={() => setTab('score')}>1 · Score speakers</button><button className={tab === 'rank' ? 'active' : ''} onClick={() => setTab('rank')}>2 · Rank the round</button></div>
 
     {tab === 'score' ? <>
-      <div className="jb-strip" role="tablist" aria-label="Speakers in this round">{roundSpeakers.map((item, index) => {
+      <div className="jb-strip" role="tablist" aria-label="Speakers in this round">{speakers.map((item, index) => {
         const data = ballots[item.code];
         const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.marks.some(Boolean) ? 'draft' : 'empty';
         return <button key={item.code} role="tab" aria-selected={current === item.code} className={`${current === item.code ? 'active' : ''} ${state}`} onClick={() => goTo(item.code)}>
@@ -242,7 +249,7 @@ export function JudgeBallot() {
       })}</div>
 
       <div className="jb-speaker">
-        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF 6 · {speaker.code}</span><h2>{speaker.name}</h2><p>{speaker.title} · {speaker.school}</p>{loadOf(speaker.name) && <p className="jb-load"><Badge tone="info" icon="users">{loadOf(speaker.name)}</Badge> In more than one room this round. They may arrive late or need to leave early.</p>}</div>
+        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF {speakers.length}{room ? '' : ` · ${speaker.code}`}</span><h2>{speaker.name}</h2><p>{speaker.title ? `${speaker.title} · ` : ''}{speaker.school}</p>{loadOf(speaker.name) && <p className="jb-load"><Badge tone="info" icon="users">{loadOf(speaker.name)}</Badge> In more than one room this round. They may arrive late or need to leave early.</p>}</div>
         <SpeakerCheckIn code={current} onChange={() => { dirty.current = true; }}/>
       </div>
 
@@ -313,16 +320,16 @@ export function JudgeBallot() {
       </div>}
 
       <div className="jb-nav">
-        <Button variant="secondary" disabled={speakerIndex === 0} onClick={() => goTo(roundSpeakers[speakerIndex - 1].code)}>Previous</Button>
+        <Button variant="secondary" disabled={speakerIndex === 0} onClick={() => goTo(speakers[speakerIndex - 1].code)}>Previous</Button>
         {saveLine}
-        {speakerIndex < roundSpeakers.length - 1 ? <Button icon="arrow" onClick={() => goTo(roundSpeakers[speakerIndex + 1].code)}>Next speaker</Button> : <Button icon="arrow" onClick={() => setTab('rank')}>Rank the round</Button>}
+        {speakerIndex < speakers.length - 1 ? <Button icon="arrow" onClick={() => goTo(speakers[speakerIndex + 1].code)}>Next speaker</Button> : <Button icon="arrow" onClick={() => setTab('rank')}>Rank the round</Button>}
       </div>
     </> : <>
       <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>Sort by rating</Button></div>
       <div className="jb-rank-list">
         <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>Rating</span><span/></div>
         {finalRanked.map((code, index) => {
-          const item = roundSpeakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
+          const item = speakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
           return <div key={code} className={`jb-rank-row ${outOfOrder.has(code) ? 'conflict' : ''} ${dragged === code ? 'dragging' : ''}`} draggable onDragStart={() => setDragged(code)} onDragEnd={() => setDragged(null)} onDragOver={drag => drag.preventDefault()} onDrop={() => dropOn(code)}>
             <span className="jb-grip"><Icon name="drag"/></span>
             <span className="jb-rank-number">{index + 1}</span>
@@ -332,7 +339,7 @@ export function JudgeBallot() {
             <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={ranked.indexOf(code) === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={ranked.indexOf(code) === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
           </div>;
         })}
-        {noShows.map(code => <div key={code} className="jb-rank-row no-show"><span/><span className="jb-rank-number">–</span><span className="jb-rank-name"><strong>{roundSpeakers.find(entry => entry.code === code)!.name}</strong><small>{code} · No-show, not ranked</small></span><span>—</span><span>—</span><span/></div>)}
+        {noShows.map(code => <div key={code} className="jb-rank-row no-show"><span/><span className="jb-rank-number">–</span><span className="jb-rank-name"><strong>{speakers.find(entry => entry.code === code)!.name}</strong><small>{code} · No-show, not ranked</small></span><span>—</span><span>—</span><span/></div>)}
       </div>
 
       <div className="jb-checks">

@@ -48,14 +48,14 @@ export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
  * Save the ballot as a draft and, if `submit` is set, submit it. The database checks the ballot
  * again on submission and locks it afterwards. Returns the ballot's id.
  */
-export async function saveBallot(key: BallotKey, id: string | null, eventId: string, classA: boolean, entries: EntryInput[], submit: boolean): Promise<string> {
+export async function saveBallot(key: BallotKey, id: string | null, eventId: string, classA: boolean, entries: EntryInput[], submit: boolean, link?: { tournamentId: string; sectionId: string }): Promise<string> {
   const db = supabase ?? fail('Accounts are not connected.');
   let ballotId = id;
   if (ballotId) {
     const { error } = await db.from('ballots').update({ event_id: eventId, class_a: classA }).eq('id', ballotId);
     if (error) fail(error.message);
   } else {
-    const { data, error } = await db.from('ballots').insert({ ...key, event_id: eventId, class_a: classA }).select('id').single();
+    const { data, error } = await db.from('ballots').insert({ ...key, event_id: eventId, class_a: classA, ...(link ? { tournament_id: link.tournamentId, section_id: link.sectionId } : {}) }).select('id').single();
     if (error) fail(/row-level security/i.test(error.message) ? 'Only accounts with the Judge role can save a ballot.' : error.message);
     ballotId = data!.id as string;
   }
@@ -98,4 +98,25 @@ export async function loadTeamBallots(school: string): Promise<TeamBallotRow[]> 
       judge: parent.judge_name, tournament: parent.tournament, round: parent.round, eventId: parent.event_id, submittedAt: parent.submitted_at,
     };
   }).sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
+}
+
+/** Status of each ballot the signed-in judge has started, keyed "round|room". */
+export async function listMyBallotStatus(tournament: string): Promise<Record<string, 'draft' | 'submitted'>> {
+  const db = supabase ?? fail('Accounts are not connected.');
+  const { data, error } = await db.from('ballots').select('round, room, status').eq('tournament', tournament);
+  if (error) fail(error.message);
+  return Object.fromEntries((data ?? []).map(row => [`${row.round}|${row.room}`, row.status]));
+}
+
+/** Ranks and ratings from submitted ballots for a tournament's rooms. Only its director can read them all. */
+export async function listTournamentResults(tournamentId: string): Promise<{ entryId: string; round: number; sectionId: string; rank: number; rating: number }[]> {
+  const db = supabase ?? fail('Accounts are not connected.');
+  const { data: ballots, error } = await db.from('ballots').select('id, round, section_id').eq('tournament_id', tournamentId).eq('status', 'submitted');
+  if (error) fail(error.message);
+  const rows = await Promise.all((ballots ?? []).filter(ballot => ballot.section_id).map(async ballot => {
+    const { data, error: entryError } = await db.from('ballot_entries').select('speaker_code, rank, rating, present').eq('ballot_id', ballot.id);
+    if (entryError) fail(entryError.message);
+    return (data ?? []).filter(entry => entry.present && entry.rank && entry.rating).map(entry => ({ entryId: entry.speaker_code as string, round: ballot.round as number, sectionId: ballot.section_id as string, rank: entry.rank as number, rating: entry.rating as number }));
+  }));
+  return rows.flat();
 }
