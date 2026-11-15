@@ -1,9 +1,9 @@
 import { supabase } from './auth';
-import type { Entry, Judge, Section, Tournament, TournamentStatus } from './tournament';
+import type { Entry, Judge, JudgePrefs, Section, Tournament, TournamentStatus } from './tournament';
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -46,8 +46,8 @@ export async function saveTournament(id: string, patch: Partial<Tournament>): Pr
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -71,6 +71,12 @@ export async function requestToJoin(tournamentId: string, role: MemberRole, scho
 
 export async function decideMember(member: Member, status: MemberStatus): Promise<void> {
   const { error } = await db().from('tournament_members').update({ status }).eq('tournament_id', member.tournamentId).eq('user_id', member.userId).eq('role', member.role);
+  if (error) fail(error.message);
+}
+
+/** A judge saves which events they would most like to judge in finals. */
+export async function saveJudgePreferences(tournamentId: string, userId: string, preferences: JudgePrefs): Promise<void> {
+  const { error } = await db().from('tournament_members').update({ event_preferences: preferences }).eq('tournament_id', tournamentId).eq('user_id', userId).eq('role', 'judge');
   if (error) fail(error.message);
 }
 

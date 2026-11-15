@@ -7,7 +7,8 @@ import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type Pr
 
 /** What one judge's submitted ballot says about one speaker in one room. */
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
-import { buildFinal, buildSchedule, defaultTournament, invoiceFor, isFinal, judgePool, noPayment, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Payment, type Section, type Tournament } from './tournament';
+import { buildFinal, buildSchedule, defaultTournament, invoiceFor, isFinal, judgePool, noPayment, samplePreferences, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type Section, type Tournament } from './tournament';
+import { ballotEvents } from './ballots';
 
 export type Presence = 'present' | 'absent';
 
@@ -52,8 +53,14 @@ type Store = {
   fillSamplePrelims: () => void; fillSampleFinals: (eventId: string) => void; clearResults: () => void;
   /** Results from ballots judges have submitted for scheduled rooms. */
   roomResults: RoomResult[]; recordRoomResults: (sectionId: string, rows: Omit<RoomResult, 'sectionId'>[]) => void;
+  /** Each judge's event preferences. They are only used to choose finals judges. */
+  judgePreferences: Record<string, JudgePrefs>;
+  /** The current judge's own preferences (Judge Leather in the demo). */
+  myPreferences: JudgePrefs; savePreferences: (preferences: JudgePrefs) => void;
   /** Set up an event's final round: one ballot per final-round judge for the six finalists. */
   createFinal: (eventId: string) => void;
+  /** Set up every event's final at once, so each judge can be placed on the final they most want. */
+  createAllFinals: () => void;
   /** Simulated fee payments, keyed by school name in lower case. No real money moves. */
   payments: Record<string, Payment>;
   paymentFor: (school: string) => Payment;
@@ -81,11 +88,16 @@ type Store = {
 };
 
 const STORAGE_KEY = 'orator-demo-v5';
+const allEventIds = ballotEvents.map(event => event.id);
+/** Judge Leather starts out preferring public-address events and avoiding group interpretation. */
+const defaultLeatherPreferences: JudgePrefs = allEventIds.map(id => ({ id, level: ['info', 'persuasive', 'extemp'].includes(id) ? 'top' as const : ['oid', 'duet', 'duo'].includes(id) ? 'avoid' as const : 'willing' as const }))
+  .sort((a, b) => ['top', 'willing', 'avoid'].indexOf(a.level) - ['top', 'willing', 'avoid'].indexOf(b.level));
+const samplePoolPreferences: Record<string, JudgePrefs> = Object.fromEntries(judgePool.map(judge => [judge.id, samplePreferences(judge.id, allEventIds)]));
 const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincoln East', 'Gothenburg High', 'Aurora', 'Minden'];
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -121,12 +133,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [resultsReleased, setResultsReleased] = useState<boolean>(saved?.resultsReleased ?? false);
   const [payments, setPayments] = useState<Record<string, Payment>>(() => saved?.payments ?? seedPayments());
   const [roomResults, setRoomResults] = useState<RoomResult[]>(saved?.roomResults ?? []);
+  const [myPreferences, setMyPreferences] = useState<JudgePrefs>(saved?.myPreferences ?? defaultLeatherPreferences);
   const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
   const [finalResults, setFinalResults] = useState<FinalResult[]>(saved?.finalResults ?? []);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences]);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
@@ -222,6 +235,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     resetDemo: () => undefined,
     roomResults: liveResults,
     recordRoomResults: () => { refresh(); },
+    judgePreferences: Object.fromEntries(members.filter(member => member.role === 'judge').map(member => [member.userId, member.preferences])),
+    myPreferences: myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge')?.preferences.length ? myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge')!.preferences : myPreferences,
+    savePreferences: preferences => {
+      setMyPreferences(preferences);
+      if (tournamentId && myMemberships.some(member => member.tournamentId === tournamentId && member.role === 'judge')) api.saveJudgePreferences(tournamentId, userId, preferences).then(refresh).catch(report);
+    },
   };
 
   const store: Store = {
@@ -244,9 +263,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
     resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedPayments()); },
+    judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
+    myPreferences, savePreferences: setMyPreferences,
     roomResults,
     recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
-    createFinal: () => undefined,
+    createFinal: () => undefined, createAllFinals: () => undefined,
     payments,
     paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
     setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
@@ -305,12 +326,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const ids = new Set(store.entries.filter(entry => entry.eventId === eventId).map(entry => entry.id));
     setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalistsOf(eventId), store.tournament.finalJudges ?? 2)]);
   };
-  store.createFinal = eventId => {
-    if (finalSections.some(section => section.eventId === eventId)) return;
-    const built = buildFinal(store.tournament, eventId, finalistsOf(eventId).map(standing => standing.entryId), store.entries, store.judges, store.sections);
-    if (built.length === 0 || built[0].entryIds.length === 0) return;
+  const eventsWithEntries = store.tournament.eventIds.filter(id => store.entries.some(entry => entry.eventId === id));
+  const awaitingFinal = (sectionsSoFar: Section[]) => eventsWithEntries.filter(id => !sectionsSoFar.some(section => isFinal(section, store.tournament) && section.eventId === id));
+  const planFinal = (eventId: string, sectionsSoFar: Section[]) => buildFinal(store.tournament, eventId, finalistsOf(eventId).map(standing => standing.entryId), store.entries, store.judges, sectionsSoFar, store.judgePreferences, awaitingFinal(sectionsSoFar));
+  const addFinals = (built: Section[]) => {
+    if (built.length === 0) return;
     if (live && tournamentId) api.addSections(tournamentId, built, store.sections.length).then(added => setLiveSections(all => [...all, ...added])).catch(report);
     else setSections(all => [...all, ...built]);
+  };
+  store.createFinal = eventId => {
+    if (finalSections.some(section => section.eventId === eventId)) return;
+    const built = planFinal(eventId, store.sections);
+    if (built.length && built[0].entryIds.length) addFinals(built);
+  };
+  store.createAllFinals = () => {
+    let soFar = store.sections; const all: Section[] = [];
+    awaitingFinal(store.sections).forEach(eventId => { const built = planFinal(eventId, soFar); if (built.length && built[0].entryIds.length) { all.push(...built); soFar = [...soFar, ...built]; } });
+    addFinals(all);
   };
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

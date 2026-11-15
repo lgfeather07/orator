@@ -16,7 +16,9 @@ import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
 import { pastBallots } from './PastBallots';
 import { entryLoadByName, loadLabel, roundLabel, roundTimes, sameSchool } from './tournament';
 import { ballotEvents as nsaaEvents } from './ballots';
-import { EventPreferences, allEventPreferences } from './Preferences';
+import { EventPreferences, toPreferenceList } from './Preferences';
+import { judgePool, preferenceFor } from './tournament';
+import { eventCodes } from './ballots';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
@@ -312,23 +314,19 @@ function DirectorPage() {
 }
 
 function JudgeAssignments() {
-  const [events, setEvents] = useState(allEventPreferences);
-  const [autoAssigned, setAutoAssigned] = useState(false);
+  const store = useStore();
+  const events = toPreferenceList(store.myPreferences);
+  const codes = (judgeId: string, level: 'top' | 'avoid') => nsaaEvents.filter(event => preferenceFor(store.judgePreferences[judgeId], event.id) === level).map(event => eventCodes[event.id]).join(' · ') || '—';
   return <div className="preferences-layout">
       <section className="preference-builder">
-        <div className="builder-head"><div><h2>Judge Leather</h2><p>Lincoln High School · 8 years judging</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
-        <div className="preference-note"><Icon name="drag"/><span>All 11 events can be ranked. Drag an event between lists or use its menu; the top of each list is the strongest preference.</span></div>
-        <EventPreferences events={events} onChange={setEvents}/>
+        <div className="builder-head"><div><h2>Judge Leather</h2><p>Community judge · finals preferences</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
+        <div className="preference-note"><Icon name="drag"/><span>Preferences decide which <strong>final</strong> a judge is given. Preliminary rooms are assigned without them.</span></div>
+        <EventPreferences events={events} onChange={next => store.savePreferences(next.map(item => ({ id: item.id, level: item.level })))}/>
       </section>
       <section className="assignment-panel">
-        <div className="assignment-head"><div><h2>Round 2 assignments</h2><p>42 judges · {autoAssigned ? '2' : '7'} conflicts to resolve</p></div><Button variant="secondary" disabled={autoAssigned} onClick={() => setAutoAssigned(true)}>{autoAssigned ? 'Assignments updated' : 'Auto-assign'}</Button></div>
-        <div className="assignment-stats"><div><strong>35</strong><span>Good fit</span></div><div className="warn"><strong>5</strong><span>Preference mismatch</span></div><div className="bad"><strong>2</strong><span>School conflict</span></div></div>
-        <div className="assignment-list">{[
-          ['Judge Leather','Informative','Strong preference','success'],
-          ['Maria Chen','Poetry','Prefers to avoid','warning'],
-          ['David Ross','Extemp','School conflict','danger'],
-          ['Alyssa Ford','Oratory','Willing to judge','neutral'],
-        ].map(([name,event,note,tone]) => <div className="assignment-row" key={name}><Avatar initials={name.split(' ').map(n=>n[0]).join('')} size="sm"/><span><strong>{name}</strong><small>{event}</small></span><Badge tone={tone as 'success'|'warning'|'danger'|'neutral'} icon={tone === 'danger' ? 'warning' : tone === 'success' ? 'check' : undefined}>{note}</Badge><button className="icon-button" aria-label={`Resolve ${name} assignment`} onClick={() => setAutoAssigned(true)}><Icon name="menu"/></button></div>)}</div>
+        <div className="assignment-head"><div><h2>How judges are assigned</h2><p>{judgePool.length} judges in the pool</p></div></div>
+        <ul className="assign-rules"><li><strong>Preliminary rounds</strong><span>Any available judge, never with a speaker from their own school. Preferences aren’t used.</span></li><li><strong>Finals</strong><span>By preference: top choices first, “prefer to avoid” last. Never the final of an event they judged in prelims, and never a finalist from their own school.</span></li></ul>
+        <div className="assignment-list pref-summary">{judgePool.map(judge => <div className="assignment-row" key={judge.id}><Avatar initials={judge.name.split(' ').map(part => part[0]).join('').slice(0, 2)} size="sm"/><span><strong>{judge.name}</strong><small>{judge.school || 'No school affiliation'}</small></span><span className="pref-codes"><small>Top</small><b>{codes(judge.id, 'top')}</b><small>Avoid</small><b>{codes(judge.id, 'avoid')}</b></span></div>)}</div>
       </section>
     </div>;
 }
@@ -454,12 +452,12 @@ function JudgePage() {
   const judgeAccess = useAccess('judge');
   const [openRoom, setOpenRoom] = useState<BallotRoom | undefined>(undefined);
   const [action, setAction] = useState<'assignments' | 'ballots' | 'preferences' | 'mobileBallot' | 'competitors'>('assignments');
-  const [judgeEvents, setJudgeEvents] = useState(allEventPreferences);
+  const [judgeEvents, setJudgeEvents] = useState(() => toPreferenceList(store.myPreferences));
   const [preferencesSaved, setPreferencesSaved] = useState(true);
   return <DesktopShell active="Overview" title={greeting} subtitle="Your assignments and ballots are ready for today." persona="judge">
     <div className="role-dashboard">
       <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction(judgeAccess.state === 'approved' ? 'assignments' : 'mobileBallot')}>{judgeAccess.state === 'approved' ? 'Open my rooms' : 'Open e-ballot'}</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
-      <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Strong event fit" icon="sparkle"/></div>
+      <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top finals choice" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Used for finals only" icon="sparkle"/></div>
       <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
       {action === 'assignments' && judgeAccess.state === 'demo' && store.sections.some(section => section.judgeId === 'jl') && <div className="demo-rooms"><MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/></div>}
       {action === 'assignments' && judgeAccess.state === 'approved' ? <MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/> : action === 'assignments' ? <div className="role-grid">
@@ -478,10 +476,10 @@ function JudgePage() {
         ].map(([code,name,school,title],index) => <article key={code}><span className="speaker-order">{index + 1}</span><Avatar initials={name.split(' ').map(part => part[0]).join('')} size="sm"/><span><strong>{name}{loadLabel(entryLoadByName(store.entries, name)) && <Badge tone="info">{loadLabel(entryLoadByName(store.entries, name))}</Badge>}</strong><small>{code} · {school}</small></span><span className="speech-title">{title}</span><SpeakerCheckIn code={code} compact/></article>)}</div>
       </section> : action === 'ballots' ? <section className="panel ballot-desk"><div className="panel-head"><div><h2>Round 2 ballot desk</h2><p>Varsity Informative · 6 competitors · Room 214</p></div><Badge tone="warning" icon="edit">2 drafts</Badge></div>
         <div className="ballot-desk-grid">{['C1','C2','C3','C4','C5','C6'].map((code,i)=><article key={code}><div><span className={`status-dot ${i<3?'complete':''}`}/><Badge tone={i<3?'success':i<5?'warning':'danger'}>{i<3?'Submitted':i<5?'Draft':'Missing'}</Badge></div><strong>{code}</strong><p>{['Nora Patel','Eli Thompson','Sam Wilson','Maya Rodriguez','Iris Chen','Leo Brooks'][i]}</p><Button variant={i<3?'secondary':'primary'} icon={i<3?'archive':'edit'} onClick={() => setAction('mobileBallot')}>{i<3?'View ballot':'Continue ballot'}</Button></article>)}</div>
-      </section> : action === 'preferences' ? <section className="panel embedded-preferences"><div className="panel-head"><div><h2>Event preferences</h2><p>Sort all 11 events by how confident you feel judging them.</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
-        <div className="preference-note"><Icon name="drag"/><span>Your preferences help the director build stronger panels and avoid poor event matches.</span></div>
+      </section> : action === 'preferences' ? <section className="panel embedded-preferences"><div className="panel-head"><div><h2>Finals preferences</h2><p>Sort all 11 events by which finals you’d most like to judge.</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
+        <div className="preference-note"><Icon name="drag"/><span>These decide which <strong>final</strong> you’re given: top choices first. Preliminary rooms are assigned without them, and you won’t be given the final of an event you judged in prelims.</span></div>
         <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
-        <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => setPreferencesSaved(true)}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
+        <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => { store.savePreferences(judgeEvents.map(item => ({ id: item.id, level: item.level }))); setPreferencesSaved(true); }}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
       </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `${openRoom.final ? 'Final round' : `Round ${openRoom.key.round}`} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
     </div>
   </DesktopShell>;

@@ -10,6 +10,12 @@ const startingLevels: Record<string, Level> = { info: 'top', persuasive: 'top', 
 /** Every NSAA event, each sorted into how willing the judge is to judge it. */
 export const allEventPreferences: EventPreference[] = ballotEvents.map(event => ({ id: event.id, name: event.name, code: eventCodes[event.id] ?? event.short.slice(0, 3).toUpperCase(), level: startingLevels[event.id] ?? 'willing' }));
 
+/** The editable list for a judge's saved preferences: saved order first, then any events they haven't placed. */
+export function toPreferenceList(saved: { id: string; level: Level }[]): EventPreference[] {
+  const known = saved.flatMap(item => { const event = allEventPreferences.find(option => option.id === item.id); return event ? [{ ...event, level: item.level }] : []; });
+  return [...known, ...allEventPreferences.filter(event => !known.some(item => item.id === event.id))];
+}
+
 const levels: { id: Level; label: string; note: string; tone: 'success' | 'neutral' | 'pink' }[] = [
   { id: 'top', label: 'Top choices', note: 'Highly experienced', tone: 'success' },
   { id: 'willing', label: 'Willing to judge', note: 'Comfortable', tone: 'neutral' },

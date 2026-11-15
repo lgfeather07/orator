@@ -37,6 +37,8 @@ create table if not exists public.tournament_members (
 
 -- Added after the first version of this script: a coach's decision to show results to their students.
 alter table public.tournament_members add column if not exists results_released boolean not null default false;
+-- A judge's event preferences, used only to choose which final they judge.
+alter table public.tournament_members add column if not exists event_preferences jsonb not null default '[]'::jsonb;
 
 create table if not exists public.entries (
   id uuid primary key default gen_random_uuid(),
