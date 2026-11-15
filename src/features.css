@@ -791,3 +791,13 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 .demo-rooms { margin-bottom: 14px; }
 .final-seat-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .final-seat-status button { min-height: 30px; padding: 0 9px; color: var(--brand); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.my-entries.empty { grid-template-columns: 1fr; }
+.team-ballots-empty svg { vertical-align: -2px; margin-right: 4px; }
+.payout { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.payout > div { padding: 11px 14px; border-right: 1px solid var(--border); }
+.payout > div:last-child { border-right: 0; }
+.payout dt { color: var(--muted); font-size: 12px; }
+.payout dt small { display: block; font-size: 11px; }
+.payout dd { margin: 3px 0 0; font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.payout .net dd { color: var(--green); }
+@media (max-width: 720px) { .payout { grid-template-columns: 1fr; } .payout > div { border-right: 0; border-bottom: 1px solid var(--border); } }

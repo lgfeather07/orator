@@ -205,6 +205,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).catch(caught => { report(caught); refresh(); }); },
     submittedSchools: members.filter(member => member.role === 'coach' && member.entriesSent).map(member => member.school),
     submitSchool: () => { if (tournamentId) api.markEntriesSent(tournamentId, userId).then(refresh).catch(report); },
+    // For a signed-in coach, releasing is saved, and the database only allows it once the tournament has ended.
+    resultsReleased: myMemberships.some(member => member.tournamentId === tournamentId && member.role === 'coach' && member.resultsReleased),
+    releaseResults: () => { if (tournamentId) api.releaseResultsToStudents(tournamentId, userId).then(refresh).catch(report); },
     sections: liveSections,
     generateSchedule: () => {
       if (!tournamentId || !liveTournament) return;

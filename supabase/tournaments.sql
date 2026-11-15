@@ -35,6 +35,9 @@ create table if not exists public.tournament_members (
   primary key (tournament_id, user_id, role)
 );
 
+-- Added after the first version of this script: a coach's decision to show results to their students.
+alter table public.tournament_members add column if not exists results_released boolean not null default false;
+
 create table if not exists public.entries (
   id uuid primary key default gen_random_uuid(),
   tournament_id uuid not null references public.tournaments (id) on delete cascade,
@@ -127,6 +130,15 @@ begin
     new.tournament_id := old.tournament_id; new.user_id := old.user_id; new.role := old.role; new.display_name := old.display_name;
     if not private.is_director(old.tournament_id) then
       new.status := old.status; new.school := old.school;
+    end if;
+    -- A coach releases results to their students, and only once the tournament has ended.
+    if new.results_released and not old.results_released then
+      if old.role <> 'coach' or old.status <> 'approved' then
+        raise exception 'Only an approved coach can release results.' using errcode = 'insufficient_privilege';
+      end if;
+      if private.tournament_status(old.tournament_id) <> 'finished' then
+        raise exception 'Results can be released once the tournament has ended.' using errcode = 'check_violation';
+      end if;
     end if;
   end if;
   return new;
@@ -256,3 +268,35 @@ create policy "Directors read ballots for their tournament" on public.ballots fo
 drop policy if exists "Directors read entries for their tournament" on public.ballot_entries;
 create policy "Directors read entries for their tournament" on public.ballot_entries for select to authenticated
   using (private.ballot_is_submitted(ballot_id) and private.directs_ballot(ballot_id));
+
+-- Students see their own ballots from a tournament once it has finished and their coach has released
+-- results. "Their own" means an entry under the name they joined with, at the school they were
+-- approved for. The joining name is fixed when they ask to join, so renaming an account later
+-- does not open up a teammate's ballots.
+create or replace function private.student_can_read(target uuid, speaker text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1
+    from public.ballots b
+    join public.tournaments t on t.id = b.tournament_id
+    join public.tournament_members me on me.tournament_id = t.id and me.user_id = (select auth.uid()) and me.role = 'student' and me.status = 'approved'
+    join public.entries e on e.tournament_id = t.id and e.id::text = speaker and lower(e.school) = lower(me.school) and lower(e.student) = lower(me.display_name)
+    where b.id = target and b.status = 'submitted' and t.status = 'finished'
+      and exists (select 1 from public.tournament_members c where c.tournament_id = t.id and c.role = 'coach' and c.status = 'approved' and lower(c.school) = lower(me.school) and c.results_released)
+  );
+$$;
+create or replace function private.student_can_read_ballot(target uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.ballot_entries be where be.ballot_id = target and private.student_can_read(target, be.speaker_code));
+$$;
+revoke all on function private.student_can_read(uuid, text) from public, anon;
+revoke all on function private.student_can_read_ballot(uuid) from public, anon;
+grant execute on function private.student_can_read(uuid, text) to authenticated;
+grant execute on function private.student_can_read_ballot(uuid) to authenticated;
+
+drop policy if exists "Students read their own released entries" on public.ballot_entries;
+create policy "Students read their own released entries" on public.ballot_entries for select to authenticated
+  using (private.student_can_read(ballot_id, speaker_code));
+drop policy if exists "Students read ballots holding their released entries" on public.ballots;
+create policy "Students read ballots holding their released entries" on public.ballots for select to authenticated
+  using (tournament_id is not null and private.student_can_read_ballot(id));

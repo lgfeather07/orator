@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { useAuth } from './auth';
-import { loadTeamBallots, type TeamBallotRow } from './ballotApi';
+import { listMyReleasedBallots, loadTeamBallots, type TeamBallotRow } from './ballotApi';
 import { ballotEvents, MARK_MAX } from './ballots';
 
 /** Practice focus checklist. Coach and student both tick items off; the coach can add to it. */
@@ -126,4 +126,40 @@ export function ReleaseResults() {
       <small>{resultsReleased ? 'Each student now sees their own rankings and judge comments from this tournament.' : finished ? 'The tournament has ended. Release results when you are ready to talk them through with your team.' : 'Results stay hidden for the whole tournament. You can release them once the director ends it.'}</small></div>
     {resultsReleased ? <Badge tone="success" icon="check">Released</Badge> : <Button icon="eye" disabled={!finished} onClick={releaseResults}>Release to students</Button>}
   </div>;
+}
+
+/** A signed-in student's own ballots from this tournament, once their coach has released them. */
+export function MyTournamentBallots() {
+  const { tournament, tournamentId } = useStore();
+  const [rows, setRows] = useState<TeamBallotRow[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tournamentId) return;
+    let active = true;
+    listMyReleasedBallots(tournamentId).then(data => active && setRows(data)).catch(() => active && setRows([]));
+    return () => { active = false; };
+  }, [tournamentId, tournament.status]);
+  if (!tournamentId) return null;
+  return <section className="panel team-ballots">
+    <div className="panel-head"><div><h2>My ballots · {tournament.name}</h2><p>Your own ballots only, shown after your coach releases them</p></div>{rows && rows.length > 0 && <Badge tone="success" icon="eye">{rows.length} released</Badge>}</div>
+    {rows === null ? <p className="team-ballots-empty">Checking for released ballots…</p>
+    : rows.length === 0 ? <p className="team-ballots-empty"><Icon name="lock" size={15}/> {tournament.status === 'finished' ? 'The tournament has ended. Your ballots appear here once your coach releases them.' : 'Rankings and comments stay hidden during the tournament. They appear here after it ends, once your coach releases them.'}</p>
+    : <div className="team-ballot-list">{rows.map(row => {
+      const event = ballotEvents.find(item => item.id === row.eventId);
+      return <article key={row.key} className={open === row.key ? 'open' : ''}>
+        <button onClick={() => setOpen(open === row.key ? null : row.key)} aria-expanded={open === row.key}>
+          <span><strong>{event?.name ?? row.eventId}</strong><small>Round {row.round}</small></span>
+          <span><small>Judge</small><strong>{row.judge || 'Judge'}</strong></span>
+          {row.present === false ? <Badge tone="danger">No-show</Badge> : <Badge tone={row.rank === 1 ? 'success' : 'neutral'}>{row.rank ? ordinal(row.rank) : '—'} · {row.rating ?? '—'}</Badge>}
+          <Icon name="chevron"/>
+        </button>
+        {open === row.key && row.present !== false && <div className="team-ballot-detail">
+          <div className="team-ballot-flags">{row.timeSeconds !== null && <Badge tone={row.timePenalty ? 'danger' : 'neutral'} icon="clock">{clock(row.timeSeconds)}{row.timePenalty ? ' · lowered one rank' : ''}</Badge>}</div>
+          {row.comments && <div className="team-ballot-text"><small>Comments</small><p>{row.comments}</p></div>}
+          {row.reason && <div className="team-ballot-text"><small>Reason for decision</small><p>{row.reason}</p></div>}
+          <dl>{(event?.criteria ?? []).map((item, index) => <div key={item.name}><dt>{item.name}</dt><dd>{row.marks[index] ?? '—'}<small>/{MARK_MAX}</small></dd></div>)}</dl>
+        </div>}
+      </article>;
+    })}</div>}
+  </section>;
 }

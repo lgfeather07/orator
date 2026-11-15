@@ -14,11 +14,11 @@ import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
 import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
 import { pastBallots } from './PastBallots';
-import { entryLoadByName, loadLabel, roundTimes, sameSchool } from './tournament';
+import { entryLoadByName, loadLabel, roundLabel, roundTimes, sameSchool } from './tournament';
 import { ballotEvents as nsaaEvents } from './ballots';
 import { EventPreferences, allEventPreferences } from './Preferences';
 import { HelpModal, type HelpKind } from './HelpModal';
-import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults } from './CoachTools';
+import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
@@ -229,7 +229,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     <main className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
       <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{sidebarItems[persona].map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
-      {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your rooms and ballots are real</strong> once the director approves you and publishes the schedule. Other numbers on this page are example data.</> : <><strong>Sample tournament shown.</strong> Live data for this workspace is coming next.</>}</span></div>}
+      {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your rooms and ballots are real</strong> once the director approves you and publishes the schedule. Other numbers on this page are example data.</> : <><strong>Your events, rooms, and released ballots are real</strong> once the director approves you. The schedule, feedback, and growth shown elsewhere on this page are example data.</>}</span></div>}
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
       {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
@@ -389,14 +389,26 @@ function CoachPage() {
 /** What the student is entered in today. Double and triple entry is worked out from the coach's entries. */
 function MyEntries() {
   const { entries, sections, tournament } = useStore();
-  const mine = entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Lincoln High');
-  if (mine.length === 0) return null;
-  const round = Math.min(2, tournament.rounds);
+  const access = useAccess('student');
+  // The demo follows Maya; a signed-in student is matched to entries under the name and school they joined with.
+  const who = access.state === 'demo' ? { name: 'Maya Rodriguez', school: 'Lincoln High' } : access.state === 'approved' && access.membership ? { name: access.membership.name, school: access.membership.school } : null;
+  if (!who) return null;
+  const mine = entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school));
   const published = tournament.status !== 'registration' && sections.length > 0;
+  if (mine.length === 0) return access.state === 'demo' ? null : <section className="my-entries empty"><div><Badge tone="neutral" icon="info">No entries found</Badge><strong>{tournament.status === 'registration' ? 'Your events appear here once the schedule is published.' : `We couldn’t find entries for “${who.name}” at ${who.school}.`}</strong>{tournament.status !== 'registration' && <small>Ask your coach to check the spelling of your name on their entries. It needs to match the name on your account.</small>}</div></section>;
+  // Show the next round that hasn't been marked finished; the demo sits in Round 2.
+  const round = access.state === 'demo' ? Math.min(2, tournament.rounds) : 1;
+  const myRooms = (entryId: string) => sections.filter(section => section.entryIds.includes(entryId)).sort((a, b) => a.round - b.round).filter((section, index, list) => list.findIndex(other => other.round === section.round) === index);
   return <section className="my-entries">
-    <div><Badge tone="info" icon="users">{loadLabel(mine.length) || 'One event'}</Badge><strong>{mine.length > 1 ? `You’re in ${mine.length} events this round. You choose which room to go to first.` : 'You’re in one event this round.'}</strong>{mine.length > 1 && <small>Tell each judge you’re {loadLabel(mine.length).toLowerCase()} when you arrive. They can see it on their ballot too.</small>}</div>
-    <ul>{mine.map(entry => { const section = sections.find(item => item.round === round && item.entryIds.includes(entry.id)); return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && section ? `Round ${round} · ${roundTimes[round - 1]} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}` : 'Room posted when the schedule is published'}</small></li>; })}</ul>
+    <div><Badge tone="info" icon="users">{loadLabel(mine.length) || 'One event'}</Badge><strong>{mine.length > 1 ? `You’re in ${mine.length} events${access.state === 'demo' ? ' this round' : ''}. You choose which room to go to first.` : 'You’re in one event.'}</strong>{mine.length > 1 && <small>Tell each judge you’re {loadLabel(mine.length).toLowerCase()} when you arrive. They can see it on their ballot too.</small>}</div>
+    <ul>{mine.map(entry => { const rooms = myRooms(entry.id); const shown = access.state === 'demo' ? rooms.filter(section => section.round === round) : rooms; return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && shown.length ? shown.map(section => `${roundLabel(section, tournament)} · ${roundTimes[section.round - 1]} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}`).join('  /  ') : 'Room posted when the schedule is published'}</small></li>; })}</ul>
   </section>;
+}
+
+/** Shown to a signed-in, approved student: their released ballots from this tournament. */
+function StudentBallots() {
+  const access = useAccess('student');
+  return access.state === 'approved' ? <MyTournamentBallots/> : null;
 }
 
 function StudentPage() {
@@ -419,6 +431,7 @@ function StudentPage() {
       <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Gothenburg Invitational</h2><p>Lincoln High · Code V42 · {store.entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Lincoln High').map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') || 'No events entered'} today</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>43.0</strong><small>out of 50 · up 6.0</small></div></section>
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'Released by your coach' : 'Until your coach releases it'} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments released' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
       <MyEntries/>
+      {store.live && <StudentBallots/>}
       <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
       {view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'today' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Gothenburg Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>

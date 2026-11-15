@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Badge, Button, Icon, downloadText } from './ui';
 import { useStore } from './store';
-import { defaultFees, invoiceFor, type Fees, type Invoice } from './tournament';
+import { ORATOR_TOURNAMENT_FEE, defaultFees, invoiceFor, type Fees, type Invoice } from './tournament';
 
 const money = (amount: number) => `${amount < 0 ? '−' : ''}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -87,7 +87,7 @@ export function TeamInvoice({ school }: { school: string }) {
         {settled ? <p><Icon name="check" size={16}/> {invoice.balance < 0 ? 'You’ve paid more than you now owe. The director will refund the difference.' : 'Nothing more to pay. If you add entries, the balance updates here.'}</p> : <>
           <Button icon="lock" onClick={() => setPaying(true)}>Pay {money(invoice.balance)} by card</Button>
           <Button variant="secondary" icon="file" disabled={payment.checkPending} onClick={() => store.promiseCheck(school)}>{payment.checkPending ? 'Check noted' : 'Pay by check at the door'}</Button>
-          <p>{payment.checkPending ? 'The director knows to expect a check from you at registration.' : 'Card payments are simulated: no money moves.'}</p>
+          <p>{payment.checkPending ? 'The director knows to expect a check from you at registration.' : `Fees go to ${tournament.host || 'the host school'}. Card payments are simulated: no money moves.`}</p>
         </>}
       </div>
     </div>
@@ -124,6 +124,7 @@ export function PaymentsPanel() {
   return <div className="payments-panel">
     <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{money(collected)} of {money(billed)} collected</h3></div>
       <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge></div>
+    <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>placeholder amount</small></dt><dd>{money(-ORATOR_TOURNAMENT_FEE)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - ORATOR_TOURNAMENT_FEE))}</dd></div></dl>
     <div className="payments-table">
       <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>Total</span><span>Status</span><span/></div>
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>
@@ -134,6 +135,6 @@ export function PaymentsPanel() {
         <span className="payments-action">{invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Reminder sent</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
       </div>)}
     </div>
-    <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. Taking real payments needs a payment provider connected to the tournament host’s bank account.</p>
+    <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. In the real product, schools pay digitally, Orator keeps its per-tournament fee, and the rest is transferred to the host school through a payment provider.</p>
   </div>;
 }

@@ -18,6 +18,8 @@ export type Tournament = {
 };
 
 export type Fees = { entry: number; school: number; judge: number; entriesPerJudge: number };
+/** What Orator charges the host for running one tournament. A placeholder until pricing is decided. */
+export const ORATOR_TOURNAMENT_FEE = 49;
 export const defaultFees: Fees = { entry: 8, school: 25, judge: 60, entriesPerJudge: 6 };
 
 /** How a school has settled up. `paid` is what has been received so far, in dollars. */

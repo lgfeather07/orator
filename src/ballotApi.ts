@@ -120,3 +120,24 @@ export async function listTournamentResults(tournamentId: string): Promise<{ ent
   }));
   return rows.flat();
 }
+
+/**
+ * A student's own ballots from a tournament. The database only returns them once the tournament
+ * has finished and the student's coach has released results; before that this is empty.
+ */
+export async function listMyReleasedBallots(tournamentId: string): Promise<TeamBallotRow[]> {
+  const db = supabase ?? fail('Accounts are not connected.');
+  const { data: ballots, error } = await db.from('ballots').select('id, judge_name, tournament, round, event_id, submitted_at').eq('tournament_id', tournamentId).eq('status', 'submitted');
+  if (error) fail(error.message);
+  const rows = await Promise.all((ballots ?? []).map(async ballot => {
+    const { data, error: entryError } = await db.from('ballot_entries').select('speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications').eq('ballot_id', ballot.id);
+    if (entryError) fail(entryError.message);
+    return (data ?? []).map(row => ({
+      key: `${ballot.id}-${row.speaker_code}`, speaker: row.speaker_name as string, school: row.school as string, rank: row.rank as number | null, rating: row.rating as number | null,
+      timeSeconds: row.time_seconds as number | null, timePenalty: row.time_penalty as boolean, marks: (row.section_marks ?? []) as number[], comments: (row.comments ?? '') as string, reason: row.reason as string,
+      disqualifications: (row.disqualifications ?? []) as string[], present: row.present as boolean | null,
+      judge: ballot.judge_name as string, tournament: ballot.tournament as string, round: ballot.round as number, eventId: ballot.event_id as string, submittedAt: ballot.submitted_at as string | null,
+    }));
+  }));
+  return rows.flat().sort((a, b) => a.round - b.round);
+}

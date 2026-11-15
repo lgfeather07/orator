@@ -3,7 +3,7 @@ import type { Entry, Judge, Section, Tournament, TournamentStatus } from './tour
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -46,8 +46,8 @@ export async function saveTournament(id: string, patch: Partial<Tournament>): Pr
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -72,6 +72,13 @@ export async function requestToJoin(tournamentId: string, role: MemberRole, scho
 export async function decideMember(member: Member, status: MemberStatus): Promise<void> {
   const { error } = await db().from('tournament_members').update({ status }).eq('tournament_id', member.tournamentId).eq('user_id', member.userId).eq('role', member.role);
   if (error) fail(error.message);
+}
+
+/** A coach releases this tournament's results to their students. The database refuses until the tournament has ended. */
+export async function releaseResultsToStudents(tournamentId: string, userId: string): Promise<void> {
+  const { data, error } = await db().from('tournament_members').update({ results_released: true }).eq('tournament_id', tournamentId).eq('user_id', userId).eq('role', 'coach').select('results_released');
+  if (error) fail(error.message);
+  if (!data || data.length === 0) fail('Only an approved coach can release results.');
 }
 
 export async function markEntriesSent(tournamentId: string, userId: string): Promise<void> {
