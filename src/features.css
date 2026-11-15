@@ -781,3 +781,13 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 .payments-note { padding: 10px 14px; display: flex; gap: 6px; color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--border); font-size: 12px; line-height: 1.45; }
 .payments-note svg { flex: none; margin-top: 2px; }
 @media (max-width: 900px) { .invoice-body { grid-template-columns: 1fr; } .invoice-actions { border-left: 0; border-top: 1px solid var(--border); } .fee-grid { grid-template-columns: 1fr 1fr; } }
+
+/* ── Final rounds ─────────────────────────────────────────────── */
+.final-seats { border-bottom: 1px solid var(--border); }
+.final-seats-head { padding: 12px 17px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.final-seat { min-height: 54px; padding: 8px 17px; display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.final-seat > span:first-child { color: var(--muted); font-weight: 700; }
+.final-seat select { min-height: 38px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font-size: 13px; min-width: 0; }
+.demo-rooms { margin-bottom: 14px; }
+.final-seat-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.final-seat-status button { min-height: 30px; padding: 0 9px; color: var(--brand); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }

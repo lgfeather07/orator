@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { entryLoad, loadLabel } from './tournament';
-import { FINALISTS, NSAA_TEAM_POINTS, finalPlacings, prelimStandings, teamStandings, type Placing, type Standing } from './results';
+import { entryLoad, isFinal, loadLabel } from './tournament';
+import { FINALISTS, NSAA_TEAM_POINTS, finalPlacings, prelimStandings, sampleFinals, teamStandings, type Placing, type Standing } from './results';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : Math.min(n % 10, 4) % 4]}`;
@@ -11,7 +11,9 @@ const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n
 /** Breaks, finals, and team points for the director, following the NSAA Speech Manual. */
 export function ResultsBoard() {
   const store = useStore();
-  const { tournament, entries, sections, prelimResults, finalResults } = store;
+  const { tournament, entries, prelimResults, finalResults } = store;
+  const sections = store.sections.filter(section => !isFinal(section, tournament));
+  const finalRooms = store.sections.filter(section => isFinal(section, tournament));
   const events = tournament.eventIds.filter(id => entries.some(entry => entry.eventId === id));
   const [chosen, setChosen] = useState('');
   const eventId = events.includes(chosen) ? chosen : events[0] ?? '';
@@ -19,7 +21,10 @@ export function ResultsBoard() {
   const points = tournament.teamPoints ?? NSAA_TEAM_POINTS;
 
   const standingsFor = (id: string): Standing[] => prelimStandings(entries.filter(entry => entry.eventId === id), sections.filter(section => section.eventId === id), prelimResults);
-  const placingsFor = (id: string): Placing[] => finalPlacings(standingsFor(id).filter(standing => standing.advances), finalResults, points);
+  // With real final rooms, placings wait until every final-round judge has submitted.
+  const ballotsIn = (id: string) => finalRooms.filter(room => room.eventId === id && store.roomResults.some(result => result.sectionId === room.id)).length;
+  const finalReady = (id: string) => { const rooms = finalRooms.filter(room => room.eventId === id); return rooms.length === 0 || ballotsIn(id) === rooms.length; };
+  const placingsFor = (id: string): Placing[] => finalReady(id) ? finalPlacings(standingsFor(id).filter(standing => standing.advances), finalResults, points) : [];
   const standings = eventId ? standingsFor(eventId) : [];
   const finalists = standings.filter(standing => standing.advances);
   const placings = eventId ? placingsFor(eventId) : [];
@@ -28,6 +33,8 @@ export function ResultsBoard() {
   const finalsDone = allPlacings.filter(item => item.placings.length > 0).length;
   const hasPrelims = prelimResults.length > 0;
   const cutTie = finalists.length > FINALISTS;
+  const rooms = finalRooms.filter(room => room.eventId === eventId);
+  const seats = rooms.length || judges;
 
   if (sections.length === 0) return <div className="issue-board"><section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>Build the schedule first</h3><p>Breaks and finals are worked out from the preliminary rounds. Build the schedule on the Setup tab, then come back here.</p></div></section></div>;
 
@@ -56,8 +63,11 @@ export function ResultsBoard() {
       </section>
 
       {hasPrelims && <section className="panel">
-        <div className="panel-head"><div><h2>{eventName(eventId)} final</h2><p>{finalists.length} finalists, {judges} judges. Placed on lowest cumulative rank{judges >= 3 ? ', then judge’s preference' : ''}, then reciprocals and rating points.</p></div>
-          <Button icon="sparkle" variant={placings.length ? 'secondary' : 'primary'} onClick={() => store.fillSampleFinals(eventId)}>{placings.length ? 'New sample final' : 'Fill in sample final'}</Button></div>
+        <div className="panel-head"><div><h2>{eventName(eventId)} final</h2><p>{finalists.length} finalists, {seats} judges. Placed on lowest cumulative rank{seats >= 3 ? ', then judge’s preference' : ''}, then reciprocals and rating points.</p></div>
+          {rooms.length === 0 && <span className="panel-head-actions"><Button icon="sparkle" variant="secondary" onClick={() => store.fillSampleFinals(eventId)}>{placings.length ? 'New sample final' : 'Fill in sample final'}</Button>{placings.length === 0 && <Button icon="plus" onClick={() => store.createFinal(eventId)}>Create final round</Button>}</span>}</div>
+        {rooms.length > 0 && <div className="final-seats"><div className="final-seats-head"><strong>{rooms[0].room}</strong><Badge tone={ballotsIn(eventId) === rooms.length ? 'success' : 'warning'} icon={ballotsIn(eventId) === rooms.length ? 'check' : 'clock'}>{ballotsIn(eventId)} of {rooms.length} ballots in</Badge></div>
+          {rooms.map((room, index) => { const done = store.roomResults.some(result => result.sectionId === room.id); return <div key={room.id} className="final-seat"><span>Judge {index + 1}</span><select aria-label={`Final judge ${index + 1}`} value={room.judgeId ?? ''} disabled={done} onChange={event => store.assignJudge(room.id, event.target.value || null)}><option value="">Needs a judge</option>{store.judges.map(judge => <option key={judge.id} value={judge.id}>{judge.name}{judge.school ? ` · ${judge.school}` : ''}</option>)}</select><span className="final-seat-status"><Badge tone={done ? 'success' : room.judgeId ? 'neutral' : 'warning'} icon={done ? 'check' : undefined}>{done ? 'Ballot submitted' : room.judgeId ? 'Waiting for ballot' : 'Needs a judge'}</Badge>{!store.live && !done && <button onClick={() => store.recordRoomResults(room.id, sampleFinals(finalists, index + 1).filter(result => result.judge === index + 1).map(result => ({ entryId: result.entryId, rank: result.rank, rating: result.rating })))}>Fill sample ballot</button>}</span></div>; })}
+          {!finalReady(eventId) && <p className="results-rule"><Icon name="info" size={14}/> Placings and team points appear once every final-round judge has submitted. Each judge opens this final from their own list of rooms.</p>}</div>}
         {placings.length === 0 ? <ol className="finalist-list">{finalists.map(finalist => <li key={finalist.entryId}><strong>{finalist.student}</strong><small>{finalist.school} · {ordinal(finalist.place)} after prelims</small></li>)}</ol> : <div className="results-table" role="table" aria-label={`${eventName(eventId)} final placings`}>
           <div className="results-row results-head final" role="row"><span>Place</span><span>Speaker</span><span>Judges’ ranks</span><span>Total</span><span>Recip.</span><span>Rating pts</span><span>Team pts</span><span/></div>
           {placings.map(placing => <div key={placing.entryId} role="row" className={`results-row final ${placing.place === 1 ? 'champion' : ''}`}>

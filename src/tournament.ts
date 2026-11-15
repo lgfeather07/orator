@@ -150,4 +150,28 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
   return sections;
 }
 
-export const roundTimes = ['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM'];
+export const roundTimes = ['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM', '4:30 PM'];
+
+/** Finals are stored as the round after the last preliminary round. */
+export const isFinal = (section: Section, tournament: Tournament) => section.round > tournament.rounds;
+export const roundLabel = (section: Section, tournament: Tournament) => isFinal(section, tournament) ? 'Final' : `Round ${section.round}`;
+
+/**
+ * One final for an event: the same finalists in the same room, scored separately by each final-round
+ * judge. That is one section per judge, so each judge fills in their own ballot. Judges from a
+ * finalist's school are passed over; a seat nobody can fill is left for the director to assign.
+ */
+export function buildFinal(tournament: Tournament, eventId: string, finalistIds: string[], entries: Entry[], judges: Judge[], existing: Section[]): Section[] {
+  const seats = tournament.finalJudges ?? 2;
+  const schools = finalistIds.map(id => entries.find(entry => entry.id === id)?.school ?? '');
+  const finalsAlready = existing.filter(section => isFinal(section, tournament));
+  const busy = new Set(finalsAlready.map(section => section.judgeId));
+  const eventIndex = Math.max(0, tournament.eventIds.indexOf(eventId));
+  const start = (eventIndex * 3) % Math.max(judges.length, 1);
+  const free = [...judges.slice(start), ...judges.slice(0, start)].filter(judge => !busy.has(judge.id) && !schools.some(school => judge.school && sameSchool(school, judge.school)));
+  const room = rooms[(new Set(finalsAlready.map(section => section.room)).size) % rooms.length];
+  return Array.from({ length: seats }, (_, seat) => ({
+    id: `final-${eventId}-${seat + 1}`, round: tournament.rounds + 1, eventId, label: `Final · Judge ${seat + 1}`, room,
+    judgeId: free[seat]?.id ?? null, judgeName: free[seat]?.name ?? '', entryIds: [...finalistIds].reverse(),
+  }));
+}

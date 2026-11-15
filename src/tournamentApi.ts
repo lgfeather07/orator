@@ -121,6 +121,16 @@ export async function replaceSections(tournamentId: string, sections: Section[],
   return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);
 }
 
+/** Add sections (used for final rounds) without touching the rest of the schedule. */
+export async function addSections(tournamentId: string, sections: Section[], startAt: number): Promise<Section[]> {
+  const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
+    tournament_id: tournamentId, round: section.round, event_id: section.eventId, label: section.label, room: section.room,
+    judge_id: section.judgeId, judge_name: section.judgeName ?? '', entry_ids: section.entryIds, position: startAt + index,
+  }))).select('*');
+  if (error) fail(error.message);
+  return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);
+}
+
 export async function saveSectionJudge(sectionId: string, judge: Judge | null): Promise<void> {
   const { error } = await db().from('sections').update({ judge_id: judge?.id ?? null, judge_name: judge?.name ?? '' }).eq('id', sectionId);
   if (error) fail(error.message);

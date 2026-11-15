@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Avatar, Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { entryLoad, loadLabel, roundTimes, sameSchool } from './tournament';
+import { entryLoad, isFinal, loadLabel, roundTimes, sameSchool } from './tournament';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
@@ -36,12 +36,13 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
     {mine.length === 0 ? <p className="entry-empty">No students entered yet. Add your first entry above.</p> : <div className="entry-rows">
       <div className="entry-row entry-row-head"><span/><span>Student</span><span>Event</span><span>{published ? 'Where they speak' : ''}</span><span/></div>
       {mine.map(entry => {
-        const rounds = sections.filter(section => section.entryIds.includes(entry.id)).sort((a, b) => a.round - b.round);
+        // A final has one section per judge; show it once.
+        const rounds = sections.filter(section => section.entryIds.includes(entry.id)).sort((a, b) => a.round - b.round).filter((section, index, list) => list.findIndex(other => other.round === section.round) === index);
         return <div className="entry-row" key={entry.id}>
           <Avatar initials={initials(entry.student)} size="sm"/>
           <strong>{entry.student}{loadLabel(entryLoad(entries, entry.student, school)) && <Badge tone="info">{loadLabel(entryLoad(entries, entry.student, school))}</Badge>}</strong>
           <span>{eventName(entry.eventId)}</span>
-          <span className="entry-rounds">{published ? rounds.map(section => <small key={section.id}><b>R{section.round}</b> {roundTimes[section.round - 1]} · {section.room} · speaks {section.entryIds.indexOf(entry.id) + 1} of {section.entryIds.length}{section.judgeId ? ` · ${section.judgeName || judgePool.find(judge => judge.id === section.judgeId)?.name || 'Judge assigned'}` : ''}</small>) : null}</span>
+          <span className="entry-rounds">{published ? rounds.map(section => <small key={section.id}><b>{isFinal(section, tournament) ? 'Final' : `R${section.round}`}</b> {roundTimes[section.round - 1]} · {section.room} · speaks {section.entryIds.indexOf(entry.id) + 1} of {section.entryIds.length}{isFinal(section, tournament) ? '' : section.judgeId ? ` · ${section.judgeName || judgePool.find(judge => judge.id === section.judgeId)?.name || 'Judge assigned'}` : ''}</small>) : null}</span>
           {open ? <button className="icon-button" aria-label={`Remove ${entry.student} from ${eventName(entry.eventId)}`} onClick={() => removeEntry(entry.id)}><Icon name="close" size={16}/></button> : <span/>}
         </div>;
       })}

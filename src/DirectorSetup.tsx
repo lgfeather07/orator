@@ -3,7 +3,7 @@ import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
-import { entryLoad, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
+import { entryLoad, isFinal, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -11,7 +11,9 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds
 
 /** A judge may not hear a speaker from their own school. */
 function useScheduleChecks() {
-  const { sections, entries, judges: judgePool } = useStore();
+  const { sections: everySection, entries, judges: judgePool, tournament: current } = useStore();
+  // Preliminary rooms only; finals are managed on the Results tab.
+  const sections = everySection.filter(section => !isFinal(section, current));
   const conflict = (section: Section) => {
     const judge = judgePool.find(item => item.id === section.judgeId);
     return !!judge?.school && section.entryIds.some(id => { const entry = entries.find(item => item.id === id); return !!entry && sameSchool(entry.school, judge.school); });
@@ -24,7 +26,8 @@ function useScheduleChecks() {
 /** Five-step tournament setup: details, coach entries, judges, the schedule, then publish and run. */
 export function DirectorSetup({ judges }: { judges: ReactNode }) {
   const store = useStore();
-  const { tournament, updateTournament, entries, sections, submittedSchools, judges: judgePool } = store;
+  const { tournament, updateTournament, entries, submittedSchools, judges: judgePool } = store;
+  const sections = store.sections.filter(section => !isFinal(section, tournament));
   const { conflict, doubleBooked, problems } = useScheduleChecks();
   const [step, setStep] = useState(0);
   const [round, setRound] = useState(1);
@@ -154,7 +157,8 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
 
 /** Live numbers beside the setup steps. */
 export function SetupSummary() {
-  const { tournament, entries, sections, issues } = useStore();
+  const { tournament, entries, issues, sections: everySection } = useStore();
+  const sections = everySection.filter(section => !isFinal(section, tournament));
   const { problems } = useScheduleChecks();
   const schools = new Set(entries.map(entry => entry.school)).size;
   const openIssues = issues.filter(issue => issue.status === 'open').length;

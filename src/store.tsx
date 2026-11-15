@@ -4,7 +4,10 @@ import * as api from './tournamentApi';
 import { listTournamentResults } from './ballotApi';
 import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
 import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
-import { buildSchedule, defaultTournament, invoiceFor, judgePool, noPayment, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Payment, type Section, type Tournament } from './tournament';
+
+/** What one judge's submitted ballot says about one speaker in one room. */
+export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
+import { buildFinal, buildSchedule, defaultTournament, invoiceFor, isFinal, judgePool, noPayment, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Payment, type Section, type Tournament } from './tournament';
 
 export type Presence = 'present' | 'absent';
 
@@ -47,6 +50,10 @@ type Store = {
   /** Round results used to work out breaks, placings, and team points. */
   prelimResults: PrelimResult[]; finalResults: FinalResult[];
   fillSamplePrelims: () => void; fillSampleFinals: (eventId: string) => void; clearResults: () => void;
+  /** Results from ballots judges have submitted for scheduled rooms. */
+  roomResults: RoomResult[]; recordRoomResults: (sectionId: string, rows: Omit<RoomResult, 'sectionId'>[]) => void;
+  /** Set up an event's final round: one ballot per final-round judge for the six finalists. */
+  createFinal: (eventId: string) => void;
   /** Simulated fee payments, keyed by school name in lower case. No real money moves. */
   payments: Record<string, Payment>;
   paymentFor: (school: string) => Payment;
@@ -78,7 +85,7 @@ const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincol
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -113,12 +120,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [issues, setIssues] = useState<Issue[]>(saved?.issues ?? seedIssues);
   const [resultsReleased, setResultsReleased] = useState<boolean>(saved?.resultsReleased ?? false);
   const [payments, setPayments] = useState<Record<string, Payment>>(() => saved?.payments ?? seedPayments());
+  const [roomResults, setRoomResults] = useState<RoomResult[]>(saved?.roomResults ?? []);
   const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
   const [finalResults, setFinalResults] = useState<FinalResult[]>(saved?.finalResults ?? []);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults]);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
@@ -148,7 +156,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
   const [liveSections, setLiveSections] = useState<Section[]>([]);
-  const [liveResults, setLiveResults] = useState<PrelimResult[]>([]);
+  const [liveResults, setLiveResults] = useState<RoomResult[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -209,8 +217,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       api.saveSectionJudge(sectionId, judge).catch(caught => { report(caught); refresh(); });
     },
     resetDemo: () => undefined,
-    // Real submitted ballots take over from sample results as soon as there are any.
-    ...(liveResults.length ? { prelimResults: liveResults } : {}),
+    roomResults: liveResults,
+    recordRoomResults: () => { refresh(); },
   };
 
   const store: Store = {
@@ -226,13 +234,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeEntry: id => { setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) }))); },
     submittedSchools, submitSchool: school => setSubmittedSchools(current => current.includes(school) ? current : [...current, school]),
     sections,
-    generateSchedule: () => { setSections(buildSchedule(tournament, entries, judgePool)); setPrelimResults([]); setFinalResults([]); },
+    generateSchedule: () => { setSections(buildSchedule(tournament, entries, judgePool)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); },
     assignJudge: (sectionId, judgeId) => setSections(current => current.map(section => section.id === sectionId ? { ...section, judgeId } : section)),
     issues,
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setPayments(seedPayments()); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedPayments()); },
+    roomResults,
+    recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
+    createFinal: () => undefined,
     payments,
     paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
     setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
@@ -243,7 +254,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     promiseCheck: school => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), method: 'check', checkPending: true } })),
     prelimResults, finalResults,
-    clearResults: () => { setPrelimResults([]); setFinalResults([]); },
+    clearResults: () => { setPrelimResults([]); setFinalResults([]); setRoomResults([]); setSections(all => all.filter(section => !isFinal(section, tournament))); },
     speakerPresence, setSpeakerPresence: (code, p) => setPresence(current => ({ ...current, [code]: p })),
     judgeCheckedIn, toggleJudge: id => setJudgeCheckedIn(current => ({ ...current, [id]: !current[id] })),
     focusNotes,
@@ -254,7 +265,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addChecklist: label => setChecklist(current => [...current, { id: Date.now(), label, done: false }]),
     practiceLog, addPractice: text => setPracticeLog(current => [{ id: Date.now(), date: 'Today · Practice', text }, ...current]),
     reminders, setReminders,
-    resultsAreReal: live && liveResults.length > 0,
+    resultsAreReal: false,
     live, liveState, syncError, clearSyncError: () => setSyncError(''),
     tournamentId: live ? tournamentId : null, isDirector, tournaments, myMemberships, members,
     judges: live ? liveJudges : judgePool,
@@ -265,12 +276,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ...liveStore,
   };
   // Sample results are worked out from whichever tournament is showing, so they sit after the live overrides.
-  store.fillSamplePrelims = () => { setPrelimResults(samplePrelims(store.entries, store.sections)); setFinalResults([]); };
+  // ── Results: ballots judges submitted for a room override sample results for that room. ──
+  const sectionOf = new Map(store.sections.map(section => [section.id, section]));
+  const finalSections = store.sections.filter(section => isFinal(section, store.tournament));
+  const prelimSections = store.sections.filter(section => !isFinal(section, store.tournament));
+  const prelimFromRooms: PrelimResult[] = store.roomResults.filter(result => { const section = sectionOf.get(result.sectionId); return section && !isFinal(section, store.tournament); })
+    .map(result => ({ entryId: result.entryId, round: sectionOf.get(result.sectionId)!.round, sectionId: result.sectionId, rank: result.rank, rating: result.rating }));
+  const roomsWithBallots = new Set(prelimFromRooms.map(result => result.sectionId));
+  const samplePrelimRows = prelimResults.filter(result => sectionOf.has(result.sectionId) && !roomsWithBallots.has(result.sectionId));
+  const mergedPrelims = [...samplePrelimRows, ...prelimFromRooms];
+  // A final-round judge is identified by their seat: the order of that event's final ballots.
+  const finalFromRooms: FinalResult[] = store.roomResults.flatMap(result => {
+    const section = sectionOf.get(result.sectionId); if (!section || !isFinal(section, store.tournament)) return [];
+    const seat = finalSections.filter(item => item.eventId === section.eventId).findIndex(item => item.id === section.id) + 1;
+    return [{ entryId: result.entryId, judge: seat, rank: result.rank, rating: result.rating }];
+  });
+  const eventsWithFinalRooms = new Set(finalSections.map(section => section.eventId));
+  const entryEvent = new Map(store.entries.map(entry => [entry.id, entry.eventId]));
+  store.prelimResults = mergedPrelims;
+  store.finalResults = [...finalResults.filter(result => !eventsWithFinalRooms.has(entryEvent.get(result.entryId) ?? '')), ...finalFromRooms];
+  store.resultsAreReal = live && prelimFromRooms.length > 0;
+  store.fillSamplePrelims = () => { setPrelimResults(samplePrelims(store.entries, prelimSections)); setFinalResults([]); };
+  const finalistsOf = (eventId: string) => prelimStandings(store.entries.filter(entry => entry.eventId === eventId), prelimSections.filter(section => section.eventId === eventId), mergedPrelims).filter(standing => standing.advances);
   store.fillSampleFinals = eventId => {
-    const field = store.entries.filter(entry => entry.eventId === eventId);
-    const finalists = prelimStandings(field, store.sections.filter(section => section.eventId === eventId), prelimResults).filter(standing => standing.advances);
-    const ids = new Set(field.map(entry => entry.id));
-    setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalists, store.tournament.finalJudges ?? 2)]);
+    const ids = new Set(store.entries.filter(entry => entry.eventId === eventId).map(entry => entry.id));
+    setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalistsOf(eventId), store.tournament.finalJudges ?? 2)]);
+  };
+  store.createFinal = eventId => {
+    if (finalSections.some(section => section.eventId === eventId)) return;
+    const built = buildFinal(store.tournament, eventId, finalistsOf(eventId).map(standing => standing.entryId), store.entries, store.judges, store.sections);
+    if (built.length === 0 || built[0].entryIds.length === 0) return;
+    if (live && tournamentId) api.addSections(tournamentId, built, store.sections.length).then(added => setLiveSections(all => [...all, ...added])).catch(report);
+    else setSections(all => [...all, ...built]);
   };
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

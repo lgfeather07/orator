@@ -34,7 +34,7 @@ type Speaker = { code: string; name: string; school: string; title?: string };
 const emptyRound = (list: Speaker[]) => Object.fromEntries(list.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
 
 /** A real room from the director's schedule. Without one, the ballot shows the sample round. */
-export type BallotRoom = { key: BallotKey; tournamentId: string; sectionId: string; eventId: string; time: string; speakers: Speaker[] };
+export type BallotRoom = { key: BallotKey; tournamentId: string; sectionId: string; eventId: string; time: string; speakers: Speaker[]; final?: boolean };
 const bandOf = (rating: number) => RATING_BANDS.find(band => band.values.includes(rating))?.label ?? '';
 const maxFor = (event: BallotEvent, classA: boolean) => classA && event.time.classAMax ? event.time.classAMax : event.time.max;
 const limitText = (event: BallotEvent, classA: boolean) => event.time.min ? `${clock(event.time.min)}–${clock(event.time.max)}` : `${clock(maxFor(event, classA))} maximum`;
@@ -62,7 +62,7 @@ export function SpeakerCheckIn({ code, compact = false, onChange }: { code: stri
   </div>;
 }
 
-export function JudgeBallot({ room }: { room?: BallotRoom }) {
+export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmitted?: (rows: { entryId: string; rank: number; rating: number }[]) => void }) {
   const speakers: Speaker[] = room?.speakers ?? roundSpeakers;
   const ballotKey = room?.key ?? THIS_ROUND;
   const link = room ? { tournamentId: room.tournamentId, sectionId: room.sectionId } : undefined;
@@ -202,9 +202,10 @@ export function JudgeBallot({ room }: { room?: BallotRoom }) {
   }, [ballots, order, eventId, classA, speakerPresence, loadState, submitted, submitting]);
 
   const submit = async () => {
-    if (!remote) { setSubmitted(true); return; }
+    const announce = () => onSubmitted?.(toEntries().filter(entry => entry.present && entry.rank && entry.rating).map(entry => ({ entryId: entry.code, rank: entry.rank!, rating: entry.rating! })));
+    if (!remote) { setSubmitted(true); announce(); return; }
     setSubmitting(true); setSaveError('');
-    try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), true, link)); dirty.current = false; setSubmitted(true); }
+    try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), true, link)); dirty.current = false; setSubmitted(true); announce(); }
     catch (caught) { setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not submit the ballot.'); }
     finally { setSubmitting(false); }
   };
@@ -218,7 +219,7 @@ export function JudgeBallot({ room }: { room?: BallotRoom }) {
 
   if (submitted) return <div className="jb jb-done">
     <span className="success-icon"><Icon name="check" size={26}/></span>
-    <h2>Round {ballotKey.round} ballot submitted</h2>
+    <h2>{room?.final ? 'Final round' : `Round ${ballotKey.round}`} ballot submitted</h2>
     <p>Ranks, ratings, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
     <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
@@ -233,7 +234,7 @@ export function JudgeBallot({ room }: { room?: BallotRoom }) {
 
   return <div className="jb">
     <div className="jb-top">
-      <div><span className="jb-badges"><Badge tone="info">Round {ballotKey.round}</Badge><Badge tone="success" icon="check">Official NSAA ballot</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
+      <div><span className="jb-badges"><Badge tone="info">{room?.final ? 'Final round' : `Round ${ballotKey.round}`}</Badge><Badge tone="success" icon="check">Official NSAA ballot</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
       <div className="jb-selects">{event.time.classAMax && <label><span>School class</span><select aria-label="School class" value={classA ? 'a' : 'other'} onChange={change => { dirty.current = true; setClassA(change.target.value === 'a'); }}><option value="other">Classes B–D · {clock(event.time.max)}</option><option value="a">Class A · {clock(event.time.classAMax)}</option></select></label>}
       {!room && <label><span>Event</span><select aria-label="Event" value={eventId} onChange={change => { dirty.current = true; setEventId(change.target.value); setOpen(0); }}>{ballotEvents.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}</div>
     </div>

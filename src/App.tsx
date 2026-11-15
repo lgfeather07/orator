@@ -116,11 +116,12 @@ function PaperBallot() {
 }
 
 function BallotPage({ room }: { room?: BallotRoom }) {
+  const { recordRoomResults } = useStore();
   const [format, setFormat] = useState<'e' | 'paper'>('e');
   return <MobileFrame>
     <MobileHeader title="Judge Leather" subtitle={room?.key.tournament ?? 'Gothenburg Invitational'}/>
     <div className="segmented ballot-toggle"><button className={format === 'e' ? 'active' : ''} onClick={() => setFormat('e')}>E-ballot</button><button className={format === 'paper' ? 'active' : ''} onClick={() => setFormat('paper')}>Paper</button></div>
-    {format === 'e' ? <JudgeBallot key={room?.sectionId ?? 'sample'} room={room}/> : <PaperBallot/>}
+    {format === 'e' ? <JudgeBallot key={room?.sectionId ?? 'sample'} room={room} onSubmitted={room ? rows => recordRoomResults(room.sectionId, rows) : undefined}/> : <PaperBallot/>}
   </MobileFrame>;
 }
 
@@ -447,6 +448,7 @@ function JudgePage() {
       <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction(judgeAccess.state === 'approved' ? 'assignments' : 'mobileBallot')}>{judgeAccess.state === 'approved' ? 'Open my rooms' : 'Open e-ballot'}</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
       <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top preference" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Strong event fit" icon="sparkle"/></div>
       <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
+      {action === 'assignments' && judgeAccess.state === 'demo' && store.sections.some(section => section.judgeId === 'jl') && <div className="demo-rooms"><MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/></div>}
       {action === 'assignments' && judgeAccess.state === 'approved' ? <MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/> : action === 'assignments' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
           <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemporaneous','Room 301','Upcoming'],['1:30 PM','Round 4','Persuasive','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,3).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
@@ -467,7 +469,7 @@ function JudgePage() {
         <div className="preference-note"><Icon name="drag"/><span>Your preferences help the director build stronger panels and avoid poor event matches.</span></div>
         <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
         <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => setPreferencesSaved(true)}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
-      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `Round ${openRoom.key.round} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
+      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `${openRoom.final ? 'Final round' : `Round ${openRoom.key.round}`} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
     </div>
   </DesktopShell>;
 }
