@@ -12,8 +12,33 @@ export type Tournament = {
   finalJudges?: number;
   /** Team points for 1st to 6th in a final. Defaults to the NSAA scale. */
   teamPoints?: number[];
+  /** What the host charges. Amounts are whole dollars. */
+  fees?: Fees;
   eventIds: string[]; status: TournamentStatus;
 };
+
+export type Fees = { entry: number; school: number; judge: number; entriesPerJudge: number };
+export const defaultFees: Fees = { entry: 8, school: 25, judge: 60, entriesPerJudge: 6 };
+
+/** How a school has settled up. `paid` is what has been received so far, in dollars. */
+export type Payment = { judgesBringing: number; paid: number; method: 'card' | 'check' | null; checkPending: boolean; reference: string; paidAt: string };
+export const noPayment: Payment = { judgesBringing: 0, paid: 0, method: null, checkPending: false, reference: '', paidAt: '' };
+
+export type Invoice = { entries: number; entryTotal: number; schoolFee: number; judgesOwed: number; judgesBringing: number; judgesShort: number; judgeTotal: number; total: number; paid: number; balance: number };
+
+/**
+ * What a school owes: a fee per entry, a flat school fee, and a fee for each judge the school
+ * should supply (one per `entriesPerJudge` entries) but isn't bringing.
+ */
+export function invoiceFor(tournament: Tournament, entries: Entry[], school: string, payment: Payment = noPayment): Invoice {
+  const fees = tournament.fees ?? defaultFees;
+  const count = entries.filter(entry => entry.school.trim().toLowerCase() === school.trim().toLowerCase()).length;
+  const judgesOwed = count === 0 ? 0 : Math.ceil(count / Math.max(1, fees.entriesPerJudge));
+  const judgesShort = Math.max(0, judgesOwed - payment.judgesBringing);
+  const entryTotal = count * fees.entry, schoolFee = count === 0 ? 0 : fees.school, judgeTotal = judgesShort * fees.judge;
+  const total = entryTotal + schoolFee + judgeTotal;
+  return { entries: count, entryTotal, schoolFee, judgesOwed, judgesBringing: payment.judgesBringing, judgesShort, judgeTotal, total, paid: payment.paid, balance: total - payment.paid };
+}
 
 export type Entry = { id: string; student: string; school: string; eventId: string };
 

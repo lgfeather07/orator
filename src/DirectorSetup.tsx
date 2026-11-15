@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
+import { FeeSettings, PaymentsPanel } from './Payments';
 import { entryLoad, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
@@ -58,6 +59,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Most events per student</span><select value={tournament.maxEntries} disabled={!editable} onChange={event => updateTournament({ maxEntries: Number(event.target.value) })}>{[1, 2, 3, 4].map(count => <option key={count} value={count}>{count === 1 ? '1 event' : `${count} events`}</option>)}</select></label>
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
+      <FeeSettings editable={editable}/>
       <div className="events-offered">
         <div className="field-label"><span>Events offered</span><small>{offered.length} of {ballotEvents.length} · official NSAA ballot built in for each</small></div>
         <div className="event-checks">{ballotEvents.map(event => <label key={event.id} className={offered.includes(event.id) ? 'on' : ''}>
@@ -77,6 +79,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       {outsideEvents.length > 0 && <div className="setup-note warn"><Icon name="warning"/><span><strong>{outsideEvents.length} {outsideEvents.length === 1 ? 'entry is' : 'entries are'} in an event you no longer offer</strong> and will be left off the schedule: {[...new Set(outsideEvents.map(entry => eventName(entry.eventId)))].join(', ')}.</span></div>}
       <div className="load-mix"><span className="eyebrow">Entered in</span>{[[1, 'One event'], [2, 'Double entered'], [3, 'Triple entered'], [4, 'Four events']].map(([count, label]) => <span key={label}><b>{loadCount(count as number)}</b>{label}</span>)}<small>Worked out from the entries. Multi-entered students choose which room to go to first.</small></div>
       <div className="entry-counts">{offered.map(id => { const count = entries.filter(entry => entry.eventId === id).length; return <span key={id} className={count ? '' : 'empty'}><b>{count}</b>{eventName(id)}<small>{count ? `${Math.ceil(count / tournament.sectionSize)} room${Math.ceil(count / tournament.sectionSize) > 1 ? 's' : ''}` : 'no entries'}</small></span>; })}</div>
+      <PaymentsPanel/>
       <div className="entry-browser">
         <label className="search-box"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search student, school, or event"/></label>
         <div className="entry-browser-list">{shown.map(entry => <div key={entry.id}><strong>{entry.student}{entryLoad(entries, entry.student, entry.school) > 1 && <em className="load-tag" title={loadLabel(entryLoad(entries, entry.student, entry.school))}>{entryLoad(entries, entry.student, entry.school)}×</em>}</strong><span>{entry.school}</span><span>{eventName(entry.eventId)}</span></div>)}{shown.length === 0 && <p>No entries match “{search}”.</p>}</div>

@@ -4,7 +4,7 @@ import * as api from './tournamentApi';
 import { listTournamentResults } from './ballotApi';
 import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
 import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
-import { buildSchedule, defaultTournament, judgePool, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Section, type Tournament } from './tournament';
+import { buildSchedule, defaultTournament, invoiceFor, judgePool, noPayment, seedEntries, type Entry, type Issue, type IssueKind, type Judge, type Payment, type Section, type Tournament } from './tournament';
 
 export type Presence = 'present' | 'absent';
 
@@ -47,6 +47,12 @@ type Store = {
   /** Round results used to work out breaks, placings, and team points. */
   prelimResults: PrelimResult[]; finalResults: FinalResult[];
   fillSamplePrelims: () => void; fillSampleFinals: (eventId: string) => void; clearResults: () => void;
+  /** Simulated fee payments, keyed by school name in lower case. No real money moves. */
+  payments: Record<string, Payment>;
+  paymentFor: (school: string) => Payment;
+  setJudgesBringing: (school: string, count: number) => void;
+  recordPayment: (school: string, amount: number, method: 'card' | 'check') => string;
+  promiseCheck: (school: string) => void;
   resetDemo: () => void;
   /** Signed-in users work on a real tournament in the database; the demo keeps everything in the browser. */
   live: boolean;
@@ -67,14 +73,26 @@ type Store = {
   reminders: { text: boolean; email: boolean }; setReminders: (r: { text: boolean; email: boolean }) => void;
 };
 
-const STORAGE_KEY = 'orator-demo-v4';
+const STORAGE_KEY = 'orator-demo-v5';
 const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincoln East', 'Gothenburg High', 'Aurora', 'Minden'];
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
+}
+
+/** Sample payment states so the director's list has a realistic mix on first open. */
+function seedPayments(): Record<string, Payment> {
+  const paid = (school: string, judgesBringing: number, method: 'card' | 'check', reference: string, paidAt: string): [string, Payment] => {
+    const base = { ...noPayment, judgesBringing };
+    return [school.toLowerCase(), { ...base, paid: invoiceFor(defaultTournament, seedEntries, school, base).total, method, reference, paidAt }];
+  };
+  return Object.fromEntries([
+    paid('Creighton Prep', 2, 'card', 'ORA-7K2M4Q', 'Oct 9'), paid('Millard West', 3, 'card', 'ORA-9D1XTB', 'Oct 10'), paid('Norfolk High', 1, 'check', 'ORA-3HV8RC', 'Oct 12'), paid('Gothenburg High', 2, 'card', 'ORA-5W6NPA', 'Oct 8'),
+    ['lincoln east', { ...noPayment, judgesBringing: 2, method: 'check', checkPending: true }], ['minden', { ...noPayment, judgesBringing: 1 }],
+  ]);
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -94,12 +112,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sections, setSections] = useState<Section[]>(saved?.sections ?? []);
   const [issues, setIssues] = useState<Issue[]>(saved?.issues ?? seedIssues);
   const [resultsReleased, setResultsReleased] = useState<boolean>(saved?.resultsReleased ?? false);
+  const [payments, setPayments] = useState<Record<string, Payment>>(() => saved?.payments ?? seedPayments());
   const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
   const [finalResults, setFinalResults] = useState<FinalResult[]>(saved?.finalResults ?? []);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments]);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
@@ -213,7 +232,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setPayments(seedPayments()); },
+    payments,
+    paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
+    setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
+    recordPayment: (school, amount, method) => {
+      const reference = `ORA-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+      setPayments(all => { const key = school.trim().toLowerCase(); const current = all[key] ?? noPayment; return { ...all, [key]: { ...current, paid: current.paid + amount, method, checkPending: false, reference, paidAt: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }) } }; });
+      return reference;
+    },
+    promiseCheck: school => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), method: 'check', checkPending: true } })),
     prelimResults, finalResults,
     clearResults: () => { setPrelimResults([]); setFinalResults([]); },
     speakerPresence, setSpeakerPresence: (code, p) => setPresence(current => ({ ...current, [code]: p })),

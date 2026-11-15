@@ -8,6 +8,7 @@ import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
 import { IssueBoard, ReportIssueModal } from './Issues';
 import { TeamEntries } from './TeamEntries';
 import { EntryImport } from './EntryImport';
+import { TeamInvoice } from './Payments';
 import { PastBallots } from './PastBallots';
 import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
@@ -191,7 +192,7 @@ function CoachEntries({ onBack, importing = false }: { onBack?: () => void; impo
   const { state, membership } = useAccess('coach');
   const school = state === 'demo' ? 'Lincoln High' : state === 'approved' && membership ? membership.school : null;
   if (school && importing) return <EntryImport school={school} onDone={onBack ?? (() => undefined)}/>;
-  if (school) return <TeamEntries school={school} onBack={onBack}/>;
+  if (school) return <><TeamEntries school={school} onBack={onBack}/><TeamInvoice school={school}/></>;
   return <section className="panel access-wait"><Icon name="lock"/><div><strong>Entries open once the director approves you</strong><small>{state === 'none' ? 'Ask to join a tournament using the form at the top of this page.' : state === 'pending' ? 'Your request is with the director.' : state === 'declined' ? 'Your request was declined.' : 'Checking your access…'}</small></div>{onBack && <Button variant="secondary" icon="arrow" onClick={onBack}>Back to overview</Button>}</section>;
 }
 
