@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Badge, Button, Icon, Logo, type IconName } from './ui';
+import { BUSINESS } from './legal';
 
 export type Role = 'student' | 'judge' | 'coach' | 'director';
 export const allRoles: Role[] = ['student', 'judge', 'coach', 'director'];
@@ -93,6 +94,8 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
   const [name, setName] = useState('');
   const [school, setSchool] = useState('');
   const [roles, setRoles] = useState<Role[]>([]);
+  const [agreed, setAgreed] = useState(false);
+  const [ageOk, setAgeOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const current: Mode = recovering ? 'reset' : mode;
@@ -104,6 +107,7 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
     setError('');
     if (!supabase) { setError('Accounts aren’t connected yet. This is the demo, so use “Explore the demo” below.'); return; }
     if (current === 'signup' && roles.length === 0) { setError('Choose at least one role.'); return; }
+    if (current === 'signup' && (!agreed || !ageOk)) { setError('Please confirm both boxes to create an account.'); return; }
     if ((current === 'signup' || current === 'reset') && password.length < 8) { setError('Use a password with at least 8 characters.'); return; }
     setBusy(true);
     try {
@@ -111,7 +115,7 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
       } else if (current === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim(), school: school.trim(), roles } } });
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim(), school: school.trim(), roles, terms_version: BUSINESS.effective, terms_accepted_at: new Date().toISOString() } } });
         if (error) throw error;
         if (!data.session) go('sent-confirm');
       } else if (current === 'forgot') {
@@ -140,11 +144,11 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
 
   return <div className="signin-page auth-page">
     <header className="signin-header"><Logo/>{!authConfigured && <div><Badge tone="warning" icon="info">Demo mode · accounts not connected</Badge></div>}</header>
-    <main className="auth-main">
+    <main id="main" className="auth-main">
       <aside className="auth-pitch">
         <span className="eyebrow">Speech tournament software</span>
         <h2>Every round, every ballot, <em>one place.</em></h2>
-        <p>Orator runs the tournament day for students, judges, coaches, and directors, on the official NSAA ballot.</p>
+        <p>Orator runs the tournament day for students, judges, coaches, and directors, built around the NSAA ballot.</p>
         <ul>
           <li><b>01</b><span>E-ballots with criteria, timing, and ranking built in</span></li>
           <li><b>02</b><span>Check-in for judges and speakers, live for the tab room</span></li>
@@ -162,9 +166,13 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
           {current !== 'reset' && <label className="auth-field"><span>Email</span><input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" required/></label>}
           {current === 'signin' && passwordField('Password', 'current-password')}
           {current === 'signup' && passwordField('Password · at least 8 characters', 'new-password')}
+          {current === 'signup' && <div className="auth-consent">
+            <label><input type="checkbox" checked={agreed} onChange={event => setAgreed(event.target.checked)} required/><span>I agree to the <a href="/#/terms" target="_blank" rel="noopener">Terms</a> and the <a href="/#/privacy" target="_blank" rel="noopener">Privacy policy</a>.</span></label>
+            <label><input type="checkbox" checked={ageOk} onChange={event => setAgeOk(event.target.checked)} required/><span>I’m 13 or older. If I’m under 18, my coach and a parent or guardian know I’m using Orator.</span></label>
+          </div>}
           {current === 'reset' && passwordField('New password · at least 8 characters', 'new-password')}
           {error && <p className="auth-error" role="alert"><Icon name="warning" size={15}/> {error}</p>}
-          <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? 'One moment…' : current === 'signin' ? 'Sign in' : current === 'signup' ? 'Create account' : current === 'forgot' ? 'Send reset link' : 'Save new password'}</button>
+          <button className="button button-primary auth-submit" type="submit" disabled={busy || (current === 'signup' && (!agreed || !ageOk))}>{busy ? 'One moment…' : current === 'signin' ? 'Sign in' : current === 'signup' ? 'Create account' : current === 'forgot' ? 'Send reset link' : 'Save new password'}</button>
           {current === 'signin' && <div className="auth-links"><button type="button" onClick={() => go('forgot')}>Forgot password?</button><button type="button" onClick={() => go('signup')}>Create an account</button></div>}
           {current === 'signup' && <div className="auth-links"><span>Already have an account?</span><button type="button" onClick={() => go('signin')}>Sign in</button></div>}
           {current === 'forgot' && <div className="auth-links"><button type="button" onClick={() => go('signin')}>Back to sign in</button></div>}

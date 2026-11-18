@@ -133,6 +133,7 @@ export function EntryImport({ school, onDone }: { school: string; onDone: () => 
         </>}
       </div>}
 
+      <p className="form-note pad">Only add students on your own team. By adding them, you confirm you’re allowed to share their names and events with this tournament. Orator uses them only to run tournaments.</p>
       {added.length > 0 && <ul className="import-added">{added.map((line, index) => <li key={index}><Icon name="check" size={15}/> Added {line}</li>)}</ul>}
     </>}
   </section>;

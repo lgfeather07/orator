@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Icon } from './ui';
+import { Badge, Button, Icon, useDialog } from './ui';
 import { useStore } from './store';
 import { issueKinds, type IssueKind } from './tournament';
 
@@ -7,12 +7,12 @@ const kinds = Object.keys(issueKinds) as IssueKind[];
 
 /** The form anyone at the tournament uses to tell the tab room something is wrong. */
 export function ReportIssueForm({ reporter, role, onClose }: { reporter: string; role: string; onClose: () => void }) {
-  const { reportIssue } = useStore();
+  const { reportIssue, live } = useStore();
   const [kind, setKind] = useState<IssueKind>('no-judge');
   const [where, setWhere] = useState('');
   const [detail, setDetail] = useState('');
   const [sent, setSent] = useState(false);
-  if (sent) return <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span><h3>Sent to the tournament director</h3><p>Your report is on the director’s issue board now. Stay where you are if you can, so tab room staff can find you.</p><Button onClick={onClose}>Done</Button></div>;
+  if (sent) return <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span>{live ? <><h3>Saved, but not yet sent</h3><p>Issue reports are a preview: this one is saved in this browser only and has <strong>not</strong> reached the director. Find tournament staff in person, and in an emergency call 911.</p></> : <><h3>Sent to the tournament director</h3><p>In this demo, your report now shows on the director’s Issues tab. Stay where you are if you can, so tab room staff can find you.</p></>}<Button onClick={onClose}>Done</Button></div>;
   return <form className="support-form" onSubmit={event => { event.preventDefault(); reportIssue({ kind, where: where.trim(), detail: detail.trim(), reporter, role }); setSent(true); }}>
     <fieldset className="issue-kinds"><legend>What’s happening?</legend>{kinds.map(option => <label key={option} className={kind === option ? 'on' : ''}>
       <input type="radio" name="issue-kind" checked={kind === option} onChange={() => setKind(option)}/>
@@ -21,13 +21,16 @@ export function ReportIssueForm({ reporter, role, onClose }: { reporter: string;
     {kind === 'injury' && <p className="issue-emergency" role="alert"><Icon name="warning" size={16}/><span><strong>If this is an emergency, call 911 first.</strong> Then send this report so the director can get staff to you.</span></p>}
     <label><span>Where? <small>Room or area</small></span><input value={where} onChange={event => setWhere(event.target.value)} placeholder="e.g. Room 214" required/></label>
     <label><span>Details <small>Optional</small></span><textarea value={detail} onChange={event => setDetail(event.target.value)} placeholder="Anything that helps staff respond: the round, who is involved, what you need."/></label>
+    <p className="form-note">Your name, role and this report go to the tournament director. Please don’t include medical details; staff will follow up in person.</p>
+    {live && <p className="form-note warn" role="note"><Icon name="warning" size={14}/> Issue reports don’t reach the director yet when you’re signed in. Tell tournament staff in person.</p>}
     <div className="modal-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><button className="button button-primary" type="submit" disabled={!where.trim()}><Icon name="send"/><span>Send to director</span></button></div>
   </form>;
 }
 
 export function ReportIssueModal({ reporter, role, onClose }: { reporter: string; role: string; onClose: () => void }) {
+  const dialog = useDialog<HTMLDivElement>(onClose);
   return <div className="modal-backdrop" onClick={onClose}>
-    <div className="modal" role="dialog" aria-modal="true" aria-label="Report a tournament issue" onClick={event => event.stopPropagation()}>
+    <div ref={dialog} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-label="Report a tournament issue" onClick={event => event.stopPropagation()}>
       <header><div><span className="eyebrow">TOURNAMENT ISSUE</span><h2>Report an issue</h2></div><button className="icon-button" aria-label="Close" onClick={onClose}><Icon name="close"/></button></header>
       <ReportIssueForm reporter={reporter} role={role} onClose={onClose}/>
     </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon } from './ui';
+import { Icon, useDialog } from './ui';
 import { ReportIssueForm } from './Issues';
 
 export type HelpKind = 'guide' | 'support';
@@ -37,8 +37,9 @@ const guides: Record<string, [string, string][]> = {
 
 export function HelpModal({ kind, persona, reporter, onClose }: { kind: HelpKind; persona: string; reporter: string; onClose: () => void }) {
   const [view, setView] = useState<HelpKind>(kind);
+  const dialog = useDialog<HTMLDivElement>(onClose);
   return <div className="modal-backdrop" onClick={onClose}>
-    <div className="modal" role="dialog" aria-modal="true" aria-label={view === 'guide' ? 'Quick-start guide' : 'Report an issue'} onClick={event => event.stopPropagation()}>
+    <div ref={dialog} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-label={view === 'guide' ? 'Quick-start guide' : 'Report an issue'} onClick={event => event.stopPropagation()}>
       <header><div><span className="eyebrow">HELP · {persona.toUpperCase()}</span><h2>{view === 'guide' ? 'Quick-start guide' : 'Report an issue'}</h2></div><button className="icon-button" aria-label="Close help" onClick={onClose}><Icon name="close"/></button></header>
       <div className="segmented"><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Quick-start guide</button><button className={view === 'support' ? 'active' : ''} onClick={() => setView('support')}>Report an issue</button></div>
       {view === 'guide' ? <ol className="guide-steps">{guides[persona].map(([title, text], index) => <li key={title}><span>{index + 1}</span><div><strong>{title}</strong><p>{text}</p></div></li>)}</ol>

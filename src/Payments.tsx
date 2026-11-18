@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Badge, Button, Icon, downloadText } from './ui';
+import { Badge, Button, Icon, downloadText, useDialog } from './ui';
 import { useStore } from './store';
 import { ORATOR_TOURNAMENT_FEE, defaultFees, invoiceFor, type Fees, type Invoice } from './tournament';
 
@@ -29,6 +29,7 @@ function PaymentSimulator({ school, amount: amountDue, invoice: currentInvoice, 
   const [stage, setStage] = useState<'form' | 'processing' | 'failed' | 'paid'>('form');
   const [reference, setReference] = useState('');
   const card = testCards.find(item => item.id === cardId)!;
+  const dialog = useDialog<HTMLDivElement>(onClose, stage === 'processing');
   const pay = () => {
     setStage('processing');
     window.setTimeout(() => {
@@ -38,10 +39,10 @@ function PaymentSimulator({ school, amount: amountDue, invoice: currentInvoice, 
   };
   // Rendered at the top of the app so the panel it was opened from can't clip it.
   return createPortal(<div className="modal-backdrop" onClick={stage === 'processing' ? undefined : onClose}>
-    <div className="modal pay-modal" role="dialog" aria-modal="true" aria-label="Payment simulator" onClick={event => event.stopPropagation()}>
+    <div ref={dialog} tabIndex={-1} className="modal pay-modal" role="dialog" aria-modal="true" aria-label="Payment simulator" onClick={event => event.stopPropagation()}>
       <header><div><span className="eyebrow">PAYMENT SIMULATOR</span><h2>{stage === 'paid' ? 'Payment received' : `Pay ${money(amount)}`}</h2></div>{stage !== 'processing' && <button className="icon-button" aria-label="Close" onClick={onClose}><Icon name="close"/></button>}</header>
       <p className="pay-warning"><Icon name="info" size={15}/><span><strong>This is a simulation.</strong> No money moves and no real card can be entered. It shows what paying for a tournament would look like.</span></p>
-      {stage === 'paid' ? <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span><h3>{money(amount)} paid for {school}</h3><p>Reference {reference}. The tournament director can see this payment now.</p>
+      {stage === 'paid' ? <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span><h3>{money(amount)} paid for {school}</h3><p>Reference {reference}. Recorded in this simulation; no money was taken.</p>
         <div className="modal-actions center"><Button variant="secondary" icon="download" onClick={() => downloadText(`orator-receipt-${reference}.txt`, receiptText(tournament.name, school, invoice, amount, reference))}>Download receipt</Button><Button onClick={onClose}>Done</Button></div></div>
       : stage === 'processing' ? <div className="pay-processing"><span className="spinner"/><p>Contacting the bank…</p></div>
       : <>
@@ -125,14 +126,14 @@ export function PaymentsPanel() {
     <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{money(collected)} of {money(billed)} collected</h3></div>
       <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge></div>
     <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>placeholder amount</small></dt><dd>{money(-ORATOR_TOURNAMENT_FEE)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - ORATOR_TOURNAMENT_FEE))}</dd></div></dl>
-    <div className="payments-table">
+    <div className="payments-table" tabIndex={0} aria-label="Payments by school" role="region">
       <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>Total</span><span>Status</span><span/></div>
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>
         <strong>{school}</strong><span>{invoice.entries}</span>
         <span>{invoice.judgesBringing} of {invoice.judgesOwed}{invoice.judgesShort > 0 && <small> · {invoice.judgesShort} to hire</small>}</span>
         <span>{money(invoice.total)}</span>
         <span>{invoice.balance <= 0 ? <Badge tone="success" icon="check">{invoice.balance < 0 ? `Paid · refund ${money(-invoice.balance)}` : `Paid by ${payment.method === 'check' ? 'check' : 'card'}`}</Badge> : payment.checkPending ? <Badge tone="warning" icon="file">Check expected</Badge> : payment.paid > 0 ? <Badge tone="warning" icon="clock">{money(invoice.balance)} still due</Badge> : <Badge tone="danger" icon="warning">Not paid</Badge>}</span>
-        <span className="payments-action">{invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Reminder sent</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
+        <span className="payments-action">{invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Marked as reminded</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
       </div>)}
     </div>
     <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. In the real product, schools pay digitally, Orator keeps its per-tournament fee, and the rest is transferred to the host school through a payment provider.</p>

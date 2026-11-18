@@ -234,7 +234,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
 
   return <div className="jb">
     <div className="jb-top">
-      <div><span className="jb-badges"><Badge tone="info">{room?.final ? 'Final round' : `Round ${ballotKey.round}`}</Badge><Badge tone="success" icon="check">Official NSAA ballot</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
+      <div><span className="jb-badges"><Badge tone="info">{room?.final ? 'Final round' : `Round ${ballotKey.round}`}</Badge><Badge tone="success" icon="check">NSAA ballot format</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
       <div className="jb-selects">{event.time.classAMax && <label><span>School class</span><select aria-label="School class" value={classA ? 'a' : 'other'} onChange={change => { dirty.current = true; setClassA(change.target.value === 'a'); }}><option value="other">Classes B–D · {clock(event.time.max)}</option><option value="a">Class A · {clock(event.time.classAMax)}</option></select></label>}
       {!room && <label><span>Event</span><select aria-label="Event" value={eventId} onChange={change => { dirty.current = true; setEventId(change.target.value); setOpen(0); }}>{ballotEvents.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}</div>
     </div>
@@ -254,7 +254,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         <SpeakerCheckIn code={current} onChange={() => { dirty.current = true; }}/>
       </div>
 
-      {absent(current) ? <div className="jb-absent"><Icon name="info"/><span><strong>{speaker.name} is marked as a no-show.</strong><small>They are left out of your ranking and the director is notified. Tap “No-show” again to undo.</small></span></div> : <div className="jb-grid">
+      {absent(current) ? <div className="jb-absent"><Icon name="info"/><span><strong>{speaker.name} is marked as a no-show.</strong><small>They are left out of your ranking. Tap “No-show” again to undo.</small></span></div> : <div className="jb-grid">
         <section className="criteria-card jb-criteria">
           <div className="card-label"><span>Criteria for evaluation</span><small>{ballot.marks.filter(Boolean).length} of {event.criteria.length} sections marked · required</small></div>
           {event.criteria.map((item, index) => <div className={`criterion ${open === index ? 'open' : ''}`} key={item.name}>
@@ -279,7 +279,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
           <section className="jb-card">
             <div className="field-label"><span>Reason for decision</span><small>Why this rank and rating</small></div>
             <textarea value={ballot.comment} onChange={change => update({ comment: change.target.value })} placeholder="Explain this speaker’s rank compared with the others in the round."/>
-            <div className={`jb-meter ${commentProgress >= 100 ? 'ready' : ''}`}><Progress value={commentProgress}/><span>{commentProgress >= 100 ? 'Feedback minimum reached' : `Write at least ${MIN_COMMENT} characters across comments and reason for decision (${feedbackLength(ballot)} so far)`}</span></div>
+            <div className={`jb-meter ${commentProgress >= 100 ? 'ready' : ''}`}><Progress value={commentProgress} label="Feedback written"/><span>{commentProgress >= 100 ? 'Feedback minimum reached' : `Write at least ${MIN_COMMENT} characters across comments and reason for decision (${feedbackLength(ballot)} so far)`}</span></div>
           </section>
 
           <section className="jb-card jb-private">

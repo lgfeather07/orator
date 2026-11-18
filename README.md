@@ -44,6 +44,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/results.ts`, `src/Results.tsx` — breaks, finals, and team points following the NSAA manual
 - `src/PastBallots.tsx` — past-tournament ballots for students and coaches
 - `src/EntryImport.tsx` — adding students by hand or from a roster file
+- `src/legal.tsx` — privacy, terms, cookies, refund and accessibility pages (drafts) and the footer; business details go in `BUSINESS` at the top
 - `src/Payments.tsx` — tournament fees, each school's invoice, and the payment simulator (no real money moves)
 - `supabase/` — database tables and access rules
 - `src/store.tsx` — demo data shared across roles

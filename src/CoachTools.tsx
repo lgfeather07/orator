@@ -22,9 +22,9 @@ export function ReminderSettings() {
   const { reminders, setReminders } = useStore();
   return <div className="reminder-card">
     <span className="reminder-icon"><Icon name="bell"/></span>
-    <div><strong>Round reminders</strong><small>Get your room and start time 15 minutes before each round, without opening Orator.</small></div>
-    <label><input type="checkbox" checked={reminders.text} onChange={event => setReminders({ ...reminders, text: event.target.checked })}/> Text me</label>
-    <label><input type="checkbox" checked={reminders.email} onChange={event => setReminders({ ...reminders, email: event.target.checked })}/> Email me</label>
+    <div><strong>Round reminders <Badge tone="neutral">Coming soon</Badge></strong><small>Your room and start time before each round, without opening Orator. Nothing is sent yet; you’ll be asked for permission before any texts.</small></div>
+    <label><input type="checkbox" disabled checked={false} onChange={() => setReminders(reminders)}/> Text me</label>
+    <label><input type="checkbox" disabled checked={false} onChange={() => setReminders(reminders)}/> Email me</label>
   </div>;
 }
 
@@ -50,7 +50,7 @@ export function StudentRecordExtras({ student }: { student: string }) {
     <section className="record-card">
       <div className="field-label"><span><Icon name="send" size={14}/> Send {first} a focus note</span><small>Shows on their overview</small></div>
       <textarea value={note} onChange={event => setNote(event.target.value)} placeholder={`e.g. “You ran 10:24 in Round 1. Cut the third example before Round 2.”`}/>
-      <div className="record-row"><label className="urgent-toggle"><input type="checkbox" checked={urgent} onChange={event => setUrgent(event.target.checked)}/> Mark urgent and send a text alert</label><Button icon="send" disabled={!note.trim()} onClick={() => { sendFocusNote(note.trim(), urgent); setNote(''); setUrgent(false); }}>Send note</Button></div>
+      <div className="record-row"><label className="urgent-toggle"><input type="checkbox" checked={urgent} onChange={event => setUrgent(event.target.checked)}/> Mark urgent</label><Button icon="send" disabled={!note.trim()} onClick={() => { sendFocusNote(note.trim(), urgent); setNote(''); setUrgent(false); }}>Send note</Button></div>
       <ul className="sent-notes">{focusNotes.map(item => <li key={item.id}><p>{item.text}</p><span>{item.urgent && <Badge tone="danger" icon="bell">Urgent</Badge>}<Badge tone={item.seen ? 'success' : 'neutral'} icon={item.seen ? 'eye' : 'clock'}>{item.seen ? `Seen by ${first}` : 'Not seen yet'}</Badge><small>{item.sent}</small></span></li>)}</ul>
     </section>
 

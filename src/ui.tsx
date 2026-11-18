@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 export type IconName =
   | 'archive' | 'arrow' | 'ballot' | 'camera' | 'check' | 'chevron' | 'clock'
@@ -68,8 +68,34 @@ export function Avatar({ initials, size = 'md' }: { initials: string; size?: 'sm
   return <span className={`avatar avatar-${size}`}>{initials}</span>;
 }
 
-export function Progress({ value }: { value: number }) {
-  return <div className="progress" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }}/></div>;
+export function Progress({ value, label = 'Progress' }: { value: number; label?: string }) {
+  return <div className="progress" role="progressbar" aria-label={label} aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${value}%` }}/></div>;
+}
+
+/**
+ * Keyboard behaviour for a pop-up window: focus moves into it, Tab stays inside it, Escape closes it,
+ * and focus returns to where it was. Put the returned ref on the element with role="dialog".
+ */
+export function useDialog<T extends HTMLElement>(onClose: () => void, locked = false) {
+  const ref = useRef<T>(null);
+  const close = useRef(onClose); close.current = onClose;
+  const isLocked = useRef(locked); isLocked.current = locked;
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    const focusable = () => [...(ref.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])];
+    (focusable().find(item => item.tagName !== 'BUTTON' || !item.getAttribute('aria-label')?.startsWith('Close')) ?? ref.current)?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isLocked.current) { event.preventDefault(); close.current(); return; }
+      if (event.key !== 'Tab') return;
+      const items = focusable(); if (items.length === 0) return;
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); before?.focus?.(); };
+  }, []);
+  return ref;
 }
 
 /** The Orator mark: the letter O drawn as a watching eye. */

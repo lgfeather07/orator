@@ -10,6 +10,7 @@ import { TeamEntries } from './TeamEntries';
 import { EntryImport } from './EntryImport';
 import { TeamInvoice } from './Payments';
 import { PastBallots } from './PastBallots';
+import { LegalFooter, LegalView, useLegalRoute } from './legal';
 import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
 import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
@@ -45,7 +46,7 @@ const utilityPages: { id: Page; label: string; description: string }[] = [
 function PrototypeNav({ page, setPage, dark, setDark }: { page: Page; setPage: (p: Page) => void; dark: boolean; setDark: (v: boolean) => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const utilityPage = utilityPages.find(item => item.id === page);
-  return <div className="prototype-nav">
+  return <nav className="prototype-nav" aria-label="Orator demo">
     <div className="preview-brand"><span role="img" aria-label="Orator"><OratorMark size={17}/>rator</span><small>Interactive preview</small></div>
     <nav className="preview-roles" aria-label="Preview a role">{rolePages.map(item =>
       <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { setPage(item.id); setMoreOpen(false); }}><Icon name={item.icon} size={15}/><span>{item.label}</span></button>
@@ -56,7 +57,7 @@ function PrototypeNav({ page, setPage, dark, setDark }: { page: Page; setPage: (
       </div>
       <button className="theme-button" aria-label="Toggle light or dark theme" onClick={() => setDark(!dark)}><Icon name={dark ? 'sun' : 'moon'}/></button>
     </div>
-  </div>;
+  </nav>;
 }
 
 /** Top bar for signed-in users: only the workspaces their account has, plus sign out. */
@@ -64,7 +65,7 @@ function AccountNav({ page, setPage, dark, setDark }: { page: Page; setPage: (p:
   const { profile, signOut } = useAuth();
   if (!profile) return null;
   const mine = rolePages.filter(item => profile.roles.includes(item.id as Role));
-  return <div className="prototype-nav account-nav">
+  return <nav className="prototype-nav account-nav" aria-label="Your account">
     <div className="preview-brand"><span role="img" aria-label="Orator"><OratorMark size={17}/>rator</span></div>
     <nav className="preview-roles" aria-label="Your workspaces">{mine.length > 1 && mine.map(item =>
       <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon name={item.icon} size={15}/><span>{item.label}</span></button>
@@ -74,7 +75,7 @@ function AccountNav({ page, setPage, dark, setDark }: { page: Page; setPage: (p:
       <button className="account-signout" onClick={signOut}>Sign out</button>
       <button className="theme-button" aria-label="Toggle light or dark theme" onClick={() => setDark(!dark)}><Icon name={dark ? 'sun' : 'moon'}/></button>
     </div>
-  </div>;
+  </nav>;
 }
 
 function MobileHeader({ title, subtitle, back, initials = 'JL' }: { title: string; subtitle?: string; back?: boolean; initials?: string }) {
@@ -113,7 +114,7 @@ function PaperBallot() {
     <div className="paper-intro"><span className="illustration"><Icon name="file" size={38}/></span><h2>Add a paper ballot</h2><p>Upload a saved file or scan a paper ballot with your camera.</p></div>
     <button className="choice-card" onClick={() => setStep('camera')}><span className="choice-icon"><Icon name="camera"/></span><span><strong>Scan with camera</strong><small>Fastest · PDF created automatically</small></span><Icon name="arrow"/></button>
     <button className="choice-card" onClick={() => setStep('uploading')}><span className="choice-icon"><Icon name="upload"/></span><span><strong>Upload file</strong><small>PDF, JPG, or PNG · up to 10 MB</small></span><Icon name="arrow"/></button>
-    <div className="offline-note"><Icon name="wifi"/><span><strong>Weak connection?</strong> Scans save on this device and upload when you’re back online.</span></div>
+    <div className="offline-note"><Icon name="wifi"/><span><strong>Weak connection?</strong> Paper ballot scanning is a preview: nothing is uploaded or read yet.</span></div>
   </div>;
 }
 
@@ -219,7 +220,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     'Tournament setup': 'Configure events, rounds, rooms, criteria, and permissions.',
   };
   return <div className="desktop-shell">
-    <aside className="sidebar"><Logo/><div className="tournament-chip"><span className="tiny-logo">{tournament.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase()}</span><span><strong>{tournament.name}</strong><small>{tournament.date}</small></span><Icon name="chevron" size={15}/></div>
+    <aside className="sidebar" aria-label="Workspace menu"><Logo/><div className="tournament-chip"><span className="tiny-logo">{tournament.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase()}</span><span><strong>{tournament.name}</strong><small>{tournament.date}</small></span><Icon name="chevron" size={15}/></div>
       {(persona === 'coach' || persona === 'judge') && <div className="role-switcher"><span>Working as</span><div><button className={persona === 'coach' ? 'active' : ''} onClick={() => navigate('coach')}><Icon name="users" size={15}/> Coach</button><button className={persona === 'judge' ? 'active' : ''} onClick={() => navigate('judge')}><Icon name="ballot" size={15}/> Judge</button></div><small>Switch roles without signing out</small></div>}
       <span className="sidebar-section-label">{persona} workspace</span>
       <nav>
@@ -228,7 +229,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       </nav>
       <div className="sidebar-bottom"><div className="save-chip"><Icon name="check"/> All changes saved</div><button className="profile" onClick={() => navigate('signin')}><Avatar initials={profile.initials}/><span><strong>{profile.name}</strong><small>{profile.detail}</small></span><Icon name="chevron" size={15}/></button></div>
     </aside>
-    <main className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
+    <main id="main" className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
       <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{sidebarItems[persona].map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
       {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your rooms and ballots are real</strong> once the director approves you and publishes the schedule. Other numbers on this page are example data.</> : <><strong>Your events, rooms, and released ballots are real</strong> once the director approves you. The schedule, feedback, and growth shown elsewhere on this page are example data.</>}</span></div>}
@@ -284,7 +285,7 @@ function SignInPage() {
   const selectedRole = roles.find(role => role.id === selected)!;
   return <div className="signin-page">
     <header className="signin-header"><Logo/>{!profile && <div><Badge tone="success" icon="check">Demo accounts ready</Badge></div>}</header>
-    <main className="signin-main">
+    <main id="main" className="signin-main">
       <section className="signin-intro"><Badge tone="info" icon="sparkle">One account, every tournament role</Badge><h1>How are you joining today?</h1><p>Choose a role to enter the right workspace. You can switch roles later without signing out.</p></section>
       <div className="role-card-grid">{roles.map(role => <button key={role.id} className={`signin-role-card ${selected === role.id ? 'selected' : ''}`} onClick={() => setSelected(role.id)}>
         <span className="signin-role-icon"><Icon name={role.icon} size={24}/></span><span className="role-check">{selected === role.id && <Icon name="check" size={15}/>}</span><strong>{role.title}</strong><p>{role.description}</p><div><Avatar initials={role.name.split(' ').map(part => part[0]).join('').slice(0,2)} size="sm"/><span><strong>{role.name}</strong><small>{role.detail}</small></span></div>
@@ -464,7 +465,7 @@ function JudgePage() {
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
           <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemporaneous','Room 301','Upcoming'],['1:30 PM','Round 4','Persuasive','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,3).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
         </section>
-        <aside className="panel judge-note"><div className="panel-head"><div><h2>Before you judge</h2><p>A quick Round 2 checklist</p></div></div>{[['wifi','Offline backup is ready'],['users','No school conflicts found'],['ballot','Criteria updated for INFO'],['check','Judge philosophy shared']].map(([icon,text])=><div key={text}><span><Icon name={icon as IconName}/></span><strong>{text}</strong><Icon name="check" size={16}/></div>)}</aside>
+        <aside className="panel judge-note"><div className="panel-head"><div><h2>Before you judge</h2><p>A quick Round 2 checklist</p></div></div>{[['check','Ballot autosaves as you go'],['users','No school conflicts found'],['ballot','Criteria updated for INFO'],['check','Judge philosophy shared']].map(([icon,text])=><div key={text}><span><Icon name={icon as IconName}/></span><strong>{text}</strong><Icon name="check" size={16}/></div>)}</aside>
       </div> : action === 'competitors' ? <section className="panel competitor-panel"><div className="panel-head"><div><h2>Round 2 competitors</h2><p>Varsity Informative · Speaking order · Room 214 · Check speakers in as they arrive</p></div><Button variant="secondary" icon="arrow" onClick={() => setAction('assignments')}>Back to assignments</Button></div>
         <div className="competitor-roster">{[
           ['C1','Nora Patel','Lincoln East','“Small acts, lasting change”'],
@@ -513,7 +514,7 @@ function StatesPage() {
   const [retrying, setRetrying] = useState(false);
   return <div className="docs-page"><DocsHeader title="System states" subtitle="Resilient patterns for weak Wi‑Fi and busy tournament workflows."/>
     <div className="states-grid">
-      <section className="state-card"><Badge tone="warning" icon="wifi">Offline</Badge><span className="state-icon amber"><Icon name="wifi" size={28}/></span><h2>You’re working offline</h2><p>Your ballot is safe on this device. We’ll sync it when you reconnect.</p><Button variant="secondary" onClick={() => navigate('judge')}>Keep judging</Button></section>
+      <section className="state-card"><Badge tone="warning" icon="wifi">Offline</Badge><span className="state-icon amber"><Icon name="wifi" size={28}/></span><h2>Example: working offline</h2><p>Your ballot is safe on this device. A design for a future offline mode; Orator doesn’t sync offline yet.</p><Button variant="secondary" onClick={() => navigate('judge')}>Keep judging</Button></section>
       <section className="state-card"><Badge tone={retrying ? 'success' : 'danger'} icon={retrying ? 'check' : 'warning'}>{retrying ? 'Reconnected' : 'Error'}</Badge><span className="state-icon red"><Icon name={retrying ? 'check' : 'warning'} size={28}/></span><h2>{retrying ? 'Upload resumed' : 'Upload paused'}</h2><p>{retrying ? 'Your saved scan is uploading now.' : 'We couldn’t reach the server. Your scan is saved and ready to retry.'}</p><Button disabled={retrying} onClick={() => setRetrying(true)}>{retrying ? 'Uploading' : 'Try again'}</Button></section>
       <section className="state-card"><Badge tone="neutral">Empty</Badge><span className="state-icon"><Icon name="archive" size={28}/></span><h2>No ballots yet</h2><p>Submitted ballots will appear here after your first tournament round.</p><Button variant="secondary" onClick={() => navigate('student')}>View schedule</Button></section>
       <section className="state-card"><Badge tone="info">Loading</Badge><div className="skeleton-state"><i/><i/><i/><i/></div><h2>Loading assignments</h2><p>Finding the best event fit for each judge.</p><Progress value={62}/></section>
@@ -531,6 +532,9 @@ function Workspace() {
   const [dark, setDark] = useState(false);
   /** Visitors can explore every role with sample data without an account, even when accounts are connected. */
   const [demo, setDemo] = useState(false);
+  const [legal, openLegal] = useLegalRoute();
+  const skip = <a className="skip-link" href="#main" onClick={event => { event.preventDefault(); const main = document.getElementById('main'); main?.setAttribute('tabindex', '-1'); main?.focus(); }}>Skip to main content</a>;
+  const footer = <LegalFooter onOpen={openLegal}/>;
   const signedIn = authConfigured && profile !== null && !recovering;
   // Signed-in users land on their workspace, or the role chooser if they have several, and can only open their own roles.
   const allowed = (target: Page) => !signedIn || target === 'signin' || profile!.roles.includes(target as Role);
@@ -545,8 +549,9 @@ function Workspace() {
     components: <ComponentsPage/>, styles: <StylesPage/>, states: <StatesPage/>
   })[current], [current]);
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
-  if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}><AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/></div>;
-  return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}</div></NavigationContext.Provider>;
+  if (legal) return <div className={dark ? 'app dark' : 'app'}>{skip}<LegalView page={legal} onClose={() => openLegal(null)} onOpen={openLegal}/></div>;
+  if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;
+  return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{skip}{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}{footer}</div></NavigationContext.Provider>;
 }
 
 export default function App() {
