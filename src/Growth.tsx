@@ -5,7 +5,7 @@ import { loadLabel } from './tournament';
 import { useStore } from './store';
 
 /** The five most recent finished tournaments, oldest first. */
-export const growthMeets = ['Lincoln East', 'Norfolk', 'Millard West', 'Aurora', 'Minden'];
+export const growthMeets = ['Ashgrove', 'Brightwater', 'Halden West', 'Thornbury', 'Fallow Creek'];
 
 /**
  * Each student's events, with their average section mark (out of 10) at each tournament.

@@ -53,7 +53,7 @@ const initials = (name: string) => name.split(' ').map(part => part[0]).join('')
  * Ballots from finished tournaments. A student sees only their own; a coach sees every student on the team.
  * `student` fixes the view to one person and removes the student filter.
  */
-export function PastBallots({ student, team = 'Lincoln High' }: { student?: string; team?: string }) {
+export function PastBallots({ student, team = 'Wrenfield High' }: { student?: string; team?: string }) {
   const [who, setWho] = useState('all');
   const [meet, setMeet] = useState('all');
   const [eventId, setEventId] = useState('all');

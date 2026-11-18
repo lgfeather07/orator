@@ -29,11 +29,11 @@ export function ReminderSettings() {
 }
 
 const seasonBallots = [
-  { tournament: 'Gothenburg Invitational', judge: 'Judge Leather', score: 46, outlier: false },
-  { tournament: 'Millard West Classic', judge: 'Maria Chen', score: 45, outlier: false },
-  { tournament: 'Millard West Classic', judge: 'Tom Becker', score: 36, outlier: true },
-  { tournament: 'Norfolk Invitational', judge: 'David Ross', score: 44, outlier: false },
-  { tournament: 'Lincoln East Open', judge: 'Alyssa Ford', score: 43, outlier: false },
+  { tournament: 'Larkspur Invitational', judge: 'Judge Leather', score: 46, outlier: false },
+  { tournament: 'Halden West Classic', judge: 'Maria Chen', score: 45, outlier: false },
+  { tournament: 'Halden West Classic', judge: 'Tom Becker', score: 36, outlier: true },
+  { tournament: 'Brightwater Invitational', judge: 'David Ross', score: 44, outlier: false },
+  { tournament: 'Ashgrove Open', judge: 'Alyssa Ford', score: 43, outlier: false },
 ];
 const average = (rows: typeof seasonBallots) => (rows.reduce((sum, row) => sum + row.score, 0) / rows.length).toFixed(1);
 

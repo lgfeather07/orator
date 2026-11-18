@@ -27,9 +27,9 @@ export function CreateTournamentCard() {
   return <section className="panel access-card">
     <div className="panel-head"><div><h2>Create your tournament</h2><p>Coaches, judges, and students will ask to join it, and you approve each one.</p></div></div>
     <form className="access-form" onSubmit={async event => { event.preventDefault(); setBusy(true); await createLiveTournament({ ...defaultTournament, name: name.trim(), date: date.trim(), host: host.trim() }); setBusy(false); }}>
-      <label><span>Tournament name</span><input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Gothenburg Invitational" required/></label>
+      <label><span>Tournament name</span><input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Larkspur Invitational" required/></label>
       <label><span>Date</span><input value={date} onChange={event => setDate(event.target.value)} placeholder="e.g. October 19, 2026"/></label>
-      <label><span>Host school</span><input value={host} onChange={event => setHost(event.target.value)} placeholder="e.g. Gothenburg High School"/></label>
+      <label><span>Host school</span><input value={host} onChange={event => setHost(event.target.value)} placeholder="e.g. Larkspur High School"/></label>
       <button className="button button-primary" type="submit" disabled={!name.trim() || busy}><Icon name="plus"/><span>{busy ? 'Creating…' : 'Create tournament'}</span></button>
     </form>
   </section>;
@@ -53,7 +53,7 @@ export function JoinTournament({ role }: { role: MemberRole }) {
     <div className="panel-head"><div><h2>Join a tournament</h2><p>Ask the tournament director for access as a {roleWord[role].toLowerCase()}. You’ll be let in once they approve you.</p></div></div>
     {tournaments.length === 0 ? <p className="access-empty">No tournaments have been created yet. Check back once your tournament director has set one up.</p> : <form className="access-form" onSubmit={async event => { event.preventDefault(); setBusy(true); await requestJoin(selected, role, school.trim()); setBusy(false); }}>
       <label><span>Tournament</span><select value={selected} onChange={event => setChoice(event.target.value)}>{tournaments.map(item => <option key={item.id} value={item.id}>{item.name}{item.date ? ` · ${item.date}` : ''}</option>)}</select></label>
-      <label><span>{needsSchool ? 'Your school' : 'School you’re affiliated with'} {!needsSchool && <small>Optional. You won’t judge your own school.</small>}</span><input value={school} onChange={event => setSchool(event.target.value)} placeholder="e.g. Lincoln High" required={needsSchool}/></label>
+      <label><span>{needsSchool ? 'Your school' : 'School you’re affiliated with'} {!needsSchool && <small>Optional. You won’t judge your own school.</small>}</span><input value={school} onChange={event => setSchool(event.target.value)} placeholder="e.g. Wrenfield High" required={needsSchool}/></label>
       <button className="button button-primary" type="submit" disabled={busy || !selected || (needsSchool && !school.trim())}><Icon name="send"/><span>{busy ? 'Sending…' : 'Ask to join'}</span></button>
     </form>}
   </section>;

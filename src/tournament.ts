@@ -68,19 +68,19 @@ export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122'
 
 export const judgePool: Judge[] = [
   { id: 'jl', name: 'Judge Leather', school: '' },
-  { id: 'mc', name: 'Maria Chen', school: 'Millard West' },
-  { id: 'dr', name: 'David Ross', school: 'Norfolk High' },
-  { id: 'af', name: 'Alyssa Ford', school: 'Lincoln East' },
-  { id: 'ej', name: 'Erin Johnson', school: 'Lincoln High' },
+  { id: 'mc', name: 'Maria Chen', school: 'Halden West' },
+  { id: 'dr', name: 'David Ross', school: 'Brightwater High' },
+  { id: 'af', name: 'Alyssa Ford', school: 'Ashgrove' },
+  { id: 'ej', name: 'Erin Johnson', school: 'Wrenfield High' },
   { id: 'tb', name: 'Tom Becker', school: '' },
-  { id: 'rn', name: 'Rosa Nuñez', school: 'Creighton Prep' },
-  { id: 'kp', name: 'Kyle Pratt', school: 'Gothenburg High' },
-  { id: 'hw', name: 'Hannah Wolfe', school: 'Aurora' },
+  { id: 'rn', name: 'Rosa Nuñez', school: 'Kestrel Prep' },
+  { id: 'kp', name: 'Kyle Pratt', school: 'Larkspur High' },
+  { id: 'hw', name: 'Hannah Wolfe', school: 'Thornbury' },
   { id: 'bs', name: 'Ben Sato', school: '' },
-  { id: 'lm', name: 'Lena Morris', school: 'Minden' },
+  { id: 'lm', name: 'Lena Morris', school: 'Fallow Creek' },
   { id: 'pg', name: 'Priya Gill', school: '' },
   { id: 'co', name: 'Carl Osei', school: '' },
-  { id: 'nw', name: 'Nell Ward', school: 'Bellevue West' },
+  { id: 'nw', name: 'Nell Ward', school: 'Marlowe West' },
   { id: 'jh', name: 'Jon Hale', school: '' },
   { id: 'sv', name: 'Sara Vance', school: '' },
   { id: 'mo', name: 'Marcus Odom', school: '' },
@@ -90,20 +90,20 @@ export const judgePool: Judge[] = [
 ];
 
 export const defaultTournament: Tournament = {
-  name: 'Gothenburg Invitational', date: 'October 19, 2026', host: 'Gothenburg High School', rounds: 3, sectionSize: 6, maxEntries: 4,
+  name: 'Larkspur Invitational', date: 'October 19, 2026', host: 'Larkspur High School', rounds: 3, sectionSize: 6, maxEntries: 4,
   eventIds: ['info', 'persuasive', 'extemp', 'entertainment', 'poetry', 'serious', 'humorous'], status: 'registration',
 };
 
 // A realistic field: most students are in one or two events, many in three, and one in four.
 const seedTeams: Record<string, [string, string[]][]> = {
-  'Lincoln High': [['Maya Rodriguez', ['info', 'persuasive', 'poetry']], ['Eli Thompson', ['extemp', 'info']], ['Nora Patel', ['persuasive', 'serious', 'extemp']], ['Sam Wilson', ['poetry', 'humorous']], ['Iris Chen', ['serious']]],
-  'Creighton Prep': [['Leo Brooks', ['info', 'extemp']], ['Ava Kim', ['persuasive']], ['Noah Reyes', ['humorous', 'entertainment', 'poetry']], ['Zoe Hart', ['extemp']], ['Mila Stone', ['entertainment', 'humorous']]],
-  'Millard West': [['Owen Burke', ['info', 'persuasive', 'extemp']], ['Ruby Lang', ['info']], ['Cole Avery', ['extemp', 'entertainment']], ['Tess Nolan', ['serious', 'poetry']], ['Jude Park', ['humorous']], ['Piper Dunn', ['poetry', 'serious', 'humorous', 'entertainment']]],
-  'Norfolk High': [['Ivy Marsh', ['info', 'poetry']], ['Dean Rowe', ['persuasive', 'extemp', 'info']], ['Lila Voss', ['poetry']], ['Max Pruitt', ['entertainment']], ['Elle Tran', ['serious', 'persuasive']]],
-  'Lincoln East': [['Finn Carter', ['info']], ['Hazel Byrd', ['extemp', 'persuasive']], ['Miles Okoye', ['persuasive', 'info', 'serious']], ['June Salas', ['humorous']], ['Theo Grant', ['entertainment', 'humorous']]],
-  'Gothenburg High': [['Cara Mills', ['info', 'serious']], ['Wyatt Sims', ['info']], ['Nina Flores', ['serious', 'poetry', 'persuasive']], ['Reid Adler', ['extemp']], ['Skye Ellis', ['poetry', 'entertainment']], ['Beau Lin', ['humorous', 'extemp', 'entertainment']]],
-  Aurora: [['Eden Cole', ['info']], ['Kai Benton', ['persuasive', 'serious']], ['Remy Shaw', ['extemp', 'humorous', 'info']], ['Luz Ortega', ['poetry']], ['Gus Whitman', ['entertainment']]],
-  Minden: [['Tara Quinn', ['info', 'persuasive']], ['Abel Frost', ['persuasive']], ['Dara Holt', ['serious', 'humorous', 'poetry']], ['Ezra Pike', ['humorous']], ['Wren Abbott', ['poetry', 'serious']]],
+  'Wrenfield High': [['Maya Rodriguez', ['info', 'persuasive', 'poetry']], ['Eli Thompson', ['extemp', 'info']], ['Nora Patel', ['persuasive', 'serious', 'extemp']], ['Sam Wilson', ['poetry', 'humorous']], ['Iris Chen', ['serious']]],
+  'Kestrel Prep': [['Leo Brooks', ['info', 'extemp']], ['Ava Kim', ['persuasive']], ['Noah Reyes', ['humorous', 'entertainment', 'poetry']], ['Zoe Hart', ['extemp']], ['Mila Stone', ['entertainment', 'humorous']]],
+  'Halden West': [['Owen Burke', ['info', 'persuasive', 'extemp']], ['Ruby Lang', ['info']], ['Cole Avery', ['extemp', 'entertainment']], ['Tess Nolan', ['serious', 'poetry']], ['Jude Park', ['humorous']], ['Piper Dunn', ['poetry', 'serious', 'humorous', 'entertainment']]],
+  'Brightwater High': [['Ivy Marsh', ['info', 'poetry']], ['Dean Rowe', ['persuasive', 'extemp', 'info']], ['Lila Voss', ['poetry']], ['Max Pruitt', ['entertainment']], ['Elle Tran', ['serious', 'persuasive']]],
+  'Ashgrove': [['Finn Carter', ['info']], ['Hazel Byrd', ['extemp', 'persuasive']], ['Miles Okoye', ['persuasive', 'info', 'serious']], ['June Salas', ['humorous']], ['Theo Grant', ['entertainment', 'humorous']]],
+  'Larkspur High': [['Cara Mills', ['info', 'serious']], ['Wyatt Sims', ['info']], ['Nina Flores', ['serious', 'poetry', 'persuasive']], ['Reid Adler', ['extemp']], ['Skye Ellis', ['poetry', 'entertainment']], ['Beau Lin', ['humorous', 'extemp', 'entertainment']]],
+  Thornbury: [['Eden Cole', ['info']], ['Kai Benton', ['persuasive', 'serious']], ['Remy Shaw', ['extemp', 'humorous', 'info']], ['Luz Ortega', ['poetry']], ['Gus Whitman', ['entertainment']]],
+  'Fallow Creek': [['Tara Quinn', ['info', 'persuasive']], ['Abel Frost', ['persuasive']], ['Dara Holt', ['serious', 'humorous', 'poetry']], ['Ezra Pike', ['humorous']], ['Wren Abbott', ['poetry', 'serious']]],
 };
 export const seedEntries: Entry[] = Object.entries(seedTeams).flatMap(([school, students]) => students.flatMap(([student, events]) => events.map(eventId => ({ student, school, eventId }))))
   .map((entry, index) => ({ id: `e${index + 1}`, ...entry }));

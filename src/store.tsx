@@ -13,24 +13,24 @@ import { ballotEvents } from './ballots';
 export type Presence = 'present' | 'absent';
 
 export const roundSpeakers = [
-  { code: 'C1', name: 'Nora Patel', school: 'Lincoln East', title: '“Small acts, lasting change”' },
-  { code: 'C2', name: 'Eli Thompson', school: 'Millard West', title: '“The attention economy”' },
-  { code: 'C3', name: 'Sam Wilson', school: 'Norfolk High', title: '“Beyond the final bell”' },
-  { code: 'C4', name: 'Maya Rodriguez', school: 'Lincoln High', title: '“When the well runs dry”' },
-  { code: 'C5', name: 'Iris Chen', school: 'Gothenburg High', title: '“Designed to disappear”' },
-  { code: 'C6', name: 'Leo Brooks', school: 'Creighton Prep', title: '“The quiet infrastructure”' },
+  { code: 'C1', name: 'Nora Patel', school: 'Ashgrove', title: '“Small acts, lasting change”' },
+  { code: 'C2', name: 'Eli Thompson', school: 'Halden West', title: '“The attention economy”' },
+  { code: 'C3', name: 'Sam Wilson', school: 'Brightwater High', title: '“Beyond the final bell”' },
+  { code: 'C4', name: 'Maya Rodriguez', school: 'Wrenfield High', title: '“When the well runs dry”' },
+  { code: 'C5', name: 'Iris Chen', school: 'Larkspur High', title: '“Designed to disappear”' },
+  { code: 'C6', name: 'Leo Brooks', school: 'Kestrel Prep', title: '“The quiet infrastructure”' },
 ];
 
 /** Judges with the room and event they have in Round 2, for the check-in board. */
 export const tournamentJudges = [
   { id: 'jl', name: 'Judge Leather', room: 'Room 214', event: 'Informative', school: 'Community judge' },
-  { id: 'mc', name: 'Maria Chen', room: 'Room 108', event: 'Extemp', school: 'Millard West' },
-  { id: 'dr', name: 'David Ross', room: 'Room 301', event: 'Poetry', school: 'Norfolk High' },
-  { id: 'af', name: 'Alyssa Ford', room: 'Room 122', event: 'Persuasive', school: 'Lincoln East' },
-  { id: 'ej', name: 'Erin Johnson', room: 'Room 207', event: 'Humorous', school: 'Lincoln High' },
+  { id: 'mc', name: 'Maria Chen', room: 'Room 108', event: 'Extemp', school: 'Halden West' },
+  { id: 'dr', name: 'David Ross', room: 'Room 301', event: 'Poetry', school: 'Brightwater High' },
+  { id: 'af', name: 'Alyssa Ford', room: 'Room 122', event: 'Persuasive', school: 'Ashgrove' },
+  { id: 'ej', name: 'Erin Johnson', room: 'Room 207', event: 'Humorous', school: 'Wrenfield High' },
   { id: 'tb', name: 'Tom Becker', room: 'Room 110', event: 'Serious', school: 'Community judge' },
-  { id: 'rn', name: 'Rosa Nuñez', room: 'Room 215', event: 'Entertainment', school: 'Creighton Prep' },
-  { id: 'kp', name: 'Kyle Pratt', room: 'Room 303', event: 'Informative', school: 'Gothenburg High' },
+  { id: 'rn', name: 'Rosa Nuñez', room: 'Room 215', event: 'Entertainment', school: 'Kestrel Prep' },
+  { id: 'kp', name: 'Kyle Pratt', room: 'Room 303', event: 'Informative', school: 'Larkspur High' },
 ];
 
 export type FocusNote = { id: number; text: string; urgent: boolean; sent: string; seen: boolean };
@@ -87,13 +87,13 @@ type Store = {
   reminders: { text: boolean; email: boolean }; setReminders: (r: { text: boolean; email: boolean }) => void;
 };
 
-const STORAGE_KEY = 'orator-demo-v5';
+const STORAGE_KEY = 'orator-demo-v6';
 const allEventIds = ballotEvents.map(event => event.id);
 /** Judge Leather starts out preferring public-address events and avoiding group interpretation. */
 const defaultLeatherPreferences: JudgePrefs = allEventIds.map(id => ({ id, level: ['info', 'persuasive', 'extemp'].includes(id) ? 'top' as const : ['oid', 'duet', 'duo'].includes(id) ? 'avoid' as const : 'willing' as const }))
   .sort((a, b) => ['top', 'willing', 'avoid'].indexOf(a.level) - ['top', 'willing', 'avoid'].indexOf(b.level));
 const samplePoolPreferences: Record<string, JudgePrefs> = Object.fromEntries(judgePool.map(judge => [judge.id, samplePreferences(judge.id, allEventIds)]));
-const seedSubmitted = ['Creighton Prep', 'Millard West', 'Norfolk High', 'Lincoln East', 'Gothenburg High', 'Aurora', 'Minden'];
+const seedSubmitted = ['Kestrel Prep', 'Halden West', 'Brightwater High', 'Ashgrove', 'Larkspur High', 'Thornbury', 'Fallow Creek'];
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
@@ -103,15 +103,23 @@ function loadSaved(): Saved | null {
 }
 
 /** Sample payment states so the director's list has a realistic mix on first open. */
-function seedPayments(): Record<string, Payment> {
-  const paid = (school: string, judgesBringing: number, method: 'card' | 'check', reference: string, paidAt: string): [string, Payment] => {
-    const base = { ...noPayment, judgesBringing };
-    return [school.toLowerCase(), { ...base, paid: invoiceFor(defaultTournament, seedEntries, school, base).total, method, reference, paidAt }];
+/** Before the tournament: only how many judges each school says it will bring. Nobody has paid. */
+function seedJudges(): Record<string, Payment> {
+  const bringing: [string, number][] = [['Kestrel Prep', 2], ['Halden West', 3], ['Brightwater High', 1], ['Larkspur High', 2], ['Ashgrove', 2], ['Fallow Creek', 1]];
+  return Object.fromEntries(bringing.map(([school, judgesBringing]) => [school.toLowerCase(), { ...noPayment, judgesBringing }]));
+}
+
+/** What other schools do once their invoice arrives, so the director's list shows a realistic mix in the demo. */
+function seedSettlements(current: Record<string, Payment>, tournament: Tournament, entries: Entry[]): Record<string, Payment> {
+  const next = { ...current };
+  const settle = (school: string, how: 'card' | 'check' | 'promised', reference: string) => {
+    const key = school.toLowerCase(); const payment = next[key] ?? noPayment;
+    if (payment.paid > 0 || payment.checkPending) return;
+    const total = invoiceFor(tournament, entries, school, payment).total;
+    next[key] = how === 'promised' ? { ...payment, method: 'check', checkPending: true } : { ...payment, paid: total, method: how, reference, paidAt: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }) };
   };
-  return Object.fromEntries([
-    paid('Creighton Prep', 2, 'card', 'ORA-7K2M4Q', 'Oct 9'), paid('Millard West', 3, 'card', 'ORA-9D1XTB', 'Oct 10'), paid('Norfolk High', 1, 'check', 'ORA-3HV8RC', 'Oct 12'), paid('Gothenburg High', 2, 'card', 'ORA-5W6NPA', 'Oct 8'),
-    ['lincoln east', { ...noPayment, judgesBringing: 2, method: 'check', checkPending: true }], ['minden', { ...noPayment, judgesBringing: 1 }],
-  ]);
+  settle('Kestrel Prep', 'card', 'ORA-7K2M4Q'); settle('Halden West', 'card', 'ORA-9D1XTB'); settle('Brightwater High', 'check', 'ORA-3HV8RC'); settle('Larkspur High', 'card', 'ORA-5W6NPA'); settle('Ashgrove', 'promised', '');
+  return next;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -131,7 +139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sections, setSections] = useState<Section[]>(saved?.sections ?? []);
   const [issues, setIssues] = useState<Issue[]>(saved?.issues ?? seedIssues);
   const [resultsReleased, setResultsReleased] = useState<boolean>(saved?.resultsReleased ?? false);
-  const [payments, setPayments] = useState<Record<string, Payment>>(() => saved?.payments ?? seedPayments());
+  const [payments, setPayments] = useState<Record<string, Payment>>(() => saved?.payments ?? seedJudges());
   const [roomResults, setRoomResults] = useState<RoomResult[]>(saved?.roomResults ?? []);
   const [myPreferences, setMyPreferences] = useState<JudgePrefs>(saved?.myPreferences ?? defaultLeatherPreferences);
   const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
@@ -247,6 +255,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     fillSamplePrelims: () => undefined, fillSampleFinals: () => undefined,
     tournament,
     updateTournament: patch => {
+      // Ending the tournament sends every school its invoice; in the demo, other schools then pay.
+      if (patch.status === 'finished') setPayments(all => seedSettlements(all, { ...tournament, ...patch }, entries));
       setTournament(current => ({ ...current, ...patch }));
       // Leaving "finished" withdraws the release: students must never see results mid-tournament.
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
@@ -262,7 +272,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedPayments()); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); },
     judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
     myPreferences, savePreferences: setMyPreferences,
     roomResults,

@@ -124,7 +124,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       <div className="run-steps">{([
         ['scheduled', 'Publish the schedule', 'Closes registration. Coaches, judges, and students see rooms and times.'],
         ['running', 'Start the tournament', 'Opens ballots for judges. Students see nothing about results.'],
-        ['finished', 'End the tournament', 'Locks every ballot. Coaches can then release results to their students.'],
+        ['finished', 'End the tournament', 'Locks every ballot and sends each school its invoice. Coaches can then release results to their students.'],
       ] as ['scheduled' | 'running' | 'finished', string, string][]).map(([target, title, detail], index) => {
         const order = ['registration', 'scheduled', 'running', 'finished']; const at = order.indexOf(tournament.status); const done = at >= index + 1; const next = at === index;
         return <div key={target} className={done ? 'done' : next ? 'next' : ''}><span>{done ? <Icon name="check" size={16}/> : index + 1}</span><div><strong>{title}</strong><small>{detail}</small></div>

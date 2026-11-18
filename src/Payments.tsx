@@ -69,26 +69,29 @@ export function TeamInvoice({ school }: { school: string }) {
   const fees = tournament.fees ?? defaultFees;
   const [paying, setPaying] = useState(false);
   if (invoice.entries === 0) return null;
-  const settled = invoice.balance <= 0;
+  // Schools are invoiced after the tournament, on their final entries and the judges they brought.
+  const due = tournament.status === 'finished';
+  const settled = due && invoice.balance <= 0;
   return <section className="panel team-invoice">
-    <div className="panel-head"><div><h2>Fees and payment</h2><p>{tournament.name} · updates as you change your entries</p></div>
-      <Badge tone={settled ? 'success' : payment.checkPending ? 'warning' : 'info'} icon={settled ? 'check' : 'clock'}>{settled ? (invoice.balance < 0 ? `Paid · ${money(-invoice.balance)} credit` : 'Paid in full') : payment.checkPending ? 'Check to be collected' : payment.paid > 0 ? `${money(invoice.balance)} still due` : 'Not paid yet'}</Badge></div>
+    <div className="panel-head"><div><h2>{due ? 'Invoice' : 'Estimated fees'}</h2><p>{tournament.name} · {due ? 'sent when the tournament ended' : 'invoiced after the tournament'}</p></div>
+      {!due ? <Badge tone="neutral" icon="clock">Nothing to pay yet</Badge> : <Badge tone={settled ? 'success' : payment.checkPending ? 'warning' : 'info'} icon={settled ? 'check' : 'clock'}>{settled ? (invoice.balance < 0 ? `Paid · ${money(-invoice.balance)} credit` : 'Paid in full') : payment.checkPending ? 'Check to be collected' : payment.paid > 0 ? `${money(invoice.balance)} still due` : 'Payment due'}</Badge>}</div>
     <div className="invoice-body">
       <dl className="invoice-lines">
         <div><dt>{invoice.entries} {invoice.entries === 1 ? 'entry' : 'entries'} <small>× {money(fees.entry)}</small></dt><dd>{money(invoice.entryTotal)}</dd></div>
         <div><dt>School fee</dt><dd>{money(invoice.schoolFee)}</dd></div>
         <div><dt>Judges <small>you owe {invoice.judgesOwed}, one per {fees.entriesPerJudge} entries</small>
-          <span className="judge-stepper"><button aria-label="Bring one fewer judge" disabled={payment.judgesBringing === 0} onClick={() => store.setJudgesBringing(school, payment.judgesBringing - 1)}>−</button><b>{payment.judgesBringing}</b><button aria-label="Bring one more judge" onClick={() => store.setJudgesBringing(school, payment.judgesBringing + 1)}>+</button><em>bringing</em></span>
+          <span className="judge-stepper"><button aria-label="Bring one fewer judge" disabled={due || payment.judgesBringing === 0} onClick={() => store.setJudgesBringing(school, payment.judgesBringing - 1)}>−</button><b>{payment.judgesBringing}</b><button aria-label="Bring one more judge" disabled={due} onClick={() => store.setJudgesBringing(school, payment.judgesBringing + 1)}>+</button><em>{due ? 'brought' : 'bringing'}</em></span>
         </dt><dd>{invoice.judgesShort ? money(invoice.judgeTotal) : 'Covered'}{invoice.judgesShort > 0 && <small>{invoice.judgesShort} hired × {money(fees.judge)}</small>}</dd></div>
-        <div className="total"><dt>Total</dt><dd>{money(invoice.total)}</dd></div>
+        <div className="total"><dt>{due ? 'Total' : 'Estimated total'}</dt><dd>{money(invoice.total)}</dd></div>
         {payment.paid > 0 && <div><dt>Paid {payment.method === 'check' ? 'by check' : 'by card'} <small>{payment.paidAt} · {payment.reference}</small></dt><dd>{money(-payment.paid)}</dd></div>}
         {payment.paid > 0 && <div className="total"><dt>{invoice.balance < 0 ? 'Credit' : 'Balance due'}</dt><dd>{money(Math.abs(invoice.balance))}</dd></div>}
       </dl>
       <div className="invoice-actions">
-        {settled ? <p><Icon name="check" size={16}/> {invoice.balance < 0 ? 'You’ve paid more than you now owe. The director will refund the difference.' : 'Nothing more to pay. If you add entries, the balance updates here.'}</p> : <>
+        {!due ? <p><Icon name="info" size={16}/> You’ll be invoiced after the tournament, based on your final entries and the judges you bring. There’s nothing to pay now.</p>
+        : settled ? <p><Icon name="check" size={16}/> {invoice.balance < 0 ? 'You’ve paid more than you owe. The host will refund the difference.' : 'Thank you. This tournament is paid in full.'}</p> : <>
           <Button icon="lock" onClick={() => setPaying(true)}>Pay {money(invoice.balance)} by card</Button>
-          <Button variant="secondary" icon="file" disabled={payment.checkPending} onClick={() => store.promiseCheck(school)}>{payment.checkPending ? 'Check noted' : 'Pay by check at the door'}</Button>
-          <p>{payment.checkPending ? 'The director knows to expect a check from you at registration.' : `Fees go to ${tournament.host || 'the host school'}. Card payments are simulated: no money moves.`}</p>
+          <Button variant="secondary" icon="file" disabled={payment.checkPending} onClick={() => store.promiseCheck(school)}>{payment.checkPending ? 'Check noted' : 'Pay by check'}</Button>
+          <p>{payment.checkPending ? 'The director knows to expect your check.' : `Fees go to ${tournament.host || 'the host school'}. Card payments are simulated: no money moves.`}</p>
         </>}
       </div>
     </div>
@@ -122,20 +125,21 @@ export function PaymentsPanel() {
   const billed = rows.reduce((sum, row) => sum + row.invoice.total, 0);
   const collected = rows.reduce((sum, row) => sum + Math.min(row.invoice.paid, row.invoice.total), 0);
   const unpaid = rows.filter(row => row.invoice.balance > 0);
+  const sent = tournament.status === 'finished';
   return <div className="payments-panel">
-    <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{money(collected)} of {money(billed)} collected</h3></div>
-      <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge></div>
-    <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>placeholder amount</small></dt><dd>{money(-ORATOR_TOURNAMENT_FEE)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - ORATOR_TOURNAMENT_FEE))}</dd></div></dl>
+    <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{sent ? `${money(collected)} of ${money(billed)} collected` : `${money(billed)} estimated across ${rows.length} schools`}</h3></div>
+      {sent ? <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge> : <Badge tone="neutral" icon="clock">Invoices go out when you end the tournament</Badge>}</div>
+    {sent && <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>placeholder amount</small></dt><dd>{money(-ORATOR_TOURNAMENT_FEE)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - ORATOR_TOURNAMENT_FEE))}</dd></div></dl>}
     <div className="payments-table" tabIndex={0} aria-label="Payments by school" role="region">
-      <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>Total</span><span>Status</span><span/></div>
+      <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>{sent ? 'Total' : 'Estimate'}</span><span>Status</span><span/></div>
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>
         <strong>{school}</strong><span>{invoice.entries}</span>
         <span>{invoice.judgesBringing} of {invoice.judgesOwed}{invoice.judgesShort > 0 && <small> · {invoice.judgesShort} to hire</small>}</span>
         <span>{money(invoice.total)}</span>
-        <span>{invoice.balance <= 0 ? <Badge tone="success" icon="check">{invoice.balance < 0 ? `Paid · refund ${money(-invoice.balance)}` : `Paid by ${payment.method === 'check' ? 'check' : 'card'}`}</Badge> : payment.checkPending ? <Badge tone="warning" icon="file">Check expected</Badge> : payment.paid > 0 ? <Badge tone="warning" icon="clock">{money(invoice.balance)} still due</Badge> : <Badge tone="danger" icon="warning">Not paid</Badge>}</span>
-        <span className="payments-action">{invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Marked as reminded</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
+        <span>{!sent ? <Badge tone="neutral">Not invoiced yet</Badge> : invoice.balance <= 0 ? <Badge tone="success" icon="check">{invoice.balance < 0 ? `Paid · refund ${money(-invoice.balance)}` : `Paid by ${payment.method === 'check' ? 'check' : 'card'}`}</Badge> : payment.checkPending ? <Badge tone="warning" icon="file">Check expected</Badge> : payment.paid > 0 ? <Badge tone="warning" icon="clock">{money(invoice.balance)} still due</Badge> : <Badge tone="danger" icon="warning">Not paid</Badge>}</span>
+        <span className="payments-action">{sent && invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Marked as reminded</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{sent && invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
       </div>)}
     </div>
-    <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. In the real product, schools pay digitally, Orator keeps its per-tournament fee, and the rest is transferred to the host school through a payment provider.</p>
+    <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. Schools are invoiced when the tournament ends. In the real product they pay digitally, Orator keeps its per-tournament fee, and the rest is transferred to the host school through a payment provider.</p>
   </div>;
 }

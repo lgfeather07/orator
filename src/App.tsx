@@ -122,7 +122,7 @@ function BallotPage({ room }: { room?: BallotRoom }) {
   const { recordRoomResults } = useStore();
   const [format, setFormat] = useState<'e' | 'paper'>('e');
   return <MobileFrame>
-    <MobileHeader title="Judge Leather" subtitle={room?.key.tournament ?? 'Gothenburg Invitational'}/>
+    <MobileHeader title="Judge Leather" subtitle={room?.key.tournament ?? 'Larkspur Invitational'}/>
     <div className="segmented ballot-toggle"><button className={format === 'e' ? 'active' : ''} onClick={() => setFormat('e')}>E-ballot</button><button className={format === 'paper' ? 'active' : ''} onClick={() => setFormat('paper')}>Paper</button></div>
     {format === 'e' ? <JudgeBallot key={room?.sectionId ?? 'sample'} room={room} onSubmitted={room ? rows => recordRoomResults(room.sectionId, rows) : undefined}/> : <PaperBallot/>}
   </MobileFrame>;
@@ -142,7 +142,7 @@ const rounds = [
 function RoundsPage({ director = false }: { director?: boolean }) {
   const [expanded, setExpanded] = useState(1);
   const navigate = useContext(NavigationContext);
-  return <MobileFrame><MobileHeader title={director ? 'Round control' : 'My ballots'} subtitle={director ? 'Gothenburg Invitational' : 'Saturday, Oct 19'} initials={director ? 'DD' : 'JL'}/>
+  return <MobileFrame><MobileHeader title={director ? 'Round control' : 'My ballots'} subtitle={director ? 'Larkspur Invitational' : 'Saturday, Oct 19'} initials={director ? 'DD' : 'JL'}/>
     <div className="mobile-page">
       <div className="page-lead"><div><span className="eyebrow">VARSITY INFORMATIVE</span><h1>Four prelim rounds</h1></div><Badge tone="success" icon="check">On track</Badge></div>
       <div className="completion-card"><div className="ring">8<span>/24</span></div><div><strong>Ballots complete</strong><p>2 drafts need your attention</p></div></div>
@@ -178,9 +178,9 @@ function useGreeting(sampleName: string) {
 }
 
 const personaDetails: Record<Persona, { name: string; detail: string; initials: string }> = {
-  student: { name: 'Maya Rodriguez', detail: 'Student · Lincoln HS', initials: 'MR' },
+  student: { name: 'Maya Rodriguez', detail: 'Student · Wrenfield HS', initials: 'MR' },
   judge: { name: 'Judge Leather', detail: 'Community judge', initials: 'JL' },
-  coach: { name: 'Erin Johnson', detail: 'Head coach · Lincoln HS', initials: 'EJ' },
+  coach: { name: 'Erin Johnson', detail: 'Head coach · Wrenfield HS', initials: 'EJ' },
   director: { name: 'Dan Miller', detail: 'Tournament director', initials: 'DD' },
 };
 
@@ -194,7 +194,7 @@ const sidebarItems: Record<Persona, [IconName, string][]> = {
 /** The coach's entries: the demo team, or the school the director approved them for. */
 function CoachEntries({ onBack, importing = false }: { onBack?: () => void; importing?: boolean }) {
   const { state, membership } = useAccess('coach');
-  const school = state === 'demo' ? 'Lincoln High' : state === 'approved' && membership ? membership.school : null;
+  const school = state === 'demo' ? 'Wrenfield High' : state === 'approved' && membership ? membership.school : null;
   if (school && importing) return <EntryImport school={school} onDone={onBack ?? (() => undefined)}/>;
   if (school) return <><TeamEntries school={school} onBack={onBack}/><TeamInvoice school={school}/></>;
   return <section className="panel access-wait"><Icon name="lock"/><div><strong>Entries open once the director approves you</strong><small>{state === 'none' ? 'Ask to join a tournament using the form at the top of this page.' : state === 'pending' ? 'Your request is with the director.' : state === 'declined' ? 'Your request was declined.' : 'Checking your access…'}</small></div>{onBack && <Button variant="secondary" icon="arrow" onClick={onBack}>Back to overview</Button>}</section>;
@@ -242,17 +242,17 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
 
 const topicContent: Record<string, { eyebrow: string; title: string; description: string; metrics: [string,string,string,IconName][]; rows: [string,string,string][] }> = {
   Overview: { eyebrow: 'LIVE TOURNAMENT', title: 'Everything is on track', description: 'Monitor rounds, rooms, entries, and ballots from one place.', metrics: [['Round','2 of 4','In progress','clock'],['Entries','184','6 events','users'],['Ballots','68%','Submitted','ballot'],['Conflicts','2','Need review','warning']], rows: [['Varsity Informative','Round 2 · 12 ballots','On time'],['Original Oratory','Round 2 · 10 ballots','On time'],['Poetry Interpretation','Round 1 · 2 missing','Review']] },
-  Entries: { eyebrow: 'REGISTRATION', title: 'Entries and participants', description: 'Search and manage every student, judge, and event registration.', metrics: [['Students','126','4 waitlisted','users'],['Judges','42','39 confirmed','users'],['Schools','18','All checked in','home'],['Imports','12','Ready to review','upload']], rows: [['Maya Rodriguez','Lincoln HS · Informative','Confirmed'],['Eli Thompson','Lincoln HS · Extemp','Confirmed'],['Nora Patel','Lincoln HS · Oratory','Needs form']] },
+  Entries: { eyebrow: 'REGISTRATION', title: 'Entries and participants', description: 'Search and manage every student, judge, and event registration.', metrics: [['Students','126','4 waitlisted','users'],['Judges','42','39 confirmed','users'],['Schools','18','All checked in','home'],['Imports','12','Ready to review','upload']], rows: [['Maya Rodriguez','Wrenfield HS · Informative','Confirmed'],['Eli Thompson','Wrenfield HS · Extemp','Confirmed'],['Nora Patel','Wrenfield HS · Oratory','Needs form']] },
   Ballots: { eyebrow: 'BALLOT CONTROL', title: 'Ballots without the paper chase', description: 'Open, review, edit, and follow up on every tournament ballot.', metrics: [['Submitted','82','68% complete','check'],['Drafts','11','Autosaved','edit'],['Missing','4','Need attention','warning'],['Speakers','24','Scored today','users']], rows: [['Round 2 · Informative','Judge Leather · 6 competitors','Open ballot'],['Round 2 · Extemp','Maria Chen · Draft saved','Continue'],['Round 1 · Poetry','David Ross · Submitted','View feedback']] },
   Analytics: { eyebrow: 'PERFORMANCE', title: 'Trends that lead to better coaching', description: 'Compare event performance across tournaments.', metrics: [['Finals breaks','14','This season','sparkle'],['Avg. rating','43.0','Out of 50','growth'],['Avg. rank','2.6','Last tournament','growth'],['Top event','Informative','4 finals breaks','ballot']], rows: [['Delivery','Average 9.0 of 10','Strongest'],['Organization','Average 8.2 of 10','Improving'],['Thesis','Average 7.4 of 10','Coach next']] },
-  Archive: { eyebrow: 'RECORDS', title: 'Every result, ready when you need it', description: 'Search completed tournaments, ballots, and exported records.', metrics: [['Ballots','1,248','Since 2023','archive'],['Tournaments','26','12 wins','ballot'],['Students','84','Historical','users'],['Exports','18','PDF & CSV','download']], rows: [['Millard West Classic','Oct 12 · 48 ballots','Download'],['Norfolk Invitational','Oct 5 · 52 ballots','Open'],['Lincoln East Open','Sep 28 · 44 ballots','Open']] },
+  Archive: { eyebrow: 'RECORDS', title: 'Every result, ready when you need it', description: 'Search completed tournaments, ballots, and exported records.', metrics: [['Ballots','1,248','Since 2023','archive'],['Tournaments','26','12 wins','ballot'],['Students','84','Historical','users'],['Exports','18','PDF & CSV','download']], rows: [['Halden West Classic','Oct 12 · 48 ballots','Download'],['Brightwater Invitational','Oct 5 · 52 ballots','Open'],['Ashgrove Open','Sep 28 · 44 ballots','Open']] },
   'Tournament setup': { eyebrow: 'CONFIGURATION', title: 'Tournament setup', description: 'Keep events, rooms, rounds, and permissions ready for competition.', metrics: [['Events','10','8 complete','ballot'],['Rooms','24','All assigned','home'],['Rounds','4','Published','clock'],['Criteria','4/10','Needs work','settings']], rows: [['Tournament details','Dates, location, contact','Complete'],['Ballot criteria','4 of 10 events configured','Continue setup'],['Judge permissions','42 judges invited','Complete']] },
 };
 
 const personaArchives: Partial<Record<Persona, typeof topicContent.Archive>> = {
-  student: { eyebrow: 'MY HISTORY', title: 'Your previous tournaments', description: 'Revisit your ballots, rankings, and feedback from every competition.', metrics: [['Tournaments','8','This season','archive'],['Ballots','32','All available','ballot'],['Finals','6','Personal best','sparkle'],['Feedback','94','Judge comments','comment']], rows: [['Millard West Classic','Informative · 3rd place · Oct 12','View ballots'],['Norfolk Invitational','Informative · 2nd place · Oct 5','View feedback'],['Lincoln East Open','Informative · 1st place · Sep 28','View results']] },
-  judge: { eyebrow: 'JUDGING HISTORY', title: 'Tournaments you judged', description: 'Review your submitted ballots and assignments from previous tournaments.', metrics: [['Tournaments','12','This season','archive'],['Ballots','86','Submitted','ballot'],['Events','7','Judged','sparkle'],['On time','98%','Submission rate','check']], rows: [['Millard West Classic','18 ballots · Informative & Extemp','View ballots'],['Norfolk Invitational','16 ballots · Oratory & Poetry','View ballots'],['Lincoln East Open','20 ballots · Informative','View summary']] },
-  coach: { eyebrow: 'TEAM HISTORY', title: 'Lincoln Speech tournament archive', description: 'Find team ballots, results, and exports from every previous tournament.', metrics: [['Tournaments','26','Since 2023','archive'],['Team ballots','1,248','Searchable','ballot'],['Students','84','Historical records','users'],['Team wins','12','Across all events','sparkle']], rows: [['Millard West Classic','18 students · 48 ballots · Oct 12','Download team file'],['Norfolk Invitational','16 students · 52 ballots · Oct 5','Open results'],['Lincoln East Open','14 students · 44 ballots · Sep 28','Open results']] },
+  student: { eyebrow: 'MY HISTORY', title: 'Your previous tournaments', description: 'Revisit your ballots, rankings, and feedback from every competition.', metrics: [['Tournaments','8','This season','archive'],['Ballots','32','All available','ballot'],['Finals','6','Personal best','sparkle'],['Feedback','94','Judge comments','comment']], rows: [['Halden West Classic','Informative · 3rd place · Oct 12','View ballots'],['Brightwater Invitational','Informative · 2nd place · Oct 5','View feedback'],['Ashgrove Open','Informative · 1st place · Sep 28','View results']] },
+  judge: { eyebrow: 'JUDGING HISTORY', title: 'Tournaments you judged', description: 'Review your submitted ballots and assignments from previous tournaments.', metrics: [['Tournaments','12','This season','archive'],['Ballots','86','Submitted','ballot'],['Events','7','Judged','sparkle'],['On time','98%','Submission rate','check']], rows: [['Halden West Classic','18 ballots · Informative & Extemp','View ballots'],['Brightwater Invitational','16 ballots · Oratory & Poetry','View ballots'],['Ashgrove Open','20 ballots · Informative','View summary']] },
+  coach: { eyebrow: 'TEAM HISTORY', title: 'Wrenfield Speech tournament archive', description: 'Find team ballots, results, and exports from every previous tournament.', metrics: [['Tournaments','26','Since 2023','archive'],['Team ballots','1,248','Searchable','ballot'],['Students','84','Historical records','users'],['Team wins','12','Across all events','sparkle']], rows: [['Halden West Classic','18 students · 48 ballots · Oct 12','Download team file'],['Brightwater Invitational','16 students · 52 ballots · Oct 5','Open results'],['Ashgrove Open','14 students · 44 ballots · Sep 28','Open results']] },
 };
 
 function SidebarTopicView({ topic, persona }: { topic: string; persona: Persona }) {
@@ -263,7 +263,7 @@ function SidebarTopicView({ topic, persona }: { topic: string; persona: Persona 
   return <div className="topic-page">
     <section className="topic-hero"><div><span className="eyebrow">{data.eyebrow}</span><h2>{data.title}</h2><p>{data.description}</p></div><Button icon={topic === 'Entries' ? 'plus' : topic === 'Archive' ? 'download' : 'arrow'} onClick={() => setSelectedRecord(data.rows[0])}>{topic === 'Entries' ? 'Add entry' : topic === 'Archive' ? 'Export records' : 'Open workspace'}</Button></section>
     <div className="metric-grid">{data.metrics.map(([label,value,note,icon]) => <Metric key={label} label={label} value={value} note={note} icon={icon}/>)}</div>
-    <section className="panel topic-panel"><div className="panel-head"><div><h2>{topic === 'Overview' ? 'Live event status' : topic}</h2><p>Gothenburg Invitational · Updated just now</p></div><label className="search-box"><Icon name="search"/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${topic.toLowerCase()}`}/></label></div>
+    <section className="panel topic-panel"><div className="panel-head"><div><h2>{topic === 'Overview' ? 'Live event status' : topic}</h2><p>Larkspur Invitational · Updated just now</p></div><label className="search-box"><Icon name="search"/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${topic.toLowerCase()}`}/></label></div>
       <div className="topic-list">{rows.map(([name,detail,status]) => <button className="topic-row" key={name} onClick={() => setSelectedRecord([name,detail,status])}><span className="topic-row-icon"><Icon name={topic === 'Entries' ? 'users' : topic === 'Ballots' ? 'ballot' : topic === 'Analytics' ? 'growth' : topic === 'Archive' ? 'archive' : 'settings'}/></span><span><strong>{name}</strong><small>{detail}</small></span><Badge tone={status.includes('missing') || status.includes('Needs') ? 'warning' : 'success'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
       {selectedRecord && <div className="topic-record"><span className="topic-row-icon"><Icon name={topic === 'Archive' ? 'archive' : topic === 'Ballots' ? 'ballot' : 'info'}/></span><div><span className="eyebrow">SELECTED RECORD</span><strong>{selectedRecord[0]}</strong><p>{selectedRecord[1]}</p></div><Badge tone="success">{selectedRecord[2]}</Badge><Button variant="secondary" icon={topic === 'Archive' ? 'download' : 'edit'} onClick={() => setSelectedRecord(null)}>{topic === 'Archive' ? 'Download record' : 'Done'}</Button></div>}
     </section>
@@ -277,10 +277,10 @@ function SignInPage() {
   const [selected, setSelected] = useState<Persona>(profile ? profile.roles[0] : 'coach');
   const destination: Record<Persona, Page> = { student: 'student', judge: 'judge', coach: 'coach', director: 'director' };
   const roles: { id: Persona; icon: IconName; title: string; description: string; name: string; detail: string }[] = [
-    { id: 'student', icon: 'growth', title: 'Student', description: 'Rounds, results, feedback, and growth.', name: 'Maya Rodriguez', detail: 'Lincoln High School' },
+    { id: 'student', icon: 'growth', title: 'Student', description: 'Rounds, results, feedback, and growth.', name: 'Maya Rodriguez', detail: 'Wrenfield High School' },
     { id: 'judge', icon: 'ballot', title: 'Judge', description: 'Assignments, ballots, and preferences.', name: 'Judge Leather', detail: 'Community judge' },
-    { id: 'coach', icon: 'users', title: 'Coach', description: 'Entries, analytics, and team records.', name: 'Erin Johnson', detail: 'Lincoln High School' },
-    { id: 'director', icon: 'settings', title: 'Director', description: 'Tournament setup and operations.', name: 'Dan Miller', detail: 'Gothenburg Invitational' },
+    { id: 'coach', icon: 'users', title: 'Coach', description: 'Entries, analytics, and team records.', name: 'Erin Johnson', detail: 'Wrenfield High School' },
+    { id: 'director', icon: 'settings', title: 'Director', description: 'Tournament setup and operations.', name: 'Dan Miller', detail: 'Larkspur Invitational' },
   ].filter(role => !profile || profile.roles.includes(role.id as Role)).map(role => profile ? { ...role, name: profile.name, detail: profile.school || profile.email } : role) as { id: Persona; icon: IconName; title: string; description: string; name: string; detail: string }[];
   const selectedRole = roles.find(role => role.id === selected)!;
   return <div className="signin-page">
@@ -335,11 +335,11 @@ function JudgeAssignments() {
 function CoachPage() {
   const greeting = useGreeting('Erin');
   const { profile: account } = useAuth();
-  const teamName = account ? (account.school || 'Your team') : 'Lincoln Speech';
+  const teamName = account ? (account.school || 'Your team') : 'Wrenfield Speech';
   // Numbers a coach can act on, worked out from the team's entries and ballots rather than typed in.
   const coachStore = useStore();
   const coachAccess = useAccess('coach');
-  const teamSchool = coachAccess.state === 'demo' ? 'Lincoln High' : coachAccess.membership?.school ?? '';
+  const teamSchool = coachAccess.state === 'demo' ? 'Wrenfield High' : coachAccess.membership?.school ?? '';
   const teamEntries = coachStore.entries.filter(entry => sameSchool(entry.school, teamSchool));
   const teamStudents = [...new Set(teamEntries.map(entry => entry.student))];
   const multiEntered = teamStudents.filter(name => teamEntries.filter(entry => entry.student === name).length > 1).length;
@@ -351,10 +351,10 @@ function CoachPage() {
   const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student'>('team');
   const [selectedStudent, setSelectedStudent] = useState('Maya Rodriguez');
   const ballots = [
-    ['Maya Rodriguez','Judge Leather','Informative','Gothenburg Invitational','1st','Oct 19'],
-    ['Eli Thompson','Maria Chen','Extemp','Millard West Classic','3rd','Oct 12'],
-    ['Maya Rodriguez','David Ross','Informative','Norfolk Invitational','2nd','Oct 05'],
-    ['Nora Patel','Alyssa Ford','Original Oratory','Lincoln East Open','1st','Sep 28'],
+    ['Maya Rodriguez','Judge Leather','Informative','Larkspur Invitational','1st','Oct 19'],
+    ['Eli Thompson','Maria Chen','Extemp','Halden West Classic','3rd','Oct 12'],
+    ['Maya Rodriguez','David Ross','Informative','Brightwater Invitational','2nd','Oct 05'],
+    ['Nora Patel','Alyssa Ford','Original Oratory','Ashgrove Open','1st','Sep 28'],
   ].filter(row => row.join(' ').toLowerCase().includes(query.toLowerCase()));
   return <DesktopShell active="Overview" title={greeting} subtitle="Your team, ballots, and coaching priorities are ready." persona="coach">
     <div className="role-dashboard">
@@ -362,7 +362,7 @@ function CoachPage() {
       <div className="metric-grid"><Metric label="Students entered" value={String(teamStudents.length)} note={`${teamEntries.length} entries · ${multiEntered} in more than one event`} icon="users"/><Metric label="Average rank" value={lastMeetRank} note={`Last tournament · ${lastMeet.length} ballots`} icon="growth"/><Metric label="Ballots to review" value={String(pastBallots.length)} note="This season, under Past ballots" icon="ballot"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
       <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
       {view === 'team' ? <div className="role-grid">
-        <section className="panel coach-team-panel"><div className="panel-head"><div><h2>Team at Gothenburg</h2><p>Live status across all six events</p></div><Badge tone="success" icon="check">18 checked in</Badge></div>
+        <section className="panel coach-team-panel"><div className="panel-head"><div><h2>Team at Larkspur</h2><p>Live status across all six events</p></div><Badge tone="success" icon="check">18 checked in</Badge></div>
           <div className="coach-student-list">{[
             ['MR','Maya Rodriguez','Informative · Round 2','Competing','success'],
             ['ET','Eli Thompson','Extemp · Prep room','Preparing','info'],
@@ -375,7 +375,7 @@ function CoachPage() {
           ['comment','Low-comment ballot','Sam · Poetry'],
           ['plus','Add students','By hand or from a file'],
         ].map(([icon,title,note],i) => <button key={title} onClick={() => i < 2 ? setView('ballots') : setView('import')}><span><Icon name={icon as IconName}/></span><span><strong>{title}</strong><small>{note}</small></span><Icon name="arrow"/></button>)}</aside>
-      </div> : view === 'entries' ? <CoachEntries onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Lincoln High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>43.0</strong><small>Season average / 50</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <CoachEntries importing onBack={() => setView('entries')}/>
+      </div> : view === 'entries' ? <CoachEntries onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Wrenfield High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>43.0</strong><small>Season average / 50</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <CoachEntries importing onBack={() => setView('entries')}/>
        : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
        : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
         <div className="archive-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search student, judge, event, or tournament"/></label><select aria-label="Filter by event" onChange={event => setQuery(event.target.value)}><option value="">All events</option>{ballotEvents.slice(0,6).map(event => <option value={event.short} key={event.id}>{event.short}</option>)}</select><select aria-label="Filter by season"><option>This season</option><option>Last season</option><option>All time</option></select></div>
@@ -390,7 +390,7 @@ function MyEntries() {
   const { entries, sections, tournament } = useStore();
   const access = useAccess('student');
   // The demo follows Maya; a signed-in student is matched to entries under the name and school they joined with.
-  const who = access.state === 'demo' ? { name: 'Maya Rodriguez', school: 'Lincoln High' } : access.state === 'approved' && access.membership ? { name: access.membership.name, school: access.membership.school } : null;
+  const who = access.state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : access.state === 'approved' && access.membership ? { name: access.membership.name, school: access.membership.school } : null;
   if (!who) return null;
   const mine = entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school));
   const published = tournament.status !== 'registration' && sections.length > 0;
@@ -427,13 +427,13 @@ function StudentPage() {
   };
   return <DesktopShell active="Overview" title={greeting} subtitle="Your rounds, feedback, and progress are ready in one place." persona="student">
     <div className="role-dashboard">
-      <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Gothenburg Invitational</h2><p>Lincoln High · Code V42 · {store.entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Lincoln High').map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') || 'No events entered'} today</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>43.0</strong><small>out of 50 · up 6.0</small></div></section>
+      <section className="role-hero student-hero"><div><Badge tone="info">Round 2 starts in 24 minutes</Badge><h2>Larkspur Invitational</h2><p>Wrenfield High · Code V42 · {store.entries.filter(entry => entry.student === 'Maya Rodriguez' && entry.school === 'Wrenfield High').map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') || 'No events entered'} today</p><div className="hero-actions"><Button icon="clock" onClick={() => setView('round')}>View round details</Button><Button variant="secondary" icon="file" onClick={() => setView('prep')}>Open prep notes</Button></div></div><div className="hero-stat"><span>Season average</span><strong>43.0</strong><small>out of 50 · up 6.0</small></div></section>
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'Released by your coach' : 'Until your coach releases it'} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments released' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
       <MyEntries/>
       {store.live && <StudentBallots/>}
       <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
       {view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'today' ? <div className="role-grid">
-        <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Gothenburg Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>
+        <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Larkspur Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>
           <div className="timeline-list">{[['8:00 AM','Round 1','Room 108','Completed'],['9:30 AM','Round 2','Room 214','Up next'],['11:00 AM','Round 3','Room 301','Scheduled'],['1:30 PM','Round 4','Room 122','Scheduled']].map(([time,round,room,status],i)=><div className={`timeline-row ${i===1?'current':''}`} key={round}><span className="timeline-dot">{i<1?<Icon name="check" size={14}/>:i+1}</span><span><small>{time}</small><strong>{round}</strong></span><span>{room}</span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge></div>)}</div>
         </section>
         <aside className="panel focus-panel"><div className="panel-head"><div><h2>Coach focus</h2><p>From Erin · {coachNote.sent}</p></div><Avatar initials="EJ" size="sm"/></div><div className="focus-content">{coachNote.urgent ? <Badge tone="danger" icon="bell">Urgent from your coach</Badge> : <span className="state-icon"><Icon name="sparkle"/></span>}<blockquote>“{coachNote.text}”</blockquote><Button variant="secondary" icon="check" disabled={coachNote.seen} onClick={() => store.markNoteSeen(coachNote.id)}>{coachNote.seen ? 'Reviewed · Erin can see this' : 'Mark as reviewed'}</Button></div><div className="focus-checklist"><PracticeChecklist/></div></aside>
@@ -441,7 +441,7 @@ function StudentPage() {
       </section> : view === 'prep' ? <section className="panel action-workspace prep-notes"><div className="panel-head"><div><h2>Prep notes</h2><p>Private notes for “When the well runs dry”</p></div><Button variant="secondary" icon="close" onClick={() => setView('today')}>Close notes</Button></div><div className="prep-layout"><aside><Badge tone="success" icon="check">Saved</Badge><h3>Round 2 focus</h3><p>Use these reminders during your final preparation.</p>{['Opening','Transitions','Evidence','Closing'].map((item,index) => <button className={prepSection===item?'active':''} key={item} onClick={() => setPrepSection(item)}><span>{index+1}</span>{item}</button>)}</aside><div><label className="field-label"><span>{prepSection} reminders</span><small>Autosaved just now</small></label><textarea key={prepSection} defaultValue={prepNotes[prepSection]}/><div className="prep-footer"><Badge tone="info" icon="lock">Only you and Coach Erin can see this</Badge><Button icon="check" onClick={() => setView('today')}>Done</Button></div></div></div>
       </section> : <section className="panel feedback-desktop"><div className="panel-head"><div><h2>Feedback library</h2><p>Actionable notes from your latest ballots</p></div><Button variant="secondary" icon="download" onClick={() => downloadText('maya-feedback.txt','Orator feedback for Maya Rodriguez\nDelivery: Strong pacing and confidence.\nOrganization: Clarify the transition into point two.')}>Download all</Button></div>
         {!commentsVisible && <div className="held-banner"><Icon name="lock"/><span><strong>Today’s rankings and comments are with your coach</strong><small>You’ll see them when your coach releases them after the tournament, never during it. Your coach can still send you focus notes. Feedback below is from earlier tournaments.</small></span></div>}
-        <div className="feedback-columns">{[['Delivery','Your pacing felt confident and natural through the evidence section.','Judge Leather','success'],['Organization','Make the transition into point two more explicit for the audience.','Maria Chen','pink'],['Content','Excellent specificity in the water policy examples.','David Ross','success']].map(([title,text,judge,tone])=><article key={title}><Badge tone={tone as 'success'|'pink'} icon={tone==='success'?'check':'growth'}>{tone==='success'?'Strength':'Coaching note'}</Badge><h3>{title}</h3><p>{text}</p><small>{judge} · {commentsVisible ? 'Gothenburg Invitational · today' : 'Norfolk Invitational · Oct 5'}</small></article>)}</div>
+        <div className="feedback-columns">{[['Delivery','Your pacing felt confident and natural through the evidence section.','Judge Leather','success'],['Organization','Make the transition into point two more explicit for the audience.','Maria Chen','pink'],['Content','Excellent specificity in the water policy examples.','David Ross','success']].map(([title,text,judge,tone])=><article key={title}><Badge tone={tone as 'success'|'pink'} icon={tone==='success'?'check':'growth'}>{tone==='success'?'Strength':'Coaching note'}</Badge><h3>{title}</h3><p>{text}</p><small>{judge} · {commentsVisible ? 'Larkspur Invitational · today' : 'Brightwater Invitational · Oct 5'}</small></article>)}</div>
       </section>}
     </div>
   </DesktopShell>;
@@ -468,12 +468,12 @@ function JudgePage() {
         <aside className="panel judge-note"><div className="panel-head"><div><h2>Before you judge</h2><p>A quick Round 2 checklist</p></div></div>{[['check','Ballot autosaves as you go'],['users','No school conflicts found'],['ballot','Criteria updated for INFO'],['check','Judge philosophy shared']].map(([icon,text])=><div key={text}><span><Icon name={icon as IconName}/></span><strong>{text}</strong><Icon name="check" size={16}/></div>)}</aside>
       </div> : action === 'competitors' ? <section className="panel competitor-panel"><div className="panel-head"><div><h2>Round 2 competitors</h2><p>Varsity Informative · Speaking order · Room 214 · Check speakers in as they arrive</p></div><Button variant="secondary" icon="arrow" onClick={() => setAction('assignments')}>Back to assignments</Button></div>
         <div className="competitor-roster">{[
-          ['C1','Nora Patel','Lincoln East','“Small acts, lasting change”'],
-          ['C2','Eli Thompson','Millard West','“The attention economy”'],
-          ['C3','Sam Wilson','Norfolk High','“Beyond the final bell”'],
-          ['C4','Maya Rodriguez','Lincoln High','“When the well runs dry”'],
-          ['C5','Iris Chen','Gothenburg High','“Designed to disappear”'],
-          ['C6','Leo Brooks','Creighton Prep','“The quiet infrastructure”'],
+          ['C1','Nora Patel','Ashgrove','“Small acts, lasting change”'],
+          ['C2','Eli Thompson','Halden West','“The attention economy”'],
+          ['C3','Sam Wilson','Brightwater High','“Beyond the final bell”'],
+          ['C4','Maya Rodriguez','Wrenfield High','“When the well runs dry”'],
+          ['C5','Iris Chen','Larkspur High','“Designed to disappear”'],
+          ['C6','Leo Brooks','Kestrel Prep','“The quiet infrastructure”'],
         ].map(([code,name,school,title],index) => <article key={code}><span className="speaker-order">{index + 1}</span><Avatar initials={name.split(' ').map(part => part[0]).join('')} size="sm"/><span><strong>{name}{loadLabel(entryLoadByName(store.entries, name)) && <Badge tone="info">{loadLabel(entryLoadByName(store.entries, name))}</Badge>}</strong><small>{code} · {school}</small></span><span className="speech-title">{title}</span><SpeakerCheckIn code={code} compact/></article>)}</div>
       </section> : action === 'ballots' ? <section className="panel ballot-desk"><div className="panel-head"><div><h2>Round 2 ballot desk</h2><p>Varsity Informative · 6 competitors · Room 214</p></div><Badge tone="warning" icon="edit">2 drafts</Badge></div>
         <div className="ballot-desk-grid">{['C1','C2','C3','C4','C5','C6'].map((code,i)=><article key={code}><div><span className={`status-dot ${i<3?'complete':''}`}/><Badge tone={i<3?'success':i<5?'warning':'danger'}>{i<3?'Submitted':i<5?'Draft':'Missing'}</Badge></div><strong>{code}</strong><p>{['Nora Patel','Eli Thompson','Sam Wilson','Maya Rodriguez','Iris Chen','Leo Brooks'][i]}</p><Button variant={i<3?'secondary':'primary'} icon={i<3?'archive':'edit'} onClick={() => setAction('mobileBallot')}>{i<3?'View ballot':'Continue ballot'}</Button></article>)}</div>

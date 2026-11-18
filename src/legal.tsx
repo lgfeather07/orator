@@ -8,9 +8,9 @@ import { Icon } from './ui';
 export const BUSINESS = {
   name: 'Orator',
   /** Legal name of whoever runs Orator, e.g. "Orator LLC" or the student team's names. */
-  operator: '',
-  contactEmail: '',
-  mailingAddress: '',
+  operator: 'Logan Feather',
+  contactEmail: 'lgfeather07@gmail.com',
+  mailingAddress: 'Lincoln, NE',
   state: 'Nebraska',
   effective: 'November 18, 2026',
 };
@@ -127,7 +127,7 @@ const pages: Record<LegalPage, { title: string; intro: string; body: ReactNode }
         <p>You keep ownership of what you enter. You allow us to store it and show it to the people the tournament’s access rules permit, only to run the service.</p>
       </Section>
       <Section title="Fees">
-        <p>Tournament hosts set entry fees. Orator charges the host a fee per tournament. See the <a href="#/refunds">refund policy</a>. Payments are currently simulated and no money is taken.</p>
+        <p>Tournament hosts set entry fees. Schools are invoiced after the tournament, based on their final entries and the judges they brought, and pay digitally. Orator keeps a fee per tournament from what is collected, and the rest goes to the host school. See the <a href="#/refunds">refund policy</a>. Payments are currently simulated and no money is taken.</p>
       </Section>
       <Section title="The service">
         <p>Orator is provided as is, while it is being developed. The demo uses fictional people, results and payments. To the extent the law allows, we are not liable for indirect losses, or for tournament decisions made using Orator.</p>
@@ -166,13 +166,13 @@ const pages: Record<LegalPage, { title: string; intro: string; body: ReactNode }
   },
   refunds: {
     title: 'Refund policy',
-    intro: 'Payments in Orator are currently simulated, and no money is taken. This policy applies once real payments start.',
+    intro: 'Schools pay after the tournament, not before. Payments in Orator are currently simulated and no money is taken; this policy applies once real payments start.',
     body: <>
       <Section title="Entry fees">
-        <p>Entry fees are set and received by the host school. If a school drops entries after paying, Orator shows the difference as a credit, and the host decides and issues refunds under its own policy.</p>
+        <p>Entry fees are set by the host school. Each school is invoiced when the tournament ends, based on its final entries and the judges it brought, so entries dropped before the tournament are not charged. If a school is charged in error or overpays, the host refunds the difference.</p>
       </Section>
       <Section title="Orator’s tournament fee">
-        <p>Orator’s fee is refunded in full if the tournament is cancelled before its schedule is published, for example because of weather. It is not refunded once the tournament has taken place.</p>
+        <p>If a tournament is cancelled before its schedule is published, for example because of weather, Orator does not charge its fee, and refunds it in full if it was already paid. Once the tournament has taken place, the fee is not refunded.</p>
       </Section>
       <Section title="How to ask">
         <p>Contact the tournament host about entry fees, and Orator at {contact} about Orator’s fee. Refunds go back to the original payment method.</p>

@@ -29,7 +29,7 @@ const markTotal = (ballot: SpeakerBallot) => ballot.marks.reduce((sum, mark) => 
 const ratingOf = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) ? Math.max(RATING_MIN, markTotal(ballot)) : 0;
 const feedbackLength = (ballot: SpeakerBallot) => ballot.general.trim().length + ballot.comment.trim().length;
 const isScored = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) && secondsOf(ballot) !== null && feedbackLength(ballot) >= MIN_COMMENT;
-const THIS_ROUND: BallotKey = { tournament: 'Gothenburg Invitational', round: 2, room: 'Room 214' };
+const THIS_ROUND: BallotKey = { tournament: 'Larkspur Invitational', round: 2, room: 'Room 214' };
 type Speaker = { code: string; name: string; school: string; title?: string };
 const emptyRound = (list: Speaker[]) => Object.fromEntries(list.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
 
