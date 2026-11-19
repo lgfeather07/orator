@@ -43,6 +43,7 @@ const contact = BUSINESS.contactEmail
 
 export function LegalFooter({ onOpen }: { onOpen: (page: LegalPage) => void }) {
   return <footer className="legal-footer">
+    <nav aria-label="Explore Orator"><a href="#/calendar">Tournament calendar</a></nav>
     <nav aria-label="Legal">{legalPages.map(page => <a key={page.id} href={`#/${page.id}`} onClick={event => { event.preventDefault(); onOpen(page.id); }}>{page.label}</a>)}</nav>
     <p>© 2026 {BUSINESS.operator || BUSINESS.name}{BUSINESS.contactEmail && <> · <a href={`mailto:${BUSINESS.contactEmail}`}>{BUSINESS.contactEmail}</a></>}{BUSINESS.mailingAddress && <> · {BUSINESS.mailingAddress}</>}</p>
     <p>Orator is not affiliated with or endorsed by the Nebraska School Activities Association (NSAA). Demo data, including people, results and payments, is fictional.</p>
@@ -145,19 +146,20 @@ const pages: Record<LegalPage, { title: string; intro: string; body: ReactNode }
   },
   cookies: {
     title: 'Cookies & storage',
-    intro: 'Orator does not use cookies. It stores two things in your browser, both needed for features you ask for.',
+    intro: 'Orator does not use cookies. It stores a few things in your browser, each needed for something you ask for.',
     body: <>
       <Section title="What is stored">
         <table className="legal-table">
           <thead><tr><th>Name</th><th>Purpose</th><th>Kept until</th></tr></thead>
           <tbody>
             <tr><td><code>sb-…-auth-token</code></td><td>Keeps you signed in.</td><td>You sign out</td></tr>
+            <tr><td><code>orator-register-tournament</code></td><td>Remembers the tournament you chose on the calendar while you sign in, so you land back on it.</td><td>You register, or two days pass</td></tr>
             <tr><td><code>orator-demo-v5</code></td><td>Saves your changes to the demo so they survive a reload.</td><td>You reset the demo or clear site data</td></tr>
           </tbody>
         </table>
       </Section>
       <Section title="Why there is no consent banner">
-        <p>Both items are strictly necessary for something you chose to do, and neither is used for tracking, analytics or advertising. We don’t use analytics or advertising cookies, so there is nothing to opt in to. If that changes, we will ask for consent first.</p>
+        <p>Each item is strictly necessary for something you chose to do, and neither is used for tracking, analytics or advertising. We don’t use analytics or advertising cookies, so there is nothing to opt in to. If that changes, we will ask for consent first.</p>
       </Section>
       <Section title="Removing it">
         <p>Sign out to remove the sign-in token, use “Reset demo” on the director’s Details step, or clear this site’s data in your browser settings.</p>

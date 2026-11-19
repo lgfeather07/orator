@@ -85,9 +85,9 @@ const friendly = (message: string) => {
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'sent-confirm' | 'sent-reset' | 'reset';
 
-export function AuthPage({ onDemo }: { onDemo?: () => void }) {
+export function AuthPage({ onDemo, initialMode = 'signin', notice }: { onDemo?: () => void; initialMode?: 'signin' | 'signup'; notice?: ReactNode }) {
   const { recovering, finishRecovery } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -156,7 +156,7 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
         </ul>
       </aside>
       <section className="auth-card">
-        <h1>{titles[current][0]}</h1><p className="auth-lead">{titles[current][1]}</p>
+        <h1>{titles[current][0]}</h1><p className="auth-lead">{titles[current][1]}</p>{notice}
         {current === 'sent-confirm' || current === 'sent-reset' ? <div className="auth-sent"><span className="success-icon"><Icon name="check" size={26}/></span><p>Didn’t get it? Check your spam folder, or go back and try again.</p><Button variant="secondary" onClick={() => go('signin')}>Back to sign in</Button></div> : <form onSubmit={submit} noValidate={false}>
           {current === 'signup' && <>
             <label className="auth-field"><span>Full name</span><input value={name} onChange={event => setName(event.target.value)} autoComplete="name" required/></label>
@@ -179,6 +179,7 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
         </form>}
       </section>
       {onDemo && <button className="auth-demo" onClick={onDemo}><Icon name="sparkle" size={16}/><span><strong>Explore the demo</strong><small>Look around every role with sample data. No account needed.</small></span><Icon name="arrow" size={16}/></button>}
+      <a className="auth-calendar" href="#/calendar"><Icon name="clock" size={16}/><span><strong>Tournament calendar</strong><small>See upcoming tournaments and register your school. No account needed to look.</small></span><Icon name="arrow" size={16}/></a>
       <p className="signin-security"><Icon name="lock" size={14}/> Your school and tournament permissions determine what you can access.</p>
     </main>
   </div>;

@@ -21,11 +21,13 @@ The demo includes a full tournament setup: a coach enters students, the director
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
-2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`.
+2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`, then `supabase/calendar.sql`.
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 
 **Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: issue reports, judge check-in, practice goals, director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
+
+Then run `supabase/calendar.sql` again too, every time, after `tournaments.sql`: it adds the public tournament calendar (listing, city, ISO date, registration deadline, notes for coaches, saved fees) and the director's "Approve coaches automatically" setting, and it replaces the membership trigger that `tournaments.sql` defines. Tournaments created before it stay off the calendar until their director lists them.
 
 ## Layout
 
@@ -36,6 +38,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/TeamEntries.tsx` — a coach's entries for the tournament
 - `src/tournament.ts` — demo tournament data and the schedule builder
 - `src/Issues.tsx` — issue reporting and the director's issue board
+- `src/Calendar.tsx` — the public tournament calendar (`#/calendar`, `#/calendar/<id>`, no sign-in needed), registering a school from it, and the director's listing settings
 - `src/theme.css` — the visual theme
 - `src/CoachTools.tsx` — focus notes, practice log, checklist
 - `src/auth.tsx` — sign in, sign up, password reset
