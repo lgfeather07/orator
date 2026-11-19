@@ -12,7 +12,7 @@ export function ReportIssueForm({ reporter, role, onClose }: { reporter: string;
   const [where, setWhere] = useState('');
   const [detail, setDetail] = useState('');
   const [sent, setSent] = useState(false);
-  if (sent) return <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span>{live ? <><h3>Saved, but not yet sent</h3><p>Issue reports are a preview: this one is saved in this browser only and has <strong>not</strong> reached the director. Find tournament staff in person, and in an emergency call 911.</p></> : <><h3>Sent to the tournament director</h3><p>In this demo, your report now shows on the director’s Issues tab. Stay where you are if you can, so tab room staff can find you.</p></>}<Button onClick={onClose}>Done</Button></div>;
+  if (sent) return <div className="modal-sent"><span className="success-icon"><Icon name="check" size={24}/></span>{live ? <><h3>Sent to the tournament director</h3><p>It’s on the director’s Issues board now. In an emergency, call 911 first.</p></> : <><h3>Sent to the tournament director</h3><p>In this demo, your report now shows on the director’s Issues tab. Stay where you are if you can, so tab room staff can find you.</p></>}<Button onClick={onClose}>Done</Button></div>;
   return <form className="support-form" onSubmit={event => { event.preventDefault(); reportIssue({ kind, where: where.trim(), detail: detail.trim(), reporter, role }); setSent(true); }}>
     <fieldset className="issue-kinds"><legend>What’s happening?</legend>{kinds.map(option => <label key={option} className={kind === option ? 'on' : ''}>
       <input type="radio" name="issue-kind" checked={kind === option} onChange={() => setKind(option)}/>
@@ -22,7 +22,6 @@ export function ReportIssueForm({ reporter, role, onClose }: { reporter: string;
     <label><span>Where? <small>Room or area</small></span><input value={where} onChange={event => setWhere(event.target.value)} placeholder="e.g. Room 214" required/></label>
     <label><span>Details <small>Optional</small></span><textarea value={detail} onChange={event => setDetail(event.target.value)} placeholder="Anything that helps staff respond: the round, who is involved, what you need."/></label>
     <p className="form-note">Your name, role and this report go to the tournament director. Please don’t include medical details; staff will follow up in person.</p>
-    {live && <p className="form-note warn" role="note"><Icon name="warning" size={14}/> Issue reports don’t reach the director yet when you’re signed in. Tell tournament staff in person.</p>}
     <div className="modal-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><button className="button button-primary" type="submit" disabled={!where.trim()}><Icon name="send"/><span>Send to director</span></button></div>
   </form>;
 }

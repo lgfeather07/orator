@@ -25,7 +25,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 
-**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
+**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: issue reports, judge check-in, practice goals, director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
 
 ## Layout
 

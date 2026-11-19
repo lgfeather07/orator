@@ -15,13 +15,14 @@ import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
 import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
 import { pastBallots } from './PastBallots';
-import { entryLoadByName, loadLabel, roundLabel, roundTimes, sameSchool } from './tournament';
+import { entryLoadByName, isFinal, loadLabel, roundLabel, roundTimes, sameSchool } from './tournament';
 import { ballotEvents as nsaaEvents } from './ballots';
 import { EventPreferences, JudgeConflicts, toPreferenceList } from './Preferences';
 import { preferenceFor } from './tournament';
 import { eventCodes } from './ballots';
 import { HelpModal, type HelpKind } from './HelpModal';
-import { StudentRecordExtras, PracticeChecklist, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
+import { CoachPractice, StudentPractice } from './Practice';
+import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
@@ -185,11 +186,47 @@ const personaDetails: Record<Persona, { name: string; detail: string; initials: 
 };
 
 const sidebarItems: Record<Persona, [IconName, string][]> = {
-  student: [['home','Overview'],['archive','Past ballots']],
+  student: [['home','Overview'],['sparkle','Practice'],['archive','Past ballots']],
   judge: [['home','Overview'],['ballot','Ballots'],['archive','Archive']],
-  coach: [['home','Overview'],['users','Entries'],['growth','Analytics'],['archive','Past ballots']],
+  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice'],['growth','Analytics'],['archive','Past ballots']],
   director: [['home','Overview'],['settings','Tournament setup']],
 };
+
+/** Signed in, only pages backed by real data are listed. */
+const liveSidebarItems: Record<Persona, [IconName, string][]> = {
+  student: [['home','Overview'],['sparkle','Practice']],
+  judge: [['home','Overview']],
+  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice']],
+  director: [['settings','Tournament setup']],
+};
+
+/** Shown in place of a page until the director has approved this person. */
+function AccessWait({ role, what }: { role: 'coach' | 'student' | 'judge'; what: string }) {
+  const { state } = useAccess(role);
+  return <section className="panel access-wait"><Icon name="lock"/><div><strong>{what} once the director approves you</strong><small>{state === 'pending' ? 'Your request is with the director.' : state === 'declined' ? 'The director declined your request. Contact them if that’s a mistake.' : state === 'loading' ? 'Loading…' : 'Ask to join a tournament using the form at the top of this page.'}</small></div></section>;
+}
+
+/** The students on a team, each with the events they're entered in. */
+const teamStudents = (entries: { student: string; eventId: string }[]) => [...entries.reduce((map, entry) => map.set(entry.student, [...(map.get(entry.student) ?? []), entry.eventId]), new Map<string, string[]>())].map(([name, events]) => ({ name, events })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** The Practice page for a coach: the demo team, or the school the director approved them for. */
+function CoachPracticeSection({ bare = false }: { bare?: boolean }) {
+  const { entries } = useStore();
+  const { state, membership } = useAccess('coach');
+  const school = state === 'demo' ? 'Wrenfield High' : state === 'approved' && membership ? membership.school : null;
+  if (!school) return <div className="role-dashboard"><AccessWait role="coach" what="Practice goals open"/></div>;
+  const practice = <CoachPractice school={school} students={teamStudents(entries.filter(entry => sameSchool(entry.school, school)))}/>;
+  return bare ? practice : <div className="role-dashboard">{practice}</div>;
+}
+
+/** The Practice page for a student: Maya in the demo, or the name and school they joined with. */
+function StudentPracticeSection({ bare = false }: { bare?: boolean }) {
+  const { state, membership } = useAccess('student');
+  const who = state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : state === 'approved' && membership ? { name: membership.name, school: membership.school } : null;
+  if (!who) return <div className="role-dashboard"><AccessWait role="student" what="Your practice goals appear"/></div>;
+  const practice = <StudentPractice student={who.name} school={who.school}/>;
+  return bare ? practice : <div className="role-dashboard">{practice}</div>;
+}
 
 /** The coach's entries: the demo team, or the school the director approved them for. */
 function CoachEntries({ onBack, importing = false }: { onBack?: () => void; importing?: boolean }) {
@@ -218,6 +255,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
   const updateTitle = freshChanges.every(change => (change.kind ?? 'schedule') === 'schedule') ? 'Schedule updated' : freshChanges.every(change => change.kind === 'entries') ? 'Entries update' : 'Updates from the director';
   const profile = account ? { name: account.name, detail: account.school || `${persona[0].toUpperCase()}${persona.slice(1)}`, initials: account.initials } : personaDetails[persona];
   const showingPrimary = section === active;
+  const items = live ? liveSidebarItems[persona] : sidebarItems[persona];
   const sectionSubtitles: Record<string,string> = {
     Overview: 'A live view of today’s tournament activity.',
     Entries: 'Manage students, judges, events, and registration status.',
@@ -226,24 +264,25 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     Archive: 'Find historical ballots, tournaments, and downloadable records.',
     'Past ballots': persona === 'student' ? 'Your ballots from finished tournaments. Only you and your coach can see them.' : 'Every ballot your team has received at finished tournaments.',
     'Tournament setup': 'Configure events, rounds, rooms, criteria, and permissions.',
+    Practice: persona === 'student' ? 'What your coach wants you to work on. Tick goals off as you get them.' : 'Set practice goals for each student. They see them on their own Practice tab.',
   };
   return <div className="desktop-shell">
     <aside className="sidebar" aria-label="Workspace menu"><Logo/><div className="tournament-chip"><span className="tiny-logo">{tournament.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase()}</span><span><strong>{tournament.name}</strong><small>{tournament.date}</small></span><Icon name="chevron" size={15}/></div>
       {(persona === 'coach' || persona === 'judge') && <div className="role-switcher"><span>Working as</span><div><button className={persona === 'coach' ? 'active' : ''} onClick={() => navigate('coach')}><Icon name="users" size={15}/> Coach</button><button className={persona === 'judge' ? 'active' : ''} onClick={() => navigate('judge')}><Icon name="ballot" size={15}/> Judge</button></div><small>Switch roles without signing out</small></div>}
       <span className="sidebar-section-label">{persona} workspace</span>
       <nav>
-        {sidebarItems[persona].map(([icon,label]) =>
+        {items.map(([icon,label]) =>
           <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}
       </nav>
       <div className="sidebar-bottom"><div className="save-chip"><Icon name="check"/> All changes saved</div><button className="profile" onClick={() => navigate('signin')}><Avatar initials={profile.initials}/><span><strong>{profile.name}</strong><small>{profile.detail}</small></span><Icon name="chevron" size={15}/></button></div>
     </aside>
-    <main id="main" className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button><button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button><button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
-      <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{sidebarItems[persona].map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
+    <main id="main" className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button>{!live && <button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button>}<button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
+      <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{items.map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
       {freshChanges.length > 0 && <div className="schedule-updated" role="status"><Icon name="bell" size={16}/><div><strong>{updateTitle}</strong><ul>{freshChanges.slice(0, 3).map(change => <li key={change.id}><time>{change.time}</time> {change.text}</li>)}</ul>{freshChanges.length > 3 && <small>and {freshChanges.length - 3} more</small>}</div><button onClick={() => dismiss(freshChanges[0].id)}>Got it</button></div>}
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
-      {account && <div className="sample-notice"><Icon name="info" size={15}/><span>{persona === 'director' ? <><strong>Your tournament is saved to your account:</strong> details, people, entries, and the schedule. Check-in, issues, and mobile rounds still show example data.</> : persona === 'coach' ? <><strong>Your entries and schedule are real</strong> once the director approves you, and real ballots are under Ballot review. Team numbers and names elsewhere on this page are example data.</> : persona === 'judge' ? <><strong>Your rooms and ballots are real</strong> once the director approves you and publishes the schedule. Other numbers on this page are example data.</> : <><strong>Your events, rooms, and released ballots are real</strong> once the director approves you. The schedule, feedback, and growth shown elsewhere on this page are example data.</>}</span></div>}
+      
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
-      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona} primary={active} onOpenPrimary={() => setSection(active)}/>}</main>
+      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Practice' ? (persona === 'student' ? <StudentPracticeSection/> : <CoachPracticeSection/>) : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona} primary={active} onOpenPrimary={() => setSection(active)}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
     {reporting && <ReportIssueModal reporter={profile.name} role={persona} onClose={() => setReporting(false)}/>}
   </div>;
@@ -315,7 +354,7 @@ function DirectorPage() {
   const needsTournament = store.live && store.liveState === 'ready' && !store.isDirector;
   const titles = { setup: ['Tournament setup', 'Details, entries, judges, the schedule, and running the day.'], people: ['People', 'Approve the coaches, judges, and students who ask to join.'], results: ['Results', 'Who breaks to finals, final placings, and team points.'], checkin: ['Check-in', 'See who has arrived and find any judge, room, or event.'], issues: ['Issues', 'What people at the tournament have reported, and where.'], rounds: ['Round management', 'Monitor ballot completion and make round-level corrections.'] };
   return <DesktopShell active="Tournament setup" title={titles[view][0]} subtitle={titles[view][1]} persona="director">
-    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>Results</button><button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button><button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button></div>
+    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>Results</button><button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button>{!store.live && <button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button>}</div>
     {store.live && store.liveState !== 'ready' ? <div className="issue-board"><section className="access-banner"><span className="spinner"/><div><strong>{store.liveState === 'failed' ? 'We couldn’t load your tournament. Check your connection and reload.' : 'Loading your tournament…'}</strong></div></section></div> : needsTournament ? <div className="issue-board"><CreateTournamentCard/></div> : view === 'people' ? <PeopleBoard/> : view === 'results' ? <ResultsBoard onOpenSetup={() => setView('setup')}/> : view === 'rounds' ? <div className="director-rounds"><RoundsPage director/></div> : view === 'checkin' ? <CheckInBoard/> : view === 'issues' ? <IssueBoard/> : <div className="setup-layout">
       <DirectorSetup judges={<JudgeAssignments/>}/>
       <SetupSummary/>
@@ -359,7 +398,7 @@ function CoachPage() {
   const lastMeet = pastBallots.filter(ballot => ballot.meetOrder === 4);
   const lastMeetRank = (lastMeet.reduce((sum, ballot) => sum + ballot.rank, 0) / lastMeet.length).toFixed(1);
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student'>('team');
+  const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student' | 'practice'>('team');
   const [selectedStudent, setSelectedStudent] = useState('Maya Rodriguez');
   const ballots = [
     ['Maya Rodriguez','Judge Leather','Informative','Larkspur Invitational','1st','Oct 19'],
@@ -371,7 +410,7 @@ function CoachPage() {
     <div className="role-dashboard">
       <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>{teamName} is on track</h2><p>{coachStore.tournament.name} · Round 2 underway · {teamStudents.length} students competing in {teamEntries.length} entries</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="plus" onClick={() => setView('import')}>Add students</Button></div></div><div className="hero-stat"><span>Finals breaks</span><strong>{totalFinals}</strong><small>this season · {finalists} of {teamGrowth.length} students</small></div></section>
       <div className="metric-grid"><Metric label="Students entered" value={String(teamStudents.length)} note={`${teamEntries.length} entries · ${multiEntered} in more than one event`} icon="users"/><Metric label="Average rank" value={lastMeetRank} note={`Last tournament · ${lastMeet.length} ballots`} icon="growth"/><Metric label="Ballots to review" value={String(pastBallots.length)} note="This season, under Past ballots" icon="ballot"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
-      <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
+      <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
       {view === 'team' ? <div className="role-grid">
         <section className="panel coach-team-panel"><div className="panel-head"><div><h2>Team at Larkspur</h2><p>Live status across all six events</p></div><Badge tone="success" icon="check">18 checked in</Badge></div>
           <div className="coach-student-list">{[
@@ -387,7 +426,7 @@ function CoachPage() {
           ['plus','Add students','By hand or from a file'],
         ].map(([icon,title,note],i) => <button key={title} onClick={() => i < 2 ? setView('ballots') : setView('import')}><span><Icon name={icon as IconName}/></span><span><strong>{title}</strong><small>{note}</small></span><Icon name="arrow"/></button>)}</aside>
       </div> : view === 'entries' ? <CoachEntries onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Wrenfield High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>43.0</strong><small>Season average / 50</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <CoachEntries importing onBack={() => setView('entries')}/>
-       : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
+       : view === 'practice' ? <CoachPracticeSection bare/> : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
        : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
         <div className="archive-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search student, judge, event, or tournament"/></label><select aria-label="Filter by event" onChange={event => setQuery(event.target.value)}><option value="">All events</option>{ballotEvents.slice(0,6).map(event => <option value={event.short} key={event.id}>{event.short}</option>)}</select><select aria-label="Filter by season"><option>This season</option><option>Last season</option><option>All time</option></select></div>
         <div className="archive-table"><div className="archive-head"><span>Student</span><span>Judge</span><span>Event & tournament</span><span>Rank</span><span>Date</span><span/></div>{ballots.map(row => <div className="archive-row clickable" key={row.join()} onClick={() => { setSelectedStudent(row[0]); setView('student'); }}><span><Avatar initials={row[0].split(' ').map(n=>n[0]).join('')} size="sm"/><strong>{row[0]}</strong></span><span>{row[1]}</span><span><strong>{row[2]}</strong><small>{row[3]}</small></span><Badge tone={row[4]==='1st' ? 'success':'neutral'}>{row[4]}</Badge><span>{row[5]}</span><button className="icon-button" aria-label={`Open ${row[0]} record`} onClick={event => { event.stopPropagation(); setSelectedStudent(row[0]); setView('student'); }}><Icon name="arrow"/></button></div>)}</div>
@@ -423,7 +462,7 @@ function StudentBallots() {
 
 function StudentPage() {
   const greeting = useGreeting('Maya');
-  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep' | 'growth' | 'ballots'>('today');
+  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep' | 'growth' | 'ballots' | 'practice'>('today');
   const [openBallot, setOpenBallot] = useState<string | undefined>(undefined);
   // Each feedback card comes from one of Maya's ballots; clicking it opens that ballot in full.
   const mayaBallots = pastBallots.filter(ballot => ballot.student === 'Maya Rodriguez').sort((a, b) => b.meetOrder - a.meetOrder || a.round - b.round);
@@ -445,12 +484,12 @@ function StudentPage() {
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'Released by your coach' : 'Until your coach releases it'} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments released' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
       <MyEntries/>
       {store.live && <StudentBallots/>}
-      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => { setOpenBallot(undefined); setView('ballots'); }}>My ballots</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
-      {view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'ballots' ? <PastBallots key={openBallot ?? 'all'} student="Maya Rodriguez" initialOpen={openBallot}/> : view === 'today' ? <div className="role-grid">
+      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => { setOpenBallot(undefined); setView('ballots'); }}>My ballots</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
+      {view === 'practice' ? <StudentPracticeSection bare/> : view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'ballots' ? <PastBallots key={openBallot ?? 'all'} student="Maya Rodriguez" initialOpen={openBallot}/> : view === 'today' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Larkspur Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>
           <div className="timeline-list">{[['8:00 AM','Round 1','Room 108','Completed'],['9:30 AM','Round 2','Room 214','Up next'],['11:00 AM','Round 3','Room 301','Scheduled'],['1:30 PM','Round 4','Room 122','Scheduled']].map(([time,round,room,status],i)=><div className={`timeline-row ${i===1?'current':''}`} key={round}><span className="timeline-dot">{i<1?<Icon name="check" size={14}/>:i+1}</span><span><small>{time}</small><strong>{round}</strong></span><span>{room}</span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge></div>)}</div>
         </section>
-        <aside className="panel focus-panel"><div className="panel-head"><div><h2>Coach focus</h2><p>From Erin · {coachNote.sent}</p></div><Avatar initials="EJ" size="sm"/></div><div className="focus-content">{coachNote.urgent ? <Badge tone="danger" icon="bell">Urgent from your coach</Badge> : <span className="state-icon"><Icon name="sparkle"/></span>}<blockquote>“{coachNote.text}”</blockquote><Button variant="secondary" icon="check" disabled={coachNote.seen} onClick={() => store.markNoteSeen(coachNote.id)}>{coachNote.seen ? 'Reviewed · Erin can see this' : 'Mark as reviewed'}</Button></div><div className="focus-checklist"><PracticeChecklist/></div></aside>
+        <aside className="panel focus-panel"><div className="panel-head"><div><h2>Coach focus</h2><p>From Erin · {coachNote.sent}</p></div><Avatar initials="EJ" size="sm"/></div><div className="focus-content">{coachNote.urgent ? <Badge tone="danger" icon="bell">Urgent from your coach</Badge> : <span className="state-icon"><Icon name="sparkle"/></span>}<blockquote>“{coachNote.text}”</blockquote><Button variant="secondary" icon="check" disabled={coachNote.seen} onClick={() => store.markNoteSeen(coachNote.id)}>{coachNote.seen ? 'Reviewed · Erin can see this' : 'Mark as reviewed'}</Button></div><div className="focus-checklist"><Button variant="secondary" icon="sparkle" onClick={() => setView('practice')}>{store.practiceGoals.filter(goal => goal.student === 'Maya Rodriguez' && !goal.done).length} practice goals to work on</Button></div></aside>
       </div> : view === 'round' ? <section className="panel action-workspace round-detail"><div className="panel-head"><div><h2>Round 2 details</h2><p>Varsity Informative · Starts at 9:30 AM</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('today')}>Back to schedule</Button></div><div className="round-detail-grid"><div><span><Icon name="clock"/></span><small>Start time</small><strong>9:30 AM</strong><p>Arrive by 9:20 AM</p></div><div><span><Icon name="home"/></span><small>Location</small><strong>Room 214</strong><p>Second floor, east wing</p></div><div><span><Icon name="users"/></span><small>Speaking order</small><strong>Third of six</strong><p>Code V42</p></div><div><span><Icon name="ballot"/></span><small>Event</small><strong>Informative</strong><p>10-minute time limit</p></div></div><div className="round-callout"><Icon name="info"/><span><strong>{ready ? 'You’re checked in and ready.' : 'Check in with your judge when you arrive.'}</strong><small>Your visual aids are already marked as approved.</small></span><Button icon="check" disabled={ready} onClick={() => setReady(true)}>{ready ? 'Ready' : 'I’m ready'}</Button></div><ReminderSettings/>
       </section> : view === 'prep' ? <section className="panel action-workspace prep-notes"><div className="panel-head"><div><h2>Prep notes</h2><p>Private notes for “When the well runs dry”</p></div><Button variant="secondary" icon="close" onClick={() => setView('today')}>Close notes</Button></div><div className="prep-layout"><aside><Badge tone="success" icon="check">Saved</Badge><h3>Round 2 focus</h3><p>Use these reminders during your final preparation.</p>{['Opening','Transitions','Evidence','Closing'].map((item,index) => <button className={prepSection===item?'active':''} key={item} onClick={() => setPrepSection(item)}><span>{index+1}</span>{item}</button>)}</aside><div><label className="field-label"><span>{prepSection} reminders</span><small>Autosaved just now</small></label><textarea key={prepSection} defaultValue={prepNotes[prepSection]}/><div className="prep-footer"><Badge tone="info" icon="lock">Only you and Coach Erin can see this</Badge><Button icon="check" onClick={() => setView('today')}>Done</Button></div></div></div>
       </section> : <section className="panel feedback-desktop"><div className="panel-head"><div><h2>Feedback library</h2><p>Actionable notes from your latest ballots</p></div><Button variant="secondary" icon="download" onClick={() => downloadText('maya-feedback.txt','Orator feedback for Maya Rodriguez\nDelivery: Strong pacing and confidence.\nOrganization: Clarify the transition into point two.')}>Download all</Button></div>
@@ -459,6 +498,23 @@ function StudentPage() {
       </section>}
     </div>
   </DesktopShell>;
+}
+
+/** The top of a signed-in judge's page: their real next room, rooms, and conflicts. */
+function LiveJudgeHead({ onRooms, onPreferences, action }: { onRooms: () => void; onPreferences: () => void; action: string }) {
+  const store = useStore();
+  const { profile } = useAuth();
+  const { state } = useAccess('judge');
+  const rooms = store.sections.filter(section => section.judgeId === profile?.id).sort((a, b) => a.round - b.round);
+  const next = rooms[0];
+  const top = store.myPreferences.find(item => item.level === 'top');
+  const conflicts = store.myJudgeProfile.clean ? 'Clean' : store.myJudgeProfile.knows.length ? `${store.myJudgeProfile.knows.length} known` : 'None set';
+  return <>
+    <section className="role-hero judge-hero"><div><Badge tone={state === 'approved' ? 'success' : 'neutral'} icon={state === 'approved' ? 'check' : 'clock'}>{state === 'approved' ? 'Approved to judge' : 'Waiting for approval'}</Badge><h2>{next ? 'Your rooms are ready' : store.tournament.name}</h2><p>{next ? `${roundLabel(next, store.tournament)} · ${nsaaEvents.find(event => event.id === next.eventId)?.name ?? next.eventId} · ${next.room} · ${roundTimes[next.round - 1] ?? ''}` : state === 'approved' ? 'Your rooms appear here once the director publishes the schedule.' : 'Ask to join above; the director approves judges.'}</p>
+      <div className="hero-actions"><Button icon="ballot" onClick={onRooms}>Open my rooms</Button><Button variant="secondary" icon="sparkle" onClick={onPreferences}>Preferences and conflicts</Button></div></div></section>
+    <div className="metric-grid"><Metric label="Rooms" value={String(rooms.length)} note={rooms.length ? 'Assigned to you' : 'None yet'} icon="clock"/><Metric label="Finals" value={String(rooms.filter(section => isFinal(section, store.tournament)).length)} note="Assigned by preference" icon="sparkle"/><Metric label="Top finals choice" value={top ? eventCodes[top.id] ?? top.id : '—'} note="Used for finals only" icon="growth"/><Metric label="Who you know" value={conflicts} note="Kept out of those rooms" icon="users"/></div>
+    <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'mobileBallot' ? 'active' : ''} onClick={onRooms}>My rooms</button><button className={action === 'preferences' ? 'active' : ''} onClick={onPreferences}>Preferences</button></div>
+  </>;
 }
 
 function JudgePage() {
@@ -471,11 +527,11 @@ function JudgePage() {
   const [preferencesSaved, setPreferencesSaved] = useState(true);
   return <DesktopShell active="Overview" title={greeting} subtitle="Your assignments and ballots are ready for today." persona="judge">
     <div className="role-dashboard">
-      <section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction(judgeAccess.state === 'approved' ? 'assignments' : 'mobileBallot')}>{judgeAccess.state === 'approved' ? 'Open my rooms' : 'Open e-ballot'}</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
+      {store.live ? <LiveJudgeHead onRooms={() => setAction('assignments')} onPreferences={() => setAction('preferences')} action={action}/> : <><section className="role-hero judge-hero"><div><Badge tone="success" icon="check">Checked in</Badge><h2>Your next panel is ready</h2><p>Round 2 · Varsity Informative · Room 214 · 9:30 AM</p><div className="hero-actions"><Button icon="ballot" onClick={() => setAction(judgeAccess.state === 'approved' ? 'assignments' : 'mobileBallot')}>{judgeAccess.state === 'approved' ? 'Open my rooms' : 'Open e-ballot'}</Button><Button variant="secondary" icon="file" onClick={() => setAction('competitors')}>View competitors</Button></div></div><div className="hero-stat"><span>Starts in</span><strong>24m</strong><small>Walk time: 4 minutes</small></div></section>
       <div className="metric-grid"><Metric label="Assignments" value="4" note="Today" icon="clock"/><Metric label="Submitted" value="6" note="All on time" icon="check"/><Metric label="Drafts" value="2" note="Autosaved" icon="edit"/><Metric label="Top finals choice" value={judgeEvents.find(event => event.level === 'top')?.code ?? '—'} note="Used for finals only" icon="sparkle"/></div>
-      <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div>
+      <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'competitors' ? 'active' : ''} onClick={() => setAction('assignments')}>Assignments</button><button className={action === 'ballots' || action === 'mobileBallot' ? 'active' : ''} onClick={() => setAction('ballots')}>Ballot desk</button><button className={action === 'preferences' ? 'active' : ''} onClick={() => setAction('preferences')}>Preferences</button></div></>}
       {action === 'assignments' && judgeAccess.state === 'demo' && store.sections.some(section => section.judgeId === 'jl') && <div className="demo-rooms"><MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/></div>}
-      {action === 'assignments' && judgeAccess.state === 'approved' ? <MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/> : action === 'assignments' ? <div className="role-grid">
+      {action === 'assignments' && store.live && judgeAccess.state !== 'approved' ? <AccessWait role="judge" what="Your rooms appear"/> : action === 'assignments' && judgeAccess.state === 'approved' ? <MyRooms onOpen={room => { setOpenRoom(room); setAction('mobileBallot'); }}/> : action === 'assignments' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s assignments</h2><p>Preferences and conflicts already checked</p></div><Badge tone="success" icon="check">Great fit</Badge></div>
           <div className="assignment-desktop">{[['8:00 AM','Round 1','Informative','Room 108','Complete'],['9:30 AM','Round 2','Informative','Room 214','Open ballot'],['11:00 AM','Round 3','Extemporaneous','Room 301','Upcoming'],['1:30 PM','Round 4','Persuasive','Room 122','Upcoming']].map(([time,round,event,room,status],i)=><button key={round} className={i===1?'featured':''} onClick={() => i===1 && setAction('mobileBallot')}><span className="event-code">{event.slice(0,3).toUpperCase()}</span><span><strong>{round} · {event}</strong><small>{time} · {room}</small></span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge><Icon name="arrow"/></button>)}</div>
         </section>
@@ -497,6 +553,56 @@ function JudgePage() {
         <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
         <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => { store.savePreferences(judgeEvents.map(item => ({ id: item.id, level: item.level }))); setPreferencesSaved(true); }}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
       </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `${openRoom.final ? 'Final round' : `Round ${openRoom.key.round}`} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
+    </div>
+  </DesktopShell>;
+}
+
+const statusText = (status: string, entriesOpen: boolean) => ({ registration: entriesOpen ? 'Entries are open' : 'Entries are closed', scheduled: 'Schedule published', running: 'Tournament underway', finished: 'Tournament finished' } as Record<string, string>)[status] ?? '';
+
+/** A signed-in coach: only their real team, entries, practice goals, and ballots. */
+function LiveCoachPage() {
+  const store = useStore();
+  const greeting = useGreeting('Coach');
+  const { state, membership } = useAccess('coach');
+  const [view, setView] = useState<'entries' | 'import' | 'practice' | 'ballots'>('entries');
+  const school = state === 'approved' && membership ? membership.school : '';
+  const mine = school ? store.entries.filter(entry => sameSchool(entry.school, school)) : [];
+  const students = teamStudents(mine);
+  const openGoals = school ? store.practiceGoals.filter(goal => sameSchool(goal.school, school) && !goal.done).length : 0;
+  const published = store.tournament.status !== 'registration' && store.sections.length > 0;
+  const multi = students.filter(student => student.events.length > 1).length;
+  return <DesktopShell active="Overview" title={greeting} subtitle={school ? `Coaching ${school}` : 'Your team, entries, practice goals, and ballots.'} persona="coach">
+    <div className="role-dashboard">
+      {school ? <>
+        <section className="role-hero coach-hero"><div><Badge tone="info" icon="clock">{statusText(store.tournament.status, store.entriesOpen)}</Badge><h2>{school} at {store.tournament.name}</h2><p>{[store.tournament.date, store.tournament.host && `hosted by ${store.tournament.host}`, `${students.length} ${students.length === 1 ? 'student' : 'students'} in ${mine.length} ${mine.length === 1 ? 'entry' : 'entries'}`].filter(Boolean).join(' · ')}</p>
+          <div className="hero-actions"><Button icon="plus" disabled={!store.entriesOpen} onClick={() => setView('import')}>Add students</Button><Button variant="secondary" icon="sparkle" onClick={() => setView('practice')}>Practice goals</Button></div></div></section>
+        <div className="metric-grid"><Metric label="Students entered" value={String(students.length)} note={`${mine.length} entries${multi ? ` · ${multi} in more than one event` : ''}`} icon="users"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Rooms and times are below' : 'The director publishes it'} icon="clock"/><Metric label="Practice goals" value={String(openGoals)} note="Still to work on" icon="sparkle"/><Metric label="Results" value={store.resultsReleased ? 'Released' : 'Held'} note={store.resultsReleased ? 'Your students can see them' : 'Release after the tournament'} icon={store.resultsReleased ? 'check' : 'lock'}/></div>
+        <div className="role-tabs"><button className={view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('entries')}>Team entries</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballots</button></div>
+        {view === 'practice' ? <CoachPractice school={school} students={students}/> : view === 'ballots' ? <><ReleaseResults/><TeamBallots/></> : <CoachEntries importing={view === 'import'} onBack={view === 'import' ? () => setView('entries') : undefined}/>}
+      </> : <AccessWait role="coach" what="Your team page opens"/>}
+    </div>
+  </DesktopShell>;
+}
+
+/** A signed-in student: their real events, rooms, practice goals, and released ballots. */
+function LiveStudentPage() {
+  const store = useStore();
+  const greeting = useGreeting('Student');
+  const { state, membership } = useAccess('student');
+  const [view, setView] = useState<'today' | 'practice' | 'ballots'>('today');
+  const who = state === 'approved' && membership ? { name: membership.name, school: membership.school } : null;
+  const mine = who ? store.entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school)) : [];
+  const goals = who ? store.practiceGoals.filter(goal => goal.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(goal.school, who.school)) : [];
+  const published = store.tournament.status !== 'registration' && store.sections.length > 0;
+  return <DesktopShell active="Overview" title={greeting} subtitle={who ? `${who.school} · ${store.tournament.name}` : 'Your events, practice goals, and ballots.'} persona="student">
+    <div className="role-dashboard">
+      {who ? <>
+        <section className="role-hero student-hero"><div><Badge tone="info">{statusText(store.tournament.status, store.entriesOpen)}</Badge><h2>{store.tournament.name}</h2><p>{[who.school, mine.length ? mine.map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') : 'No events entered yet'].join(' · ')}</p>
+          <div className="hero-actions"><Button icon="sparkle" onClick={() => setView('practice')}>My practice goals</Button></div></div></section>
+        <div className="metric-grid"><Metric label="Events" value={String(mine.length)} note={mine.length > 1 ? loadLabel(mine.length) : mine.length ? 'One event' : 'Your coach enters you'} icon="ballot"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Your rooms are below' : 'Appears once published'} icon="clock"/><Metric label="Practice goals" value={`${goals.filter(goal => goal.done).length}/${goals.length}`} note="Done so far" icon="sparkle"/><Metric label="Results" value={store.resultsReleased ? 'Released' : 'Hidden'} note={store.resultsReleased ? 'Released by your coach' : 'Until your coach releases them'} icon={store.resultsReleased ? 'growth' : 'lock'}/></div>
+        <div className="role-tabs"><button className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>My events</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>My ballots</button></div>
+        {view === 'practice' ? <StudentPractice student={who.name} school={who.school}/> : view === 'ballots' ? <MyTournamentBallots/> : <MyEntries/>}
+      </> : <AccessWait role="student" what="Your events and ballots appear"/>}
     </div>
   </DesktopShell>;
 }
@@ -559,10 +665,10 @@ function Workspace() {
   const content = useMemo(() => ({
     auth: <AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>,
     signin: <SignInPage/>,
-    student: <StudentPage/>, judge: <JudgePage/>, coach: <CoachPage/>,
+    student: signedIn ? <LiveStudentPage/> : <StudentPage/>, judge: <JudgePage/>, coach: signedIn ? <LiveCoachPage/> : <CoachPage/>,
     director: <DirectorPage/>,
     components: <ComponentsPage/>, styles: <StylesPage/>, states: <StatesPage/>
-  })[current], [current]);
+  })[current], [current, signedIn]);
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
   if (legal) return <div className={dark ? 'app dark' : 'app'}>{skip}<LegalView page={legal} onClose={() => openLegal(null)} onOpen={openLegal}/></div>;
   if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;

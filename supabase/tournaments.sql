@@ -352,3 +352,125 @@ create policy "Members read the director's updates" on public.tournament_updates
 drop policy if exists "Directors post updates" on public.tournament_updates;
 create policy "Directors post updates" on public.tournament_updates for insert to authenticated
   with check (private.is_director(tournament_id));
+
+-- ── Issue reports. Anyone approved for the tournament (and the director) can report one; the director
+-- sees and resolves them all, and each reporter can see their own.
+create table if not exists public.issues (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments (id) on delete cascade,
+  reporter_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  reporter_name text not null default '',
+  reporter_role text not null default '',
+  kind text not null check (kind in ('no-judge', 'injury', 'schedule', 'ballot', 'other')),
+  location text not null check (char_length(btrim(location)) between 1 and 120),
+  detail text not null default '' check (char_length(detail) <= 2000),
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  created_at timestamptz not null default now()
+);
+create index if not exists issues_by_tournament on public.issues (tournament_id, created_at desc);
+
+create or replace function public.stamp_issue() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' then
+    new.reporter_id := auth.uid();
+    new.reporter_name := coalesce((select p.full_name from public.profiles p where p.id = auth.uid()), '');
+    new.status := 'open';
+  else
+    -- Only the status changes after a report is sent.
+    new.tournament_id := old.tournament_id; new.reporter_id := old.reporter_id; new.reporter_name := old.reporter_name; new.reporter_role := old.reporter_role;
+    new.kind := old.kind; new.location := old.location; new.detail := old.detail; new.created_at := old.created_at;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists stamp_issue on public.issues;
+create trigger stamp_issue before insert or update on public.issues for each row execute function public.stamp_issue();
+revoke all on function public.stamp_issue() from public, anon, authenticated;
+
+alter table public.issues enable row level security;
+revoke all on public.issues from anon, authenticated;
+grant select, insert, update on public.issues to authenticated;
+drop policy if exists "Members report issues" on public.issues;
+create policy "Members report issues" on public.issues for insert to authenticated
+  with check (private.is_director(tournament_id) or private.is_approved_member(tournament_id));
+drop policy if exists "Director and reporter read issues" on public.issues;
+create policy "Director and reporter read issues" on public.issues for select to authenticated
+  using (private.is_director(tournament_id) or reporter_id = (select auth.uid()));
+drop policy if exists "Director resolves issues" on public.issues;
+create policy "Director resolves issues" on public.issues for update to authenticated
+  using (private.is_director(tournament_id)) with check (private.is_director(tournament_id));
+
+-- ── Judge check-in on the day. Only the director marks a judge as arrived.
+alter table public.tournament_members add column if not exists checked_in boolean not null default false;
+create or replace function public.guard_check_in() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not private.is_director(old.tournament_id) then new.checked_in := old.checked_in; end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_check_in on public.tournament_members;
+create trigger guard_check_in before update on public.tournament_members for each row execute function public.guard_check_in();
+revoke all on function public.guard_check_in() from public, anon, authenticated;
+
+-- ── Practice goals a coach sets for a student. They belong to the student (by name and school), not to
+-- one tournament, so they carry across the season. A coach approved at that school (at any tournament)
+-- manages them; the student approved under that name and school can read them and tick them off.
+create table if not exists public.practice_goals (
+  id uuid primary key default gen_random_uuid(),
+  school text not null check (char_length(btrim(school)) > 0),
+  student text not null check (char_length(btrim(student)) > 0),
+  event_id text not null default '',
+  goal text not null check (char_length(btrim(goal)) between 1 and 300),
+  done boolean not null default false,
+  created_by uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists practice_goals_by_student on public.practice_goals (lower(school), lower(student));
+
+create or replace function private.coaches_school(target text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.tournament_members m where m.user_id = (select auth.uid()) and m.role = 'coach' and m.status = 'approved' and lower(m.school) = lower(btrim(target)));
+$$;
+create or replace function private.is_student(target_school text, target_student text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.tournament_members m where m.user_id = (select auth.uid()) and m.role = 'student' and m.status = 'approved'
+    and lower(m.school) = lower(btrim(target_school)) and lower(m.display_name) = lower(btrim(target_student)));
+$$;
+revoke all on function private.coaches_school(text) from public, anon;
+revoke all on function private.is_student(text, text) from public, anon;
+grant execute on function private.coaches_school(text) to authenticated;
+grant execute on function private.is_student(text, text) to authenticated;
+
+-- A student may only tick a goal off (or back on); everything else stays as the coach wrote it.
+create or replace function public.guard_goal() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' then
+    new.school := btrim(new.school); new.student := btrim(new.student); new.goal := btrim(new.goal); new.created_by := auth.uid(); new.created_at := now();
+  elsif not private.coaches_school(old.school) then
+    new.school := old.school; new.student := old.student; new.event_id := old.event_id; new.goal := old.goal;
+  end if;
+  if tg_op = 'UPDATE' then new.created_by := old.created_by; new.created_at := old.created_at; end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_goal on public.practice_goals;
+create trigger guard_goal before insert or update on public.practice_goals for each row execute function public.guard_goal();
+revoke all on function public.guard_goal() from public, anon, authenticated;
+
+alter table public.practice_goals enable row level security;
+revoke all on public.practice_goals from anon, authenticated;
+grant select, insert, update, delete on public.practice_goals to authenticated;
+drop policy if exists "Coach and student read goals" on public.practice_goals;
+create policy "Coach and student read goals" on public.practice_goals for select to authenticated
+  using (private.coaches_school(school) or private.is_student(school, student));
+drop policy if exists "Coaches set goals" on public.practice_goals;
+create policy "Coaches set goals" on public.practice_goals for insert to authenticated with check (private.coaches_school(school));
+drop policy if exists "Coach and student update goals" on public.practice_goals;
+create policy "Coach and student update goals" on public.practice_goals for update to authenticated
+  using (private.coaches_school(school) or private.is_student(school, student))
+  with check (private.coaches_school(school) or private.is_student(school, student));
+drop policy if exists "Coaches remove goals" on public.practice_goals;
+create policy "Coaches remove goals" on public.practice_goals for delete to authenticated using (private.coaches_school(school));

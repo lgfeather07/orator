@@ -1,9 +1,9 @@
 import { supabase } from './auth';
-import type { Division, Entry, Judge, JudgePrefs, ScheduleChange, Section, Tournament, TournamentStatus, UpdateKind } from './tournament';
+import type { Division, Entry, Issue, IssueKind, Judge, JudgePrefs, PracticeGoal, ScheduleChange, Section, Tournament, TournamentStatus, UpdateKind } from './tournament';
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[] };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[]; checkedIn: boolean };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -48,8 +48,8 @@ export async function saveTournament(id: string, patch: Partial<Tournament>): Pr
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[] };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [] });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[]; checked_in?: boolean };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [], checkedIn: row.checked_in ?? false });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -170,5 +170,58 @@ export async function listUpdates(tournamentId: string): Promise<ScheduleChange[
 
 export async function addUpdate(tournamentId: string, kind: UpdateKind, message: string): Promise<void> {
   const { error } = await db().from('tournament_updates').insert({ tournament_id: tournamentId, kind, message: message.slice(0, 300) });
+  if (error) fail(error.message);
+}
+
+type IssueRecord = { id: string; kind: IssueKind; location: string; detail: string; reporter_name: string; reporter_role: string; status: 'open' | 'resolved'; created_at: string };
+const toIssue = (row: IssueRecord): Issue => ({ id: row.id, kind: row.kind, where: row.location, detail: row.detail, reporter: row.reporter_name || 'Someone', role: row.reporter_role, status: row.status, time: new Date(row.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+
+/** Issues reported at a tournament: all of them for the director, your own for everyone else. */
+export async function listIssues(tournamentId: string): Promise<Issue[]> {
+  const { data, error } = await db().from('issues').select('*').eq('tournament_id', tournamentId).order('created_at', { ascending: false });
+  if (error) fail(error.message);
+  return ((data ?? []) as IssueRecord[]).map(toIssue);
+}
+
+export async function reportIssue(tournamentId: string, issue: { kind: IssueKind; where: string; detail: string; role: string }): Promise<Issue> {
+  const { data, error } = await db().from('issues').insert({ tournament_id: tournamentId, kind: issue.kind, location: issue.where, detail: issue.detail, reporter_role: issue.role }).select('*').single();
+  if (error) fail(error.message);
+  return toIssue(data as IssueRecord);
+}
+
+export async function resolveIssue(id: string): Promise<void> {
+  const { error } = await db().from('issues').update({ status: 'resolved' }).eq('id', id);
+  if (error) fail(error.message);
+}
+
+/** The director marks a judge as arrived (or not). */
+export async function setJudgeCheckedIn(tournamentId: string, userId: string, checkedIn: boolean): Promise<void> {
+  const { error } = await db().from('tournament_members').update({ checked_in: checkedIn }).eq('tournament_id', tournamentId).eq('user_id', userId).eq('role', 'judge');
+  if (error) fail(error.message);
+}
+
+type GoalRecord = { id: string; school: string; student: string; event_id: string; goal: string; done: boolean; created_at: string };
+const toGoal = (row: GoalRecord): PracticeGoal => ({ id: row.id, school: row.school, student: row.student, eventId: row.event_id, text: row.goal, done: row.done, created: new Date(row.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) });
+
+/** Practice goals the signed-in user can see: their team's (coach) or their own (student). */
+export async function listGoals(): Promise<PracticeGoal[]> {
+  const { data, error } = await db().from('practice_goals').select('*').order('created_at', { ascending: false });
+  if (error) fail(error.message);
+  return ((data ?? []) as GoalRecord[]).map(toGoal);
+}
+
+export async function addGoal(goal: { school: string; student: string; eventId: string; text: string }): Promise<PracticeGoal> {
+  const { data, error } = await db().from('practice_goals').insert({ school: goal.school, student: goal.student, event_id: goal.eventId, goal: goal.text }).select('*').single();
+  if (error) fail(error.message);
+  return toGoal(data as GoalRecord);
+}
+
+export async function setGoalDone(id: string, done: boolean): Promise<void> {
+  const { error } = await db().from('practice_goals').update({ done }).eq('id', id);
+  if (error) fail(error.message);
+}
+
+export async function removeGoal(id: string): Promise<void> {
+  const { error } = await db().from('practice_goals').delete().eq('id', id);
   if (error) fail(error.message);
 }

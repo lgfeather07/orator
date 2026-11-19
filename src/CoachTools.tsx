@@ -1,21 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
+import { GoalList } from './Practice';
 import { useAuth } from './auth';
 import { listMyReleasedBallots, loadTeamBallots, type TeamBallotRow } from './ballotApi';
 import { ballotEvents, MARK_MAX } from './ballots';
-
-/** Practice focus checklist. Coach and student both tick items off; the coach can add to it. */
-export function PracticeChecklist({ canAdd = false }: { canAdd?: boolean }) {
-  const { checklist, toggleChecklist, addChecklist } = useStore();
-  const [draft, setDraft] = useState('');
-  const done = checklist.filter(item => item.done).length;
-  return <div className="practice-checklist">
-    <div className="field-label"><span>Practice focus checklist</span><small>{done} of {checklist.length} done</small></div>
-    {checklist.map(item => <label key={item.id} className={item.done ? 'done' : ''}><input type="checkbox" checked={item.done} onChange={() => toggleChecklist(item.id)}/><span>{item.label}</span></label>)}
-    {canAdd && <form onSubmit={event => { event.preventDefault(); if (draft.trim()) { addChecklist(draft.trim()); setDraft(''); } }}><input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Add a focus item" aria-label="New checklist item"/><Button variant="secondary" icon="plus" disabled={!draft.trim()}>Add</Button></form>}
-  </div>;
-}
 
 /** Student-facing opt-in for round reminders by text or email. */
 export function ReminderSettings() {
@@ -61,7 +50,7 @@ export function StudentRecordExtras({ student }: { student: string }) {
       <ul className="practice-log">{practiceLog.map(item => <li key={item.id}><small>{item.date}</small><p>{item.text}</p></li>)}</ul>
     </section>
 
-    <section className="record-card"><PracticeChecklist canAdd/></section>
+    <section className="record-card"><div className="field-label"><span><Icon name="sparkle" size={14}/> Practice goals</span><small>{first} sees these too</small></div><GoalList student={student} school="Wrenfield High" canEdit/></section>
 
     <section className="record-card">
       <div className="field-label"><span><Icon name="growth" size={14}/> Season scores</span><small>Average rating out of 50</small></div>

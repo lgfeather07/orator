@@ -7,7 +7,7 @@ import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type Pr
 
 /** What one judge's submitted ballot says about one speaker in one room. */
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
-import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
+import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type PracticeGoal, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
 import { ballotEvents } from './ballots';
 
 export type Presence = 'present' | 'absent';
@@ -34,7 +34,6 @@ export const tournamentJudges = [
 ];
 
 export type FocusNote = { id: number; text: string; urgent: boolean; sent: string; seen: boolean };
-export type ChecklistItem = { id: number; label: string; done: boolean };
 export type PracticeNote = { id: number; date: string; text: string };
 
 type Store = {
@@ -89,7 +88,9 @@ type Store = {
   speakerPresence: Record<string, Presence | undefined>; setSpeakerPresence: (code: string, p: Presence | undefined) => void;
   judgeCheckedIn: Record<string, boolean>; toggleJudge: (id: string) => void;
   focusNotes: FocusNote[]; sendFocusNote: (text: string, urgent: boolean) => void; markNoteSeen: (id: number) => void;
-  checklist: ChecklistItem[]; toggleChecklist: (id: number) => void; addChecklist: (label: string) => void;
+  /** Practice goals: what a coach asks each student to work on. Saved to the database when signed in. */
+  practiceGoals: PracticeGoal[]; addGoal: (goal: { student: string; school: string; eventId: string; text: string }) => void;
+  toggleGoal: (id: string) => void; removeGoal: (id: string) => void;
   practiceLog: PracticeNote[]; addPractice: (text: string) => void;
   reminders: { text: boolean; email: boolean }; setReminders: (r: { text: boolean; email: boolean }) => void;
 };
@@ -101,10 +102,18 @@ const defaultLeatherPreferences: JudgePrefs = allEventIds.map(id => ({ id, level
   .sort((a, b) => ['top', 'willing', 'avoid'].indexOf(a.level) - ['top', 'willing', 'avoid'].indexOf(b.level));
 const samplePoolPreferences: Record<string, JudgePrefs> = Object.fromEntries(judgePool.map(judge => [judge.id, samplePreferences(judge.id, allEventIds)]));
 const seedSubmitted = ['Kestrel Prep', 'Halden West', 'Brightwater High', 'Ashgrove', 'Larkspur High', 'Thornbury', 'Fallow Creek'];
+const seedGoals: PracticeGoal[] = [
+  ['Pause after the opening story', 'info', true], ['Name each main point before moving on', 'info', true], ['Cite the date and source for every statistic', 'info', false], ['Hold eye contact through the final sentence', 'persuasive', false],
+].map(([text, eventId, done], index) => ({ id: `g${index + 1}`, school: 'Wrenfield High', student: 'Maya Rodriguez', eventId: eventId as string, text: text as string, done: done as boolean, created: 'Oct 14' }))
+  .concat([
+    { id: 'g5', school: 'Wrenfield High', student: 'Eli Thompson', eventId: 'extemp', text: 'Use the full seven minutes; finish no earlier than 6:30', done: false, created: 'Oct 15' },
+    { id: 'g6', school: 'Wrenfield High', student: 'Sam Wilson', eventId: 'poetry', text: 'Let the big moments breathe with a pause', done: false, created: 'Oct 15' },
+    { id: 'g7', school: 'Wrenfield High', student: 'Nora Patel', eventId: 'persuasive', text: 'Slow down through transitions so each point lands', done: true, created: 'Oct 10' },
+  ]);
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -151,22 +160,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [myPreferences, setMyPreferences] = useState<JudgePrefs>(saved?.myPreferences ?? defaultLeatherPreferences);
   const [prelimResults, setPrelimResults] = useState<PrelimResult[]>(saved?.prelimResults ?? []);
   const [finalResults, setFinalResults] = useState<FinalResult[]>(saved?.finalResults ?? []);
+  const [practiceGoals, setPracticeGoals] = useState<PracticeGoal[]>(saved?.practiceGoals ?? seedGoals);
   const [scheduleChanges, setScheduleChanges] = useState<ScheduleChange[]>(saved?.scheduleChanges ?? []);
   const [myJudgeProfile, setMyJudgeProfile] = useState(saved?.myJudgeProfile ?? { clean: false, knows: ['Ashgrove'] });
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals]);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
     { id: 1, text: 'Slow down after your opening story. Give the thesis room to land before moving into evidence.', urgent: false, sent: 'Before Round 2', seen: false },
-  ]);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([
-    { id: 1, label: 'Pause after the opening story', done: true },
-    { id: 2, label: 'Name each main point before moving on', done: true },
-    { id: 3, label: 'Cite the date and source for every statistic', done: false },
-    { id: 4, label: 'Hold eye contact through the final sentence', done: false },
   ]);
   const [practiceLog, setPracticeLog] = useState<PracticeNote[]>([
     { id: 2, date: 'Oct 16 · Practice', text: 'Ran 10:12. Cut the second groundwater example to get back under time.' },
@@ -188,6 +192,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveSections, setLiveSections] = useState<Section[]>([]);
   const [liveResults, setLiveResults] = useState<RoomResult[]>([]);
   const [liveUpdates, setLiveUpdates] = useState<ScheduleChange[]>([]);
+  const [liveIssues, setLiveIssues] = useState<Issue[]>([]);
+  const [liveGoals, setLiveGoals] = useState<PracticeGoal[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -199,13 +205,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ?? all.find(item => mine.some(member => member.tournamentId === item.id && member.status === 'approved'))
         ?? all.find(item => mine.some(member => member.tournamentId === item.id));
       setTournaments(all); setMyMemberships(mine); setTournamentId(active?.id ?? null);
+      // Practice goals follow the student across tournaments, so they load whatever tournament is showing.
+      setLiveGoals(await api.listGoals().catch(() => []));
       if (active) {
         const [entryRows, sectionRows, memberRows] = await Promise.all([api.listEntries(active.id), api.listSections(active.id), api.listMembers(active.id)]);
         setLiveEntries(entryRows); setLiveSections(sectionRows); setMembers(memberRows);
         // Only the director can read every submitted ballot; for everyone else this stays empty.
         setLiveResults(active.directorId === userId ? await listTournamentResults(active.id).catch(() => []) : []);
         setLiveUpdates(await api.listUpdates(active.id).catch(() => []));
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); }
+        setLiveIssues(await api.listIssues(active.id).catch(() => []));
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -249,6 +258,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     entries: liveEntries,
     scheduleChanges: liveUpdates,
+    issues: liveIssues,
+    reportIssue: issue => {
+      if (!tournamentId) { setSyncError('Join a tournament first, then report the issue. In an emergency, call 911.'); return; }
+      api.reportIssue(tournamentId, issue).then(saved => setLiveIssues(list => [saved, ...list])).catch(report);
+    },
+    resolveIssue: id => { setLiveIssues(list => list.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)); api.resolveIssue(id).catch(caught => { report(caught); refresh(); }); },
+    judgeCheckedIn: Object.fromEntries(members.filter(member => member.role === 'judge').map(member => [member.userId, member.checkedIn])),
+    toggleJudge: id => {
+      const member = members.find(item => item.role === 'judge' && item.userId === id); if (!member || !tournamentId) return;
+      setMembers(list => list.map(item => item === member ? { ...item, checkedIn: !item.checkedIn } : item));
+      api.setJudgeCheckedIn(tournamentId, id, !member.checkedIn).catch(caught => { report(caught); refresh(); });
+    },
+    practiceGoals: liveGoals,
+    addGoal: goal => { api.addGoal(goal).then(saved => setLiveGoals(list => [saved, ...list])).catch(report); },
+    toggleGoal: id => { const goal = liveGoals.find(item => item.id === id); if (!goal) return; setLiveGoals(list => list.map(item => item.id === id ? { ...item, done: !item.done } : item)); api.setGoalDone(id, !goal.done).catch(caught => { report(caught); refresh(); }); },
+    removeGoal: id => { setLiveGoals(list => list.filter(item => item.id !== id)); api.removeGoal(id).catch(caught => { report(caught); refresh(); }); },
     entriesOpen: (liveTournament?.entriesOpen ?? true) && (liveTournament?.status ?? 'registration') === 'registration',
     addEntry: (student, school, eventId, division) => { if (tournamentId) api.insertEntry(tournamentId, student, school, eventId, division ?? 'varsity').then(entry => setLiveEntries(list => [...list, entry])).catch(report); },
     removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).catch(caught => { report(caught); refresh(); }); },
@@ -274,7 +299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     recordRoomResults: () => { refresh(); },
     judgePreferences: Object.fromEntries(members.filter(member => member.role === 'judge').map(member => [member.userId, member.preferences])),
     myPreferences: myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge')?.preferences.length ? myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge')!.preferences : myPreferences,
-    myJudgeProfile: myJudgeRow ? { clean: myJudgeRow.clean, knows: myJudgeRow.knows } : myJudgeProfile,
+    myJudgeProfile: myJudgeRow ? { clean: myJudgeRow.clean, knows: myJudgeRow.knows } : { clean: false, knows: [] },
     saveJudgeProfile: profile => {
       setMyJudgeProfile(profile);
       // Show the change straight away; the database copy arrives with the next refresh.
@@ -315,7 +340,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); },
     judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
     myPreferences, savePreferences: setMyPreferences,
     roomResults,
@@ -337,9 +362,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     focusNotes,
     sendFocusNote: (text, urgent) => setFocusNotes(current => [{ id: Date.now(), text, urgent, sent: 'Just now', seen: false }, ...current]),
     markNoteSeen: id => setFocusNotes(current => current.map(note => note.id === id ? { ...note, seen: true } : note)),
-    checklist,
-    toggleChecklist: id => setChecklist(current => current.map(item => item.id === id ? { ...item, done: !item.done } : item)),
-    addChecklist: label => setChecklist(current => [...current, { id: Date.now(), label, done: false }]),
+    practiceGoals,
+    addGoal: goal => setPracticeGoals(current => [{ ...goal, id: `g${Date.now()}`, done: false, created: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }) }, ...current]),
+    toggleGoal: id => setPracticeGoals(current => current.map(goal => goal.id === id ? { ...goal, done: !goal.done } : goal)),
+    removeGoal: id => setPracticeGoals(current => current.filter(goal => goal.id !== id)),
     practiceLog, addPractice: text => setPracticeLog(current => [{ id: Date.now(), date: 'Today · Practice', text }, ...current]),
     reminders, setReminders,
     resultsAreReal: false,

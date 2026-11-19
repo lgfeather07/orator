@@ -71,8 +71,8 @@ export type Entry = { id: string; student: string; school: string; eventId: stri
  * `knows` lists other schools whose students they know (a former team, their own kids' school), kept off like their own school.
  */
 export type Judge = { id: string; name: string; school: string; clean?: boolean; knows?: string[] };
-/** True if this judge shouldn't hear a speaker from this school. */
-export const judgeConflict = (judge: Judge, school: string) => (judge.school !== '' && sameSchool(judge.school, school)) || (judge.knows ?? []).some(known => sameSchool(known, school));
+/** True if this judge shouldn't hear a speaker from this school. A clean judge knows nobody, so can judge any room. */
+export const judgeConflict = (judge: Judge, school: string) => !judge.clean && ((judge.school !== '' && sameSchool(judge.school, school)) || (judge.knows ?? []).some(known => sameSchool(known, school)));
 
 /** One room in one round: a judge hears these entries, in this speaking order. */
 export type Section = { id: string; round: number; eventId: string; division?: Division; label: string; room: string; judgeId: string | null; judgeName?: string; entryIds: string[] };
@@ -91,6 +91,9 @@ export const parseContest = (key: string): { eventId: string; division: Division
  */
 export type UpdateKind = 'schedule' | 'entries';
 export type ScheduleChange = { id: string; time: string; text: string; kind?: UpdateKind };
+
+/** Something a coach asks a student to work on. It belongs to the student, so it carries across the season. */
+export type PracticeGoal = { id: string; school: string; student: string; eventId: string; text: string; done: boolean; created: string };
 
 export type IssueKind = 'no-judge' | 'injury' | 'schedule' | 'ballot' | 'other';
 export type Issue = {
@@ -227,7 +230,7 @@ export const preferenceFor = (prefs: JudgePrefs | undefined, eventId: string): P
  * they share a school with a finalist, or they judged that event in a preliminary round.
  */
 export function finalConflict(judge: Judge, contest: string, finalistSchools: string[], sections: Section[], tournament: Tournament): '' | 'school' | 'knows' | 'prelim' {
-  if (judge.school && finalistSchools.some(school => sameSchool(school, judge.school))) return 'school';
+  if (!judge.clean && judge.school && finalistSchools.some(school => sameSchool(school, judge.school))) return 'school';
   if (finalistSchools.some(school => judgeConflict(judge, school))) return 'knows';
   // Either division: a judge who heard Novice Informative in prelims doesn't judge the Varsity Informative final either.
   const { eventId } = parseContest(contest);

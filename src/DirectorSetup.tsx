@@ -187,14 +187,44 @@ export function SetupSummary() {
 }
 
 /** Morning check-in board: which judges have arrived, searchable by judge, room, or event. */
+/** Signed in: the tournament's approved judges, where each one is in the chosen round, and who has arrived. */
+function LiveCheckInBoard() {
+  const { judges, judgeCheckedIn, toggleJudge, sections, tournament } = useStore();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'missing'>('all');
+  const rounds = [...new Set(sections.map(section => section.round))].sort((a, b) => a - b);
+  const [round, setRound] = useState(rounds[0] ?? 1);
+  const roomOf = (id: string) => sections.find(section => section.round === round && section.judgeId === id);
+  const arrived = judges.filter(judge => judgeCheckedIn[judge.id]).length;
+  const rows = judges.filter(judge => `${judge.name} ${judge.school} ${roomOf(judge.id)?.room ?? ''}`.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || !judgeCheckedIn[judge.id]));
+  return <div className="checkin-layout single">
+    <section className="panel">
+      <div className="panel-head"><div><h2>Judge check-in</h2><p>Mark each judge as they arrive. Saved for everyone running the tab room.</p></div><Badge tone={judges.length && arrived === judges.length ? 'success' : 'warning'} icon={judges.length && arrived === judges.length ? 'check' : 'clock'}>{arrived} of {judges.length} checked in</Badge></div>
+      <div className="checkin-tools">
+        <label className="search-box"><Icon name="search"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search judge, school, or room"/></label>
+        {rounds.length > 0 && <label className="inline-select"><span>Rooms for</span><select value={round} onChange={event => setRound(Number(event.target.value))}>{rounds.map(number => <option key={number} value={number}>{number > tournament.rounds ? 'Finals' : `Round ${number}`}</option>)}</select></label>}
+        <div className="segmented"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>All judges</button><button className={filter === 'missing' ? 'active' : ''} onClick={() => setFilter('missing')}>Not checked in</button></div>
+      </div>
+      {judges.length === 0 ? <p className="checkin-empty">No approved judges yet. Approve them on the People tab.</p> : <div className="checkin-list">{rows.map(judge => { const room = roomOf(judge.id); return <div key={judge.id} className={judgeCheckedIn[judge.id] ? 'in' : ''}>
+        <Avatar initials={judge.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()} size="sm"/>
+        <span><strong>{judge.name}</strong><small>{judge.clean ? 'Clean judge' : judge.school || 'No school affiliation'}</small></span>
+        <span><strong>{room?.room ?? 'No room'}</strong><small>{room ? `${eventName(room.eventId)} · ${room.label}` : 'Not assigned this round'}</small></span>
+        <Badge tone={judgeCheckedIn[judge.id] ? 'success' : 'warning'} icon={judgeCheckedIn[judge.id] ? 'check' : 'clock'}>{judgeCheckedIn[judge.id] ? 'Checked in' : 'Not here yet'}</Badge>
+        <button className="checkin-action" onClick={() => toggleJudge(judge.id)}>{judgeCheckedIn[judge.id] ? 'Undo' : 'Check in'}</button>
+      </div>; })}{rows.length === 0 && <p className="checkin-empty">No judges match.</p>}</div>}
+    </section>
+  </div>;
+}
+
 export function CheckInBoard() {
-  const { judgeCheckedIn, toggleJudge, speakerPresence } = useStore();
+  const { judgeCheckedIn, toggleJudge, speakerPresence, live } = useStore();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'missing'>('all');
   const arrived = tournamentJudges.filter(judge => judgeCheckedIn[judge.id]).length;
   const rows = tournamentJudges.filter(judge => `${judge.name} ${judge.room} ${judge.event} ${judge.school}`.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || !judgeCheckedIn[judge.id]));
   const present = roundSpeakers.filter(speaker => speakerPresence[speaker.code] === 'present').length;
   const noShow = roundSpeakers.filter(speaker => speakerPresence[speaker.code] === 'absent');
+  if (live) return <LiveCheckInBoard/>;
   return <div className="checkin-layout">
     <section className="panel">
       <div className="panel-head"><div><h2>Judge check-in</h2><p>Round 2 · starts 9:30 AM</p></div><Badge tone={arrived === tournamentJudges.length ? 'success' : 'warning'} icon={arrived === tournamentJudges.length ? 'check' : 'clock'}>{arrived} of {tournamentJudges.length} checked in</Badge></div>
