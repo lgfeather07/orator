@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Avatar, Badge, Button, Icon, Logo, OratorMark, Progress, downloadText, type IconName } from './ui';
 import { StoreProvider, useStore } from './store';
 import { JudgeBallot, SpeakerCheckIn, type BallotRoom } from './JudgeBallot';
@@ -10,6 +10,7 @@ import { TeamEntries } from './TeamEntries';
 import { EntryImport } from './EntryImport';
 import { TeamInvoice } from './Payments';
 import { PastBallots } from './PastBallots';
+import { listMyReleasedBallots } from './ballotApi';
 import { LegalFooter, LegalView, useLegalRoute } from './legal';
 import { ResultsBoard } from './Results';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
@@ -22,6 +23,7 @@ import { preferenceFor } from './tournament';
 import { eventCodes } from './ballots';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { CoachPractice, StudentPractice } from './Practice';
+import { StudentLinks } from './StudentLinks';
 import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
 
@@ -222,7 +224,7 @@ function CoachPracticeSection({ bare = false }: { bare?: boolean }) {
 /** The Practice page for a student: Maya in the demo, or the name and school they joined with. */
 function StudentPracticeSection({ bare = false }: { bare?: boolean }) {
   const { state, membership } = useAccess('student');
-  const who = state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : state === 'approved' && membership ? { name: membership.name, school: membership.school } : null;
+  const who = state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : state === 'approved' && membership ? { name: membership.rosterName || membership.name, school: membership.school } : null;
   if (!who) return <div className="role-dashboard"><AccessWait role="student" what="Your practice goals appear"/></div>;
   const practice = <StudentPractice student={who.name} school={who.school}/>;
   return bare ? practice : <div className="role-dashboard">{practice}</div>;
@@ -440,7 +442,7 @@ function MyEntries() {
   const { entries, sections, tournament } = useStore();
   const access = useAccess('student');
   // The demo follows Maya; a signed-in student is matched to entries under the name and school they joined with.
-  const who = access.state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : access.state === 'approved' && access.membership ? { name: access.membership.name, school: access.membership.school } : null;
+  const who = access.state === 'demo' ? { name: 'Maya Rodriguez', school: 'Wrenfield High' } : access.state === 'approved' && access.membership ? { name: access.membership.rosterName || access.membership.name, school: access.membership.school } : null;
   if (!who) return null;
   const mine = entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school));
   const published = tournament.status !== 'registration' && sections.length > 0;
@@ -578,7 +580,7 @@ function LiveCoachPage() {
           <div className="hero-actions"><Button icon="plus" disabled={!store.entriesOpen} onClick={() => setView('import')}>Add students</Button><Button variant="secondary" icon="sparkle" onClick={() => setView('practice')}>Practice goals</Button></div></div></section>
         <div className="metric-grid"><Metric label="Students entered" value={String(students.length)} note={`${mine.length} entries${multi ? ` · ${multi} in more than one event` : ''}`} icon="users"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Rooms and times are below' : 'The director publishes it'} icon="clock"/><Metric label="Practice goals" value={String(openGoals)} note="Still to work on" icon="sparkle"/><Metric label="Results" value={store.resultsReleased ? 'Released' : 'Held'} note={store.resultsReleased ? 'Your students can see them' : 'Release after the tournament'} icon={store.resultsReleased ? 'check' : 'lock'}/></div>
         <div className="role-tabs"><button className={view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('entries')}>Team entries</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballots</button></div>
-        {view === 'practice' ? <CoachPractice school={school} students={students}/> : view === 'ballots' ? <><ReleaseResults/><TeamBallots/></> : <CoachEntries importing={view === 'import'} onBack={view === 'import' ? () => setView('entries') : undefined}/>}
+        {view === 'practice' ? <CoachPractice school={school} students={students}/> : view === 'ballots' ? <><ReleaseResults/><TeamBallots/></> : <><CoachEntries importing={view === 'import'} onBack={view === 'import' ? () => setView('entries') : undefined}/>{view === 'entries' && <StudentLinks school={school}/>}</>}
       </> : <AccessWait role="coach" what="Your team page opens"/>}
     </div>
   </DesktopShell>;
@@ -590,16 +592,19 @@ function LiveStudentPage() {
   const greeting = useGreeting('Student');
   const { state, membership } = useAccess('student');
   const [view, setView] = useState<'today' | 'practice' | 'ballots'>('today');
-  const who = state === 'approved' && membership ? { name: membership.name, school: membership.school } : null;
+  const who = state === 'approved' && membership ? { name: membership.rosterName || membership.name, school: membership.school } : null;
   const mine = who ? store.entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school)) : [];
   const goals = who ? store.practiceGoals.filter(goal => goal.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(goal.school, who.school)) : [];
   const published = store.tournament.status !== 'registration' && store.sections.length > 0;
+  // A student can't see their coach's release flag, but they can see whether any of their ballots are readable.
+  const [released, setReleased] = useState(false);
+  useEffect(() => { let active = true; if (who && store.tournamentId && store.tournament.status === 'finished') listMyReleasedBallots(store.tournamentId).then(rows => active && setReleased(rows.length > 0)).catch(() => undefined); return () => { active = false; }; }, [who?.name, store.tournamentId, store.tournament.status]);
   return <DesktopShell active="Overview" title={greeting} subtitle={who ? `${who.school} · ${store.tournament.name}` : 'Your events, practice goals, and ballots.'} persona="student">
     <div className="role-dashboard">
       {who ? <>
         <section className="role-hero student-hero"><div><Badge tone="info">{statusText(store.tournament.status, store.entriesOpen)}</Badge><h2>{store.tournament.name}</h2><p>{[who.school, mine.length ? mine.map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') : 'No events entered yet'].join(' · ')}</p>
           <div className="hero-actions"><Button icon="sparkle" onClick={() => setView('practice')}>My practice goals</Button></div></div></section>
-        <div className="metric-grid"><Metric label="Events" value={String(mine.length)} note={mine.length > 1 ? loadLabel(mine.length) : mine.length ? 'One event' : 'Your coach enters you'} icon="ballot"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Your rooms are below' : 'Appears once published'} icon="clock"/><Metric label="Practice goals" value={`${goals.filter(goal => goal.done).length}/${goals.length}`} note="Done so far" icon="sparkle"/><Metric label="Results" value={store.resultsReleased ? 'Released' : 'Hidden'} note={store.resultsReleased ? 'Released by your coach' : 'Until your coach releases them'} icon={store.resultsReleased ? 'growth' : 'lock'}/></div>
+        <div className="metric-grid"><Metric label="Events" value={String(mine.length)} note={mine.length > 1 ? loadLabel(mine.length) : mine.length ? 'One event' : 'Your coach enters you'} icon="ballot"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Your rooms are below' : 'Appears once published'} icon="clock"/><Metric label="Practice goals" value={`${goals.filter(goal => goal.done).length}/${goals.length}`} note="Done so far" icon="sparkle"/><Metric label="Results" value={released ? 'Released' : 'Hidden'} note={released ? 'Your ballots are under My ballots' : 'Until your coach releases them'} icon={released ? 'growth' : 'lock'}/></div>
         <div className="role-tabs"><button className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>My events</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>My ballots</button></div>
         {view === 'practice' ? <StudentPractice student={who.name} school={who.school}/> : view === 'ballots' ? <MyTournamentBallots/> : <MyEntries/>}
       </> : <AccessWait role="student" what="Your events and ballots appear"/>}

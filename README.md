@@ -21,7 +21,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
-2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`.
+2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`, then `supabase/fixes.sql` (saved director settings and linking student accounts to the roster).
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 

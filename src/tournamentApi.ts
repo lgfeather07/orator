@@ -3,7 +3,7 @@ import type { Division, Entry, Issue, IssueKind, Judge, JudgePrefs, PracticeGoal
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[]; checkedIn: boolean };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[]; checkedIn: boolean; rosterName: string };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -14,8 +14,16 @@ const fail = (message: string): never => {
 };
 const db = () => supabase ?? fail('Accounts are not connected.');
 
-type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus; entries_open?: boolean; show_rating?: boolean };
-const toTournament = (row: TournamentRecord): TournamentRow => ({ id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status, entriesOpen: row.entries_open ?? true, showRating: row.show_rating ?? false });
+type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus; entries_open?: boolean; show_rating?: boolean; settings?: Record<string, unknown> };
+/**
+ * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
+ * They are saved together in the tournament's `settings` (see supabase/settings.sql).
+ */
+const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints'] as const;
+type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
+const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
+export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);
+const toTournament = (row: TournamentRecord): TournamentRow => ({ ...settingsOf((row.settings ?? {}) as Partial<Tournament>), id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status, entriesOpen: row.entries_open ?? true, showRating: row.show_rating ?? false });
 const tournamentColumns = (patch: Partial<Tournament>) => {
   const out: Record<string, unknown> = {};
   if (patch.name !== undefined) out.name = patch.name;
@@ -43,13 +51,16 @@ export async function createTournament(tournament: Tournament): Promise<Tourname
   return toTournament(data as TournamentRecord);
 }
 
-export async function saveTournament(id: string, patch: Partial<Tournament>): Promise<void> {
-  const { error } = await db().from('tournaments').update(tournamentColumns(patch)).eq('id', id);
+/** Save a change. `whole` is the tournament after the change, so settings are saved as one complete set. */
+export async function saveTournament(id: string, patch: Partial<Tournament>, whole?: Partial<Tournament>): Promise<void> {
+  const columns = tournamentColumns(patch);
+  if (touchesSettings(patch)) columns.settings = settingsOf(whole ?? patch);
+  const { error } = await db().from('tournaments').update(columns).eq('id', id);
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[]; checked_in?: boolean };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [], checkedIn: row.checked_in ?? false });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[]; checked_in?: boolean; roster_name?: string };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [], checkedIn: row.checked_in ?? false, rosterName: row.roster_name ?? '' });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -223,5 +234,18 @@ export async function setGoalDone(id: string, done: boolean): Promise<void> {
 
 export async function removeGoal(id: string): Promise<void> {
   const { error } = await db().from('practice_goals').delete().eq('id', id);
+  if (error) fail(error.message);
+}
+
+/** Student accounts approved at the signed-in coach's school, with the roster name each is linked to. */
+export async function listSchoolStudents(tournamentId: string): Promise<{ userId: string; name: string; rosterName: string }[]> {
+  const { data, error } = await db().rpc('school_students', { target: tournamentId });
+  if (error) fail(error.message);
+  return ((data ?? []) as { user_id: string; display_name: string; roster_name: string }[]).map(row => ({ userId: row.user_id, name: row.display_name, rosterName: row.roster_name }));
+}
+
+/** A coach links a student account to the name on their entries ('' to unlink). */
+export async function linkStudent(tournamentId: string, userId: string, rosterName: string): Promise<void> {
+  const { error } = await db().rpc('link_student', { target: tournamentId, student: userId, name: rosterName });
   if (error) fail(error.message);
 }

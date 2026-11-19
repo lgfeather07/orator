@@ -923,3 +923,10 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 .practice-empty p { max-width: 440px; color: var(--muted); font-size: 13px; }
 @media (max-width: 1100px) { .practice-layout { grid-template-columns: 220px minmax(0, 1fr); } .practice-insight { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .practice-layout { grid-template-columns: 1fr; } }
+.student-links ul { margin: 0; padding: 4px 18px 18px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.student-links li { padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) 220px auto; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 10px; }
+.student-links li > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.student-links li small { color: var(--muted); font-size: 12px; }
+.student-links select { min-height: 36px; padding: 0 9px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 13px; }
+.sync-inline { margin: 0 18px 10px; color: var(--red); font-size: 12.5px; }
+@media (max-width: 640px) { .student-links li { grid-template-columns: 1fr; } }

@@ -254,7 +254,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patchLiveTournament(patch);
       if (patch.entriesOpen !== undefined && liveTournament) logChange(entriesNote(patch.entriesOpen), liveTournament.status, 'entries');
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
-      api.saveTournament(tournamentId, patch).catch(caught => { report(caught); refresh(); });
+      api.saveTournament(tournamentId, patch, liveTournament ? { ...liveTournament, ...patch } : patch).catch(caught => { report(caught); refresh(); });
     },
     entries: liveEntries,
     scheduleChanges: liveUpdates,
