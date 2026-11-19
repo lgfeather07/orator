@@ -6,6 +6,8 @@ import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { parseContest, sameSchool } from './tournament';
 import { loadPublished, newestFirst, sameName, seasonOf, whenOf, type PublishedPlacing, type PublishedResults, type PublishedTeam, type PublishedTournament } from './publicResultsApi';
+import { TeamCompare } from './TeamCompare';
+import { compareHref } from './teamCompare';
 import './publicResults.css';
 
 /**
@@ -14,12 +16,14 @@ import './publicResults.css';
  *   #/results/<tournament id>      final placings and team points
  *   #/school/<school>              a school's season history
  *   #/student/<school>/<student>   a student's season
+ *   #/compare/<school>/<rival>     two schools head to head (TeamCompare.tsx)
  */
 export type PublicRoute =
   | { kind: 'list' }
   | { kind: 'tournament'; id: string }
   | { kind: 'school'; school: string }
-  | { kind: 'student'; school: string; student: string };
+  | { kind: 'student'; school: string; student: string }
+  | { kind: 'compare'; school: string; rival?: string };
 
 const part = (text: string) => encodeURIComponent(text.trim());
 export const resultsHref = () => '#/results';
@@ -34,6 +38,7 @@ function readRoute(): PublicRoute | null {
   if (head === 'results') return parts[0] ? { kind: 'tournament', id: parts[0] } : { kind: 'list' };
   if (head === 'school' && parts[0]) return { kind: 'school', school: parts[0] };
   if (head === 'student' && parts[0] && parts[1]) return { kind: 'student', school: parts[0], student: parts[1] };
+  if (head === 'compare' && parts[0]) return { kind: 'compare', school: parts[0], rival: parts[1] };
   return null;
 }
 
@@ -47,7 +52,7 @@ export function usePublicRoute(): [PublicRoute | null, (route: PublicRoute | nul
   }, []);
   const go = (next: PublicRoute | null) => {
     if (!next) { history.replaceState(null, '', window.location.pathname + window.location.search); setRoute(null); window.scrollTo(0, 0); return; }
-    window.location.hash = (next.kind === 'list' ? resultsHref() : next.kind === 'tournament' ? tournamentHref(next.id) : next.kind === 'school' ? schoolHref(next.school) : studentHref(next.school, next.student)).slice(1);
+    window.location.hash = (next.kind === 'list' ? resultsHref() : next.kind === 'tournament' ? tournamentHref(next.id) : next.kind === 'school' ? schoolHref(next.school) : next.kind === 'compare' ? compareHref(next.school, next.rival) : studentHref(next.school, next.student)).slice(1);
   };
   return [route, go];
 }
@@ -218,7 +223,7 @@ function SchoolResults({ school }: { school: string }) {
       return { student, finals: mine.length, titles: mine.filter(row => row.place === 1).length, best: Math.min(...mine.map(row => row.place)) };
     }).sort((a, b) => b.titles - a.titles || b.finals - a.finals || a.student.localeCompare(b.student));
     return <>
-      <header className="pr-intro"><span className="eyebrow">School results</span><h1>{name}</h1><p>Published finalists and team finishes{seasons.length > 1 ? ', season by season' : ''}. Tournaments where {name} had no finalist or team points aren’t listed.</p><SeasonPicker seasons={seasons} season={season} onChange={setChosen}/></header>
+      <header className="pr-intro"><span className="eyebrow">School results</span><h1>{name}</h1><p>Published finalists and team finishes{seasons.length > 1 ? ', season by season' : ''}. Tournaments where {name} had no finalist or team points aren’t listed.</p><SeasonPicker seasons={seasons} season={season} onChange={setChosen}/><p><a href={compareHref(name)}>Compare {name} with another team</a></p></header>
       <div className="pr-metrics" aria-label={`${season} season totals`}>
         <Metric label="Tournaments" value={String(inSeason.length)} note={`${season} season`}/>
         <Metric label="Finalists" value={String(rows.length)} note={plural(students.length, 'student')}/>
@@ -286,12 +291,12 @@ function StudentResults({ school, student }: { school: string; student: string }
 
 // ── The page shell ──
 
-const titleOf = (route: PublicRoute) => route.kind === 'list' ? 'Tournament results' : route.kind === 'tournament' ? 'Tournament results' : route.kind === 'school' ? `${route.school} results` : `${route.student} · ${route.school}`;
+const titleOf = (route: PublicRoute) => route.kind === 'list' ? 'Tournament results' : route.kind === 'tournament' ? 'Tournament results' : route.kind === 'school' ? `${route.school} results` : route.kind === 'compare' ? `${route.school}${route.rival ? ` vs ${route.rival}` : ''} · Compare teams` : `${route.student} · ${route.school}`;
 
 export function PublicResultsView({ route, onClose, dark, setDark }: { route: PublicRoute; onClose: () => void; dark: boolean; setDark: (dark: boolean) => void }) {
   const { profile } = useAuth();
   useEffect(() => { const before = document.title; document.title = `${titleOf(route)} · Orator`; return () => { document.title = before; }; }, [route]);
-  const page = useMemo(() => route.kind === 'list' ? <ResultsList/> : route.kind === 'tournament' ? <TournamentResults key={route.id} id={route.id}/> : route.kind === 'school' ? <SchoolResults key={route.school} school={route.school}/> : <StudentResults key={`${route.school}|${route.student}`} school={route.school} student={route.student}/>, [route]);
+  const page = useMemo(() => route.kind === 'list' ? <ResultsList/> : route.kind === 'tournament' ? <TournamentResults key={route.id} id={route.id}/> : route.kind === 'school' ? <SchoolResults key={route.school} school={route.school}/> : route.kind === 'compare' ? <TeamCompare key={route.school} page school={route.school} rival={route.rival}/> : <StudentResults key={`${route.school}|${route.student}`} school={route.school} student={route.student}/>, [route]);
   return <div className="pr-page">
     <header className="pr-top">
       <a href={resultsHref()} className="pr-brand" aria-label="Orator tournament results"><Logo/><span aria-hidden="true">Results</span></a>
