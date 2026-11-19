@@ -7,6 +7,8 @@ export type EntryInput = {
   code: string; name: string; school: string;
   present: boolean | null; rank: number | null; rating: number | null; timeSeconds: number | null;
   timePenalty: boolean; marks: number[]; comments: string; reason: string; disqualifications: string[]; note: string;
+  /** The speech's title or thesis, as the speaker gave it or the judge wrote it down. */
+  title?: string;
 };
 
 export type SavedBallot = {
@@ -28,7 +30,7 @@ export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
   if (error) fail(error.message);
   if (!ballot) return null;
   const [entries, notes] = await Promise.all([
-    db.from('ballot_entries').select('speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications').eq('ballot_id', ballot.id),
+    db.from('ballot_entries').select('speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications, speech_title').eq('ballot_id', ballot.id),
     db.from('ballot_private_notes').select('speaker_code, note').eq('ballot_id', ballot.id),
   ]);
   if (entries.error) fail(entries.error.message);
@@ -38,7 +40,7 @@ export async function loadBallot(key: BallotKey): Promise<SavedBallot | null> {
     id: ballot.id, eventId: ballot.event_id, classA: ballot.class_a, status: ballot.status,
     entries: (entries.data ?? []).map(row => ({
       code: row.speaker_code, name: row.speaker_name, school: row.school, present: row.present, rank: row.rank, rating: row.rating,
-      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], comments: row.comments ?? '', reason: row.reason,
+      timeSeconds: row.time_seconds, timePenalty: row.time_penalty, marks: row.section_marks ?? [], comments: row.comments ?? '', reason: row.reason, title: row.speech_title ?? '',
       disqualifications: row.disqualifications ?? [], note: noteFor.get(row.speaker_code) ?? '',
     })),
   };
@@ -62,7 +64,7 @@ export async function saveBallot(key: BallotKey, id: string | null, eventId: str
   const saved = await db.from('ballot_entries').upsert(entries.map(entry => ({
     ballot_id: ballotId, speaker_code: entry.code, speaker_name: entry.name, school: entry.school, present: entry.present, rank: entry.rank,
     rating: entry.rating, time_seconds: entry.timeSeconds, time_penalty: entry.timePenalty, section_marks: entry.marks, comments: entry.comments, reason: entry.reason,
-    disqualifications: entry.disqualifications,
+    disqualifications: entry.disqualifications, speech_title: entry.title ?? '',
   })), { onConflict: 'ballot_id,speaker_code' });
   if (saved.error) fail(saved.error.message);
   const notes = await db.from('ballot_private_notes').upsert(entries.map(entry => ({ ballot_id: ballotId, speaker_code: entry.code, note: entry.note })), { onConflict: 'ballot_id,speaker_code' });

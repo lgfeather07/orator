@@ -3,8 +3,9 @@ import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
+import { RoomsEditor } from './Rooms';
 import { ListingSettings } from './Calendar';
-import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
+import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -107,6 +108,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       <div className="panel-head"><div><h2>Schedule</h2><p>{built ? `${sections.length} rooms across ${tournament.rounds} rounds` : 'Sort every entry into rooms, rounds, and judges.'}</p></div>
         <span className="panel-head-actions"><label className="inline-select"><span>Most speakers per room</span><select value={tournament.sectionSize} disabled={!editable} onChange={event => updateTournament({ sectionSize: Number(event.target.value) })}>{[5, 6, 7, 8].map(size => <option key={size} value={size}>{size}</option>)}</select></label>
         <Button icon={built ? 'sparkle' : 'plus'} variant={built ? 'secondary' : 'primary'} disabled={entries.length === 0} onClick={() => { store.generateSchedule(); setRound(1); }}>{built ? 'Rebuild' : 'Build schedule'}</Button></span></div>
+      <RoomsEditor editable/>
       {!built ? <div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>No schedule yet</h3><p>Orator splits each event into rooms of up to {tournament.sectionSize}, spreads teammates across rooms, mixes the rooms each round, and assigns judges with no school conflicts.</p><Button icon="plus" onClick={() => store.generateSchedule()}>Build schedule</Button></div> : <>
         <div className="schedule-tools"><div className="segmented">{Array.from({ length: tournament.rounds }, (_, index) => index + 1).map(number => <button key={number} className={round === number ? 'active' : ''} onClick={() => setRound(number)}>Round {number} · {roundTimes[number - 1]}</button>)}</div>
           <Badge tone={problems.length ? 'warning' : 'success'} icon={problems.length ? 'warning' : 'check'}>{problems.length ? `${problems.length} room${problems.length > 1 ? 's need' : ' needs'} attention` : 'Every room has a judge'}</Badge></div>
@@ -116,7 +118,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <div className="section-grid">{roundSections.map(section => {
           const flagged = !section.judgeId || conflict(section) || doubleBooked(section);
           return <article key={section.id} className={flagged ? 'flagged' : ''}>
-            <header><div><span className="eyebrow">{section.room}</span><strong>{eventName(section.eventId)}</strong><small>{section.label} · {section.entryIds.length} speakers</small></div>
+            <header><div><label className="room-pick"><span className="sr-only">Room for {eventName(section.eventId)} {section.label}</span><select className={roomNeeded(section.room) ? 'needed' : ''} value={section.room} onChange={event => store.assignRoom(section.id, event.target.value)}>{[...new Set([section.room, ...roomsFor(tournament)])].map(room => { const taken = roundSections.some(other => other.id !== section.id && other.room === room); return <option key={room} value={room}>{room}{taken ? ' (in use)' : ''}</option>; })}</select></label><strong>{eventName(section.eventId)}</strong><small>{section.label} · {section.entryIds.length} speakers</small></div>
               <label><span>Judge</span><select aria-label={`Judge for ${eventName(section.eventId)} ${section.label}`} value={section.judgeId ?? ''} onChange={event => store.assignJudge(section.id, event.target.value || null)}><option value="">Needs a judge</option>{judgePool.map(judge => <option key={judge.id} value={judge.id}>{judge.name}{judge.clean ? ' · clean' : judge.school ? ` · ${judge.school}` : ''}</option>)}</select></label></header>
             {flagged && <p className="section-flag"><Icon name="warning" size={14}/> {!section.judgeId ? 'No judge is free for this room. Pick one or add judges.' : conflict(section) ? 'This judge is from, or knows, the school of a speaker here.' : 'This judge is already in another room this round.'}</p>}
             <ol>{section.entryIds.map(id => { const entry = entries.find(item => item.id === id); const load = entryLoad(entries, entry?.student ?? '', entry?.school ?? ''); return entry ? <li key={id}><span>{entry.student}</span><small>{entry.school}</small>{load > 1 && <em className="load-tag" title={loadLabel(load)}>{loadLabel(load)}</em>}</li> : null; })}</ol>

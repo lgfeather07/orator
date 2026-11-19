@@ -75,3 +75,11 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function private.match_name(public.tournament_members) from public, anon;
 grant execute on function private.match_name(public.tournament_members) to authenticated;
+
+-- ── The speech's title or thesis on each ballot entry, as the speaker gave it or the judge wrote it down.
+alter table public.ballot_entries add column if not exists speech_title text not null default '';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ballot_entries_speech_title_length') then
+    alter table public.ballot_entries add constraint ballot_entries_speech_title_length check (char_length(speech_title) <= 200);
+  end if;
+end $$;

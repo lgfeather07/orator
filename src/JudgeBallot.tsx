@@ -7,7 +7,7 @@ import { useAuth } from './auth';
 import { loadBallot, saveBallot, type BallotKey, type EntryInput } from './ballotApi';
 
 /** `marks` are Orator's required 1–10 section marks; everything else is a field on the NSAA ballot. */
-type SpeakerBallot = { marks: number[]; minutes: string; seconds: string; general: string; comment: string; note: string; dq: string[] };
+type SpeakerBallot = { marks: number[]; minutes: string; seconds: string; general: string; comment: string; note: string; dq: string[]; title?: string };
 
 const MIN_COMMENT = 40;
 
@@ -148,13 +148,15 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   }
   const lowered = (code: string) => timePenalty(code) && (loweredByJudge(code) || finalRanked.indexOf(code) > ranked.indexOf(code));
 
+  // The speaker's own title, unless the judge wrote one down (when the speaker didn't announce one).
+  const titleOf = (code: string) => (ballots[code]?.title ?? '').trim() || speakers.find(item => item.code === code)?.title || '';
   const toEntries = (): EntryInput[] => speakers.map(item => {
     const data = ballots[item.code]; const presence = speakerPresence[item.code];
     const place = finalRanked.indexOf(item.code);
     return {
       code: item.code, name: item.name, school: item.school, present: presence ? presence === 'present' : null,
       rank: place >= 0 ? place + 1 : null, rating: ratingOf(data) || null, timeSeconds: secondsOf(data), timePenalty: flagsFor(item.code).penalty,
-      marks: data.marks, comments: data.general, reason: data.comment, disqualifications: data.dq, note: data.note,
+      marks: data.marks, comments: data.general, reason: data.comment, disqualifications: data.dq, note: data.note, title: titleOf(item.code),
     };
   });
 
@@ -172,7 +174,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
           next[entry.code] = {
             marks: [0, 1, 2, 3, 4].map(index => entry.marks[index] || 0),
             minutes: entry.timeSeconds === null ? '' : String(Math.floor(entry.timeSeconds / 60)), seconds: entry.timeSeconds === null ? '' : String(entry.timeSeconds % 60).padStart(2, '0'),
-            general: entry.comments, comment: entry.reason, note: entry.note, dq: entry.disqualifications,
+            general: entry.comments, comment: entry.reason, note: entry.note, dq: entry.disqualifications, title: entry.title ?? '',
           };
           setSpeakerPresence(entry.code, entry.present === null ? undefined : entry.present ? 'present' : 'absent');
         });
@@ -254,7 +256,8 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
       })}</div>
 
       <div className="jb-speaker">
-        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF {speakers.length}{room ? '' : ` · ${speaker.code}`}</span><h2>{speaker.name}</h2><p>{speaker.title ? `${speaker.title} · ` : ''}{speaker.school}</p>{loadOf(speaker.name) && <p className="jb-load"><Badge tone="info" icon="users">{loadOf(speaker.name)}</Badge> In more than one room this round. They may arrive late or need to leave early.</p>}</div>
+        <div><span className="eyebrow">SPEAKER {speakerIndex + 1} OF {speakers.length}{room ? '' : ` · ${speaker.code}`}</span><h2>{speaker.name}</h2><p>{speaker.school}</p>
+          <label className="jb-title"><span>Title or thesis</span><input value={ballot.title ?? speaker.title ?? ''} onChange={change => update({ title: change.target.value })} placeholder={speaker.title ? '' : 'Write it down if the speaker didn’t announce one'} maxLength={200}/></label>{loadOf(speaker.name) && <p className="jb-load"><Badge tone="info" icon="users">{loadOf(speaker.name)}</Badge> In more than one room this round. They may arrive late or need to leave early.</p>}</div>
         <SpeakerCheckIn code={current} onChange={() => { dirty.current = true; }}/>
       </div>
 
@@ -332,15 +335,15 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
     </> : <>
       <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>{showRating ? 'Sort by rating' : 'Sort by section marks'}</Button></div>
       <div className="jb-rank-list">
-        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>{showRating ? 'Rating' : 'Marks'}</span><span/></div>
+        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>{showRating ? 'Rating' : 'Points'}</span><span/></div>
         {finalRanked.map((code, index) => {
           const item = speakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
           return <div key={code} className={`jb-rank-row ${outOfOrder.has(code) ? 'conflict' : ''} ${dragged === code ? 'dragging' : ''}`} draggable onDragStart={() => setDragged(code)} onDragEnd={() => setDragged(null)} onDragOver={drag => drag.preventDefault()} onDrop={() => dropOn(code)}>
             <span className="jb-grip"><Icon name="drag"/></span>
             <span className="jb-rank-number">{index + 1}</span>
-            <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">{lowered(code) ? 'Lowered one rank for time' : 'Time penalty · already last'}</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small></span>
+            <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">{lowered(code) ? 'Lowered one rank for time' : 'Time penalty · already last'}</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small>{titleOf(code) && <em className="jb-rank-title">“{titleOf(code).replace(/^[“"]|[”"]$/g, '')}”</em>}</span>
             <span className={flags.penalty ? 'jb-over' : ''}>{seconds === null ? '—' : clock(seconds)}</span>
-            {showRating ? <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span> : <span>{ratingOf(data) ? <small>All marked</small> : <small>{data.marks.filter(Boolean).length} of {data.marks.length}</small>}</span>}
+            {showRating ? <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span> : <span>{data.marks.every(Boolean) ? <><strong>{markTotal(data)}</strong><small> pts</small></> : <small>{data.marks.filter(Boolean).length} of {data.marks.length} marked</small>}</span>}
             <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={ranked.indexOf(code) === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={ranked.indexOf(code) === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
           </div>;
         })}

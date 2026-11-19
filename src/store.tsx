@@ -48,6 +48,8 @@ type Store = {
   /** Schools whose coach has told the director their entries are final. */
   submittedSchools: string[]; submitSchool: (school: string) => void;
   sections: Section[]; generateSchedule: () => void; assignJudge: (sectionId: string, judgeId: string | null) => void;
+  /** Move one scheduled room somewhere else (a room becomes unavailable). Logged for coaches and judges once published. */
+  assignRoom: (sectionId: string, room: string) => void;
   issues: Issue[]; reportIssue: (issue: { kind: IssueKind; where: string; detail: string; reporter: string; role: string }) => void; resolveIssue: (id: string) => void;
   /** Coaches release rankings and comments to their students, and only once the tournament is over. */
   resultsReleased: boolean; releaseResults: () => void;
@@ -252,6 +254,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     else setScheduleChanges(list => [note, ...list].slice(0, 30));
   };
   const entriesNote = (open: boolean) => open ? 'The director reopened entries. You can add and drop students again.' : 'The director closed entries. Report an issue if something still needs to change.';
+  const describeRoomMove = (section: Section, room: string, t: Tournament) => `${roundLabel(section, t)} ${ballotEvents.find(event => event.id === section.eventId)?.name ?? section.eventId}${divisionOf(section) === 'novice' ? ` (${divisionLabel.novice})` : ''}, ${section.label.replace('Novice · ', '')}: moved from ${section.room} to ${room}`;
   const describeMove = (section: Section | undefined, judge: Judge | null, t: Tournament) => section ? `${roundLabel(section, t)} ${ballotEvents.find(event => event.id === section.eventId)?.name ?? section.eventId}${divisionOf(section) === 'novice' ? ` (${divisionLabel.novice})` : ''}, ${section.label.replace('Novice · ', '')}, ${section.room}: ${judge ? `now judged by ${judge.name}` : 'judge removed'}` : '';
   const patchLiveTournament = (patch: Partial<Tournament>) => setTournaments(list => list.map(item => item.id === tournamentId ? { ...item, ...patch } : item));
 
@@ -305,6 +308,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLiveSections(list => list.map(section => section.id === sectionId ? { ...section, judgeId: judge?.id ?? null, judgeName: judge?.name ?? '' } : section));
       api.saveSectionJudge(sectionId, judge).catch(caught => { report(caught); refresh(); });
     },
+    assignRoom: (sectionId, room) => {
+      const section = liveSections.find(item => item.id === sectionId); if (!section || section.room === room) return;
+      if (liveTournament) logChange(describeRoomMove(section, room, liveTournament), liveTournament.status);
+      setLiveSections(list => list.map(item => item.id === sectionId ? { ...item, room } : item));
+      api.saveSectionRoom(sectionId, room).catch(caught => { report(caught); refresh(); });
+    },
     resetDemo: () => undefined,
     roomResults: liveResults,
     recordRoomResults: () => { refresh(); },
@@ -346,6 +355,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     assignJudge: (sectionId, judgeId) => {
       logChange(describeMove(sections.find(item => item.id === sectionId), demoJudges.find(item => item.id === judgeId) ?? null, tournament), tournament.status);
       setSections(current => current.map(section => section.id === sectionId ? { ...section, judgeId } : section));
+    },
+    assignRoom: (sectionId, room) => {
+      const section = sections.find(item => item.id === sectionId); if (!section || section.room === room) return;
+      logChange(describeRoomMove(section, room, tournament), tournament.status);
+      setSections(current => current.map(item => item.id === sectionId ? { ...item, room } : item));
     },
     issues,
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),

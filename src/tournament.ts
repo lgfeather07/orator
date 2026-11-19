@@ -20,6 +20,8 @@ export type Tournament = {
   fees?: Fees;
   /** The director opens and closes entries. Closed entries stop coaches adding or dropping; the director still can. Defaults to open. */
   entriesOpen?: boolean;
+  /** The rooms the director has for this tournament, in the order to fill them. */
+  rooms?: string[];
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
   /** Whether novice finals earn team points. Usually not, so off by default. */
@@ -125,6 +127,11 @@ export const issueKinds: Record<IssueKind, { label: string; hint: string; urgent
   other: { label: 'Something else', hint: 'Anything the tab room should know.', urgent: false },
 };
 
+/** The director's rooms, or numbered placeholders until they add theirs. */
+export const roomsFor = (tournament: Tournament): string[] => tournament.rooms?.length ? tournament.rooms : Array.from({ length: 30 }, (_, index) => `Room ${index + 1}`);
+/** Rooms beyond the director's list are named so they stand out on the schedule. */
+export const roomNeeded = (room: string) => room.startsWith('Room needed');
+/** Sample rooms for the demo tournament. */
 export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118', 'Room 120', 'Room 305', 'Room 307', 'Room 309', 'Cafeteria'];
 
 export const judgePool: Judge[] = [
@@ -162,6 +169,7 @@ export const judgePool: Judge[] = [
 ];
 
 export const defaultTournament: Tournament = {
+  rooms,
   name: 'Larkspur Invitational', date: 'October 19, 2026', host: 'Larkspur High School', rounds: 3, sectionSize: 6, maxEntries: 4,
   eventIds: ['info', 'persuasive', 'extemp', 'entertainment', 'poetry', 'serious', 'humorous'], status: 'registration',
 };
@@ -198,6 +206,7 @@ export const loadLabel = (count: number) => count === 2 ? 'Double entered' : cou
  */
 export function buildSchedule(tournament: Tournament, entries: Entry[], judges: Judge[]): Section[] {
   const sections: Section[] = [];
+  const rooms = roomsFor(tournament);
   for (let round = 1; round <= tournament.rounds; round++) {
     const busyJudges = new Set<string>();
     let roomIndex = 0;
@@ -219,7 +228,7 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
         sections.push({
           id: `r${round}-${eventId}${division === 'novice' ? '-novice' : ''}-${groupIndex + 1}`, round, eventId, division,
           label: `${division === 'novice' ? 'Novice · ' : ''}Section ${String.fromCharCode(65 + groupIndex)}`,
-          room: rooms[roomIndex % rooms.length] + (roomIndex >= rooms.length ? ' (overflow)' : ''), judgeId: judge?.id ?? null, entryIds: ordered.map(entry => entry.id),
+          room: roomIndex < rooms.length ? rooms[roomIndex] : `Room needed ${roomIndex - rooms.length + 1}`, judgeId: judge?.id ?? null, entryIds: ordered.map(entry => entry.id),
         });
         roomIndex++;
       });
@@ -275,6 +284,7 @@ export function buildFinal(tournament: Tournament, contest: string, finalistIds:
   // Among equally keen judges, a clean judge (one who knows none of the competitors) goes first.
   const free = judges.filter(judge => !busy.has(judge.id) && finalConflict(judge, contest, schools, existing, tournament) === '')
     .map((judge, index) => ({ judge, score: order(judge) + (judge.clean ? 0 : 100), index })).sort((a, b) => a.score - b.score || a.index - b.index).map(item => item.judge);
+  const rooms = roomsFor(tournament);
   const room = rooms[(new Set(finalsAlready.map(section => section.room)).size) % rooms.length];
   return Array.from({ length: seats }, (_, seat) => ({
     id: `final-${eventId}${division === 'novice' ? '-novice' : ''}-${seat + 1}`, round: tournament.rounds + 1, eventId, division, label: `${division === 'novice' ? 'Novice final' : 'Final'} · Judge ${seat + 1}`, room,
