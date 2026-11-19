@@ -3,6 +3,7 @@ import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
+import { ListingSettings } from './Calendar';
 import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
@@ -72,6 +73,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
       <FeeSettings editable={editable}/>
+      <ListingSettings editable={editable}/>
       <div className="events-offered">
         <div className="field-label"><span>Events offered</span><small>{offered.length} of {ballotEvents.length} · official NSAA ballot built in for each</small></div>
         <div className="event-checks">{ballotEvents.map(event => <label key={event.id} className={offered.includes(event.id) ? 'on' : ''}>

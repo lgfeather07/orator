@@ -26,6 +26,7 @@ import { CoachPractice, StudentPractice } from './Practice';
 import { StudentLinks } from './StudentLinks';
 import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
+import { CalendarLink, CalendarView, RegistrationNotice, useCalendarRoute, useRegistrationLanding, type CalendarExit } from './Calendar';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
 
@@ -284,6 +285,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
       
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
+      {persona === 'coach' && showingPrimary && <div className="access-slot coach-calendar-link"><CalendarLink/></div>}
       {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Practice' ? (persona === 'student' ? <StudentPracticeSection/> : <CoachPracticeSection/>) : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona} primary={active} onOpenPrimary={() => setSection(active)}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
     {reporting && <ReportIssueModal reporter={profile.name} role={persona} onClose={() => setReporting(false)}/>}
@@ -659,6 +661,8 @@ function Workspace() {
   /** Visitors can explore every role with sample data without an account, even when accounts are connected. */
   const [demo, setDemo] = useState(false);
   const [legal, openLegal] = useLegalRoute();
+  const [calendar, openCalendar] = useCalendarRoute();
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const skip = <a className="skip-link" href="#main" onClick={event => { event.preventDefault(); const main = document.getElementById('main'); main?.setAttribute('tabindex', '-1'); main?.focus(); }}>Skip to main content</a>;
   const footer = <LegalFooter onOpen={openLegal}/>;
   const signedIn = authConfigured && profile !== null && !recovering;
@@ -667,6 +671,14 @@ function Workspace() {
   const home: Page = signedIn ? (profile!.roles.length === 1 ? profile!.roles[0] : 'signin') : 'auth';
   const current = signedIn && (page === 'auth' || !allowed(page)) ? home : page;
   const navigate = (target: Page) => setPage(allowed(target) ? target : home);
+  useRegistrationLanding(signedIn, signedIn ? profile!.roles : [], navigate);
+  // Leaving the public calendar: to sign up or sign in (registering a school), or into a workspace.
+  const leaveCalendar = (target: CalendarExit) => {
+    openCalendar(null);
+    if (target === 'signin' || target === 'signup') { setAuthMode(target); setDemo(false); setPage('auth'); }
+    else if (target === 'coach') { if (!signedIn) setDemo(true); navigate('coach'); }
+    else setPage(home);
+  };
   const content = useMemo(() => ({
     auth: <AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>,
     signin: <SignInPage/>,
@@ -676,7 +688,8 @@ function Workspace() {
   })[current], [current, signedIn]);
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
   if (legal) return <div className={dark ? 'app dark' : 'app'}>{skip}<LegalView page={legal} onClose={() => openLegal(null)} onOpen={openLegal}/></div>;
-  if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;
+  if (calendar) return <div className={dark ? 'app dark' : 'app'}>{skip}<CalendarView route={calendar} go={openCalendar} onExit={leaveCalendar} dark={dark} setDark={setDark}/>{footer}</div>;
+  if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage key={authMode} initialMode={authMode} notice={<RegistrationNotice/>} onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;
   return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{skip}{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}{footer}</div></NavigationContext.Provider>;
 }
 

@@ -1,5 +1,5 @@
 import { supabase } from './auth';
-import type { Division, Entry, Issue, IssueKind, Judge, JudgePrefs, PracticeGoal, ScheduleChange, Section, Tournament, TournamentStatus, UpdateKind } from './tournament';
+import type { Division, Entry, Fees, Issue, IssueKind, Judge, JudgePrefs, PracticeGoal, ScheduleChange, Section, Tournament, TournamentStatus, UpdateKind } from './tournament';
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
@@ -7,23 +7,23 @@ export type Member = { tournamentId: string; userId: string; role: MemberRole; s
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
-  if (/could not find|schema cache|does not exist/i.test(message)) throw new Error('The database needs an update. Run supabase/tournaments.sql in the Supabase SQL Editor.');
+  if (/could not find|schema cache|does not exist/i.test(message)) throw new Error('The database needs an update. Run supabase/tournaments.sql, then supabase/calendar.sql, in the Supabase SQL Editor.');
   if (/row-level security/i.test(message)) throw new Error('You don’t have permission to do that. The director may need to approve you first.');
   if (/entries_one_per_event/i.test(message)) throw new Error('That student is already entered in that event.');
   throw new Error(message);
 };
 const db = () => supabase ?? fail('Accounts are not connected.');
 
-type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus; entries_open?: boolean; show_rating?: boolean; settings?: Record<string, unknown> };
+type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus; entries_open?: boolean; show_rating?: boolean; settings?: Record<string, unknown> } & CalendarRecord;
 /**
  * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
- * They are saved together in the tournament's `settings` (see supabase/settings.sql).
+ * They are saved together in the tournament's `settings` (see supabase/fixes.sql). Fees are also kept in their own column for the public calendar..
  */
 const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest'] as const;
 type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
 const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
 export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);
-const toTournament = (row: TournamentRecord): TournamentRow => ({ ...settingsOf((row.settings ?? {}) as Partial<Tournament>), id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status, entriesOpen: row.entries_open ?? true, showRating: row.show_rating ?? false });
+const toTournament = (row: TournamentRecord): TournamentRow => ({ ...settingsOf((row.settings ?? {}) as Partial<Tournament>), id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status, entriesOpen: row.entries_open ?? true, showRating: row.show_rating ?? false, ...calendarFields(row) });
 const tournamentColumns = (patch: Partial<Tournament>) => {
   const out: Record<string, unknown> = {};
   if (patch.name !== undefined) out.name = patch.name;
@@ -36,8 +36,51 @@ const tournamentColumns = (patch: Partial<Tournament>) => {
   if (patch.status !== undefined) out.status = patch.status;
   if (patch.entriesOpen !== undefined) out.entries_open = patch.entriesOpen;
   if (patch.showRating !== undefined) out.show_rating = patch.showRating;
+  Object.assign(out, calendarColumns(patch));
   return out;
 };
+
+// ── Public calendar columns (supabase/calendar.sql). Rows from before that script have none of them.
+type CalendarRecord = { listed?: boolean; city?: string; start_date?: string | null; registration_deadline?: string | null; notes?: string; auto_approve_coaches?: boolean; fees?: Fees | null };
+const calendarFields = (row: CalendarRecord): Partial<Tournament> => ({
+  listed: row.listed ?? false, city: row.city ?? '', startDate: row.start_date ?? undefined, registrationDeadline: row.registration_deadline ?? undefined,
+  notes: row.notes ?? '', autoApproveCoaches: row.auto_approve_coaches ?? false, ...(row.fees ? { fees: row.fees } : {}),
+});
+const calendarColumns = (patch: Partial<Tournament>) => {
+  const out: Record<string, unknown> = {};
+  if (patch.listed !== undefined) out.listed = patch.listed;
+  if (patch.city !== undefined) out.city = patch.city.slice(0, 80);
+  if (patch.startDate !== undefined) out.start_date = patch.startDate || null;
+  if (patch.registrationDeadline !== undefined) out.registration_deadline = patch.registrationDeadline || null;
+  if (patch.notes !== undefined) out.notes = patch.notes.slice(0, 600);
+  if (patch.autoApproveCoaches !== undefined) out.auto_approve_coaches = patch.autoApproveCoaches;
+  if (patch.fees !== undefined) out.fees = patch.fees;
+  return out;
+};
+
+/** A tournament as the public calendar shows it: listed ones only, safe columns only. */
+export type PublicTournament = {
+  id: string; name: string; date: string; startDate?: string; host: string; city: string; registrationDeadline?: string; notes: string;
+  eventIds: string[]; maxEntries: number; rounds: number; status: TournamentStatus; entriesOpen: boolean; autoApproveCoaches: boolean;
+  entryFee?: number; judgeFee?: number; schoolFee?: number; schoolsRegistered: number;
+};
+type PublicRecord = { id: string; name: string; date: string; start_date: string | null; host: string; city: string; registration_deadline: string | null; notes: string; event_ids: string[] | null; max_entries: number; rounds: number; status: TournamentStatus; entries_open: boolean; auto_approve_coaches: boolean; entry_fee: number | string | null; judge_fee: number | string | null; school_fee: number | string | null; schools_registered: number };
+const amount = (value: number | string | null) => value === null || value === undefined || value === '' ? undefined : Number(value);
+const toPublic = (row: PublicRecord): PublicTournament => ({
+  id: row.id, name: row.name, date: row.date ?? '', startDate: row.start_date ?? undefined, host: row.host ?? '', city: row.city ?? '', registrationDeadline: row.registration_deadline ?? undefined, notes: row.notes ?? '',
+  eventIds: row.event_ids ?? [], maxEntries: row.max_entries, rounds: row.rounds, status: row.status, entriesOpen: row.entries_open ?? true, autoApproveCoaches: row.auto_approve_coaches ?? false,
+  entryFee: amount(row.entry_fee), judgeFee: amount(row.judge_fee), schoolFee: amount(row.school_fee), schoolsRegistered: row.schools_registered ?? 0,
+});
+
+/** Listed tournaments for the public calendar. Works without signing in. */
+export async function listPublicTournaments(): Promise<PublicTournament[]> {
+  const { data, error } = await db().rpc('list_public_tournaments');
+  if (error) {
+    if (/could not find|schema cache|does not exist/i.test(error.message)) throw new Error('The calendar isn’t set up yet. Run supabase/calendar.sql in the Supabase SQL Editor.');
+    fail(error.message);
+  }
+  return ((data ?? []) as PublicRecord[]).map(toPublic);
+}
 
 export async function listTournaments(): Promise<TournamentRow[]> {
   const { data, error } = await db().from('tournaments').select('*').order('created_at', { ascending: false });

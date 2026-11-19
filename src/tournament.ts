@@ -24,6 +24,18 @@ export type Tournament = {
   showRating?: boolean;
   /** Whether novice finals earn team points. Usually not, so off by default. */
   noviceTeamPoints?: boolean;
+  /** Public calendar listing (see Calendar.tsx). Listed by default for new tournaments. */
+  listed?: boolean;
+  /** City or venue shown on the calendar. */
+  city?: string;
+  /** The real date (YYYY-MM-DD) for sorting and filtering. `date` stays the text people read. */
+  startDate?: string;
+  /** Last day coaches can register (YYYY-MM-DD). */
+  registrationDeadline?: string;
+  /** A short note for coaches on the calendar. */
+  notes?: string;
+  /** A coach's request to register their school is approved at once. Judges and students still wait. */
+  autoApproveCoaches?: boolean;
   eventIds: string[]; status: TournamentStatus;
 };
 
