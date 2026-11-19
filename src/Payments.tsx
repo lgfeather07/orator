@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Badge, Button, Icon, downloadText, useDialog } from './ui';
 import { useStore } from './store';
-import { ORATOR_TOURNAMENT_FEE, defaultFees, invoiceFor, type Fees, type Invoice } from './tournament';
+import { ORATOR_PRICING, defaultFees, invoiceFor, money as dollars, oratorFeeFor, pricingTierLabel, type Fees, type Invoice } from './tournament';
 
 const money = (amount: number) => `${amount < 0 ? '−' : ''}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -16,7 +16,7 @@ const testCards = [
 
 function receiptText(tournament: string, school: string, invoice: Invoice, amount: number, reference: string) {
   return [`ORATOR — SIMULATED RECEIPT (no real payment was made)`, ``, `Tournament: ${tournament}`, `School: ${school}`, `Reference: ${reference}`, ``,
-    `Entries (${invoice.entries}): ${money(invoice.entryTotal)}`, `School fee: ${money(invoice.schoolFee)}`, `Judges not supplied (${invoice.judgesShort}): ${money(invoice.judgeTotal)}`, `Total due: ${money(invoice.total)}`, ``, `Paid now: ${money(amount)}`].join('\n');
+    `Entries (${invoice.entries}): ${money(invoice.entryTotal)}`, ...(invoice.schoolFee > 0 ? [`School fee: ${money(invoice.schoolFee)}`] : []), `Judges not supplied (${invoice.judgesShort}): ${money(invoice.judgeTotal)}`, `Total due: ${money(invoice.total)}`, ``, `Paid now: ${money(amount)}`].join('\n');
 }
 
 /** A stand-in for a card checkout. Nothing is charged and no card details can be entered. */
@@ -78,7 +78,7 @@ export function TeamInvoice({ school }: { school: string }) {
     <div className="invoice-body">
       <dl className="invoice-lines">
         <div><dt>{invoice.entries} {invoice.entries === 1 ? 'entry' : 'entries'} <small>× {money(fees.entry)}</small></dt><dd>{money(invoice.entryTotal)}</dd></div>
-        <div><dt>School fee</dt><dd>{money(invoice.schoolFee)}</dd></div>
+        {invoice.schoolFee > 0 && <div><dt>School fee</dt><dd>{money(invoice.schoolFee)}</dd></div>}
         <div><dt>Judges <small>you owe {invoice.judgesOwed}, one per {fees.entriesPerJudge} entries</small>
           <span className="judge-stepper"><button aria-label="Bring one fewer judge" disabled={due || payment.judgesBringing === 0} onClick={() => store.setJudgesBringing(school, payment.judgesBringing - 1)}>−</button><b>{payment.judgesBringing}</b><button aria-label="Bring one more judge" disabled={due} onClick={() => store.setJudgesBringing(school, payment.judgesBringing + 1)}>+</button><em>{due ? 'brought' : 'bringing'}</em></span>
         </dt><dd>{invoice.judgesShort ? money(invoice.judgeTotal) : 'Covered'}{invoice.judgesShort > 0 && <small>{invoice.judgesShort} hired × {money(fees.judge)}</small>}</dd></div>
@@ -99,19 +99,28 @@ export function TeamInvoice({ school }: { school: string }) {
   </section>;
 }
 
+/** A dollar amount the director can type cents into ("7.50"). It keeps what was typed until it's a full number. */
+function AmountInput({ value, onChange, disabled, label, whole = false }: { value: number; onChange: (value: number) => void; disabled: boolean; label: string; whole?: boolean }) {
+  const [text, setText] = useState(whole || Number.isInteger(value) ? String(value) : value.toFixed(2));
+  return <input inputMode={whole ? 'numeric' : 'decimal'} aria-label={label} value={text} disabled={disabled}
+    onChange={event => { const cleaned = whole ? event.target.value.replace(/\D/g, '') : event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').replace(/(\.\d{2}).+/, '$1'); setText(cleaned); onChange(Number(cleaned) || 0); }}
+    onBlur={() => setText(whole || Number.isInteger(value) ? String(value) : value.toFixed(2))}/>;
+}
+
 /** The director's fee settings. */
 export function FeeSettings({ editable }: { editable: boolean }) {
-  const { tournament, updateTournament } = useStore();
+  const { tournament, updateTournament, entries } = useStore();
   const fees = tournament.fees ?? defaultFees;
-  const set = (key: keyof Fees, text: string) => updateTournament({ fees: { ...fees, [key]: Math.max(key === 'entriesPerJudge' ? 1 : 0, Number(text.replace(/\D/g, '')) || 0) } });
+  const set = (key: keyof Fees, value: number) => updateTournament({ fees: { ...fees, [key]: Math.max(key === 'entriesPerJudge' ? 1 : 0, value) } });
   return <div className="fee-settings">
-    <div className="field-label"><span>Fees</span><small>Each school is invoiced from its entries</small></div>
+    <div className="field-label"><span>Fees</span><small>Each school is invoiced after the tournament</small></div>
     <div className="fee-grid">
-      <label><span>Per entry</span><span className="money-input"><i>$</i><input inputMode="numeric" value={fees.entry} disabled={!editable} onChange={event => set('entry', event.target.value)}/></span></label>
-      <label><span>Per school</span><span className="money-input"><i>$</i><input inputMode="numeric" value={fees.school} disabled={!editable} onChange={event => set('school', event.target.value)}/></span></label>
-      <label><span>Per judge not supplied</span><span className="money-input"><i>$</i><input inputMode="numeric" value={fees.judge} disabled={!editable} onChange={event => set('judge', event.target.value)}/></span></label>
-      <label><span>One judge owed per</span><span className="money-input"><input inputMode="numeric" value={fees.entriesPerJudge} disabled={!editable} onChange={event => set('entriesPerJudge', event.target.value)}/><i>entries</i></span></label>
+      <label><span>Per entry <small>usually $7–8</small></span><span className="money-input"><i>$</i><AmountInput label="Fee per entry" value={fees.entry} disabled={!editable} onChange={value => set('entry', value)}/></span></label>
+      <label><span>Per judge not brought</span><span className="money-input"><i>$</i><AmountInput label="Fee per judge not brought" value={fees.judge} disabled={!editable} onChange={value => set('judge', value)}/></span></label>
+      <label><span>One judge owed per</span><span className="money-input"><AmountInput whole label="Entries per judge owed" value={fees.entriesPerJudge} disabled={!editable} onChange={value => set('entriesPerJudge', value)}/><i>entries</i></span></label>
+      <label><span>Per school <small>optional</small></span><span className="money-input"><i>$</i><AmountInput label="Flat fee per school" value={fees.school} disabled={!editable} onChange={value => set('school', value)}/></span></label>
     </div>
+    <p className="fee-orator"><Icon name="info" size={14}/> <span>Orator bills you once, after the tournament, by size: {ORATOR_PRICING.map(tier => `${dollars(tier.fee)} up to ${tier.upTo === Infinity ? 'any size' : `${tier.upTo} entries`}`).join(' · ')}. With {entries.length} entries so far that’s <strong>{dollars(oratorFeeFor(entries.length))}</strong>. <em>Placeholder pricing.</em></span></p>
   </div>;
 }
 
@@ -126,10 +135,11 @@ export function PaymentsPanel() {
   const collected = rows.reduce((sum, row) => sum + Math.min(row.invoice.paid, row.invoice.total), 0);
   const unpaid = rows.filter(row => row.invoice.balance > 0);
   const sent = tournament.status === 'finished';
+  const oratorFee = oratorFeeFor(entries.length);
   return <div className="payments-panel">
     <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{sent ? `${money(collected)} of ${money(billed)} collected` : `${money(billed)} estimated across ${rows.length} schools`}</h3></div>
       {sent ? <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge> : <Badge tone="neutral" icon="clock">Invoices go out when you end the tournament</Badge>}</div>
-    {sent && <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>placeholder amount</small></dt><dd>{money(-ORATOR_TOURNAMENT_FEE)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - ORATOR_TOURNAMENT_FEE))}</dd></div></dl>}
+    {sent && <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>{entries.length} entries · {pricingTierLabel(entries.length)} tier · placeholder pricing</small></dt><dd>{money(-oratorFee)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - oratorFee))}</dd></div></dl>}
     <div className="payments-table" tabIndex={0} aria-label="Payments by school" role="region">
       <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>{sent ? 'Total' : 'Estimate'}</span><span>Status</span><span/></div>
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>

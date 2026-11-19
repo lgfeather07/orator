@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Badge, Icon } from './ui';
 import { ballotEvents, MARK_MAX, RATING_MIN } from './ballots';
 import { growthMeets, teamGrowth } from './Growth';
@@ -53,11 +53,13 @@ const initials = (name: string) => name.split(' ').map(part => part[0]).join('')
  * Ballots from finished tournaments. A student sees only their own; a coach sees every student on the team.
  * `student` fixes the view to one person and removes the student filter.
  */
-export function PastBallots({ student, team = 'Wrenfield High' }: { student?: string; team?: string }) {
+export function PastBallots({ student, team = 'Wrenfield High', initialOpen }: { student?: string; team?: string; initialOpen?: string }) {
   const [who, setWho] = useState('all');
   const [meet, setMeet] = useState('all');
   const [eventId, setEventId] = useState('all');
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initialOpen ?? null);
+  // Opened from a feedback card: bring that ballot into view.
+  useEffect(() => { if (initialOpen) document.getElementById(`ballot-${initialOpen}`)?.scrollIntoView({ block: 'center' }); }, [initialOpen]);
   // The scope is applied first and never widened by the filters below.
   const allowed = useMemo(() => student ? pastBallots.filter(ballot => ballot.student === student) : pastBallots, [student]);
   const students = [...new Set(allowed.map(ballot => ballot.student))];
@@ -82,7 +84,7 @@ export function PastBallots({ student, team = 'Wrenfield High' }: { student?: st
           <h3><span>{growthMeets[order]}</span><small>{meetDates[order]} · {rows.length} ballots</small></h3>
           <div className="team-ballot-list">{rows.map(ballot => {
             const event = ballotEvents.find(item => item.id === ballot.eventId);
-            return <article key={ballot.id} className={open === ballot.id ? 'open' : ''}>
+            return <article key={ballot.id} id={`ballot-${ballot.id}`} className={open === ballot.id ? 'open' : ''}>
               <button onClick={() => setOpen(open === ballot.id ? null : ballot.id)} aria-expanded={open === ballot.id}>
                 <span className="past-who">{!student && <Avatar initials={initials(ballot.student)} size="sm"/>}<span><strong>{student ? eventName(ballot.eventId) : ballot.student}</strong><small>{student ? `Round ${ballot.round}` : `${eventName(ballot.eventId)} · Round ${ballot.round}`}</small></span></span>
                 <span><small>Judge</small><strong>{ballot.judge}</strong></span>

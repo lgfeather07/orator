@@ -66,6 +66,25 @@ create table if not exists public.sections (
 );
 create index if not exists sections_by_tournament on public.sections (tournament_id, round, position);
 
+-- Added Nov 2026, after the interview with a head coach:
+-- the director opens and closes entries whenever they choose; judges only see a rating if the director turns it on.
+alter table public.tournaments add column if not exists entries_open boolean not null default true;
+alter table public.tournaments add column if not exists show_rating boolean not null default false;
+-- Varsity or novice. Each event runs separately in each division, with its own rooms and final.
+alter table public.entries add column if not exists division text not null default 'varsity';
+alter table public.sections add column if not exists division text not null default 'varsity';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'entries_division_check') then
+    alter table public.entries add constraint entries_division_check check (division in ('varsity', 'novice'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'sections_division_check') then
+    alter table public.sections add constraint sections_division_check check (division in ('varsity', 'novice'));
+  end if;
+end $$;
+-- A "clean" judge knows none of the competitors; otherwise a judge lists other schools whose students they know.
+alter table public.tournament_members add column if not exists clean_judge boolean not null default false;
+alter table public.tournament_members add column if not exists known_schools text[] not null default '{}';
+
 -- Helpers for the row-level security policies. They run with the table owner's rights so
 -- one table's policy can check another table without recursing into its policies.
 create or replace function private.is_director(target uuid) returns boolean
@@ -76,6 +95,11 @@ $$;
 create or replace function private.tournament_status(target uuid) returns text
 language sql stable security definer set search_path = '' as $$
   select t.status from public.tournaments t where t.id = target;
+$$;
+
+create or replace function private.entries_open(target uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select coalesce((select t.entries_open and t.status = 'registration' from public.tournaments t where t.id = target), false);
 $$;
 
 create or replace function private.is_approved_member(target uuid) returns boolean
@@ -160,6 +184,12 @@ begin
   if t.id is null then raise exception 'That tournament does not exist.'; end if;
   new.student := btrim(new.student); new.school := btrim(new.school); new.created_by := auth.uid();
   if t.status <> 'registration' then raise exception 'Registration is closed for this tournament.' using errcode = 'check_violation'; end if;
+  -- Closed entries stop coaches; the director can still add a late entry.
+  if not t.entries_open and t.director_id is distinct from auth.uid() then raise exception 'Entries are closed for this tournament.' using errcode = 'check_violation'; end if;
+  -- A student is in one division: every event they enter is in the same one.
+  if exists (select 1 from public.entries e where e.tournament_id = new.tournament_id and lower(e.school) = lower(new.school) and lower(e.student) = lower(new.student) and e.division <> new.division) then
+    raise exception '% is already entered as %.', new.student, (select e.division from public.entries e where e.tournament_id = new.tournament_id and lower(e.school) = lower(new.school) and lower(e.student) = lower(new.student) limit 1) using errcode = 'check_violation';
+  end if;
   if not (new.event_id = any (t.event_ids)) then raise exception 'That event is not offered at this tournament.' using errcode = 'check_violation'; end if;
   if (select count(*) from public.entries e where e.tournament_id = new.tournament_id and lower(e.school) = lower(new.school) and lower(e.student) = lower(new.student)) >= t.max_entries then
     raise exception '% is already in % events, the most this tournament allows.', new.student, t.max_entries using errcode = 'check_violation';
@@ -221,7 +251,7 @@ create policy "Coaches enter their own school" on public.entries for insert to a
 drop policy if exists "Coaches withdraw their own entries" on public.entries;
 create policy "Coaches withdraw their own entries" on public.entries for delete to authenticated
   using (private.tournament_status(tournament_id) = 'registration'
-    and (private.is_director(tournament_id) or lower(school) = (select private.approved_coach_school(tournament_id))));
+    and (private.is_director(tournament_id) or (private.entries_open(tournament_id) and lower(school) = (select private.approved_coach_school(tournament_id)))));
 
 -- Schedule: the director builds it; approved members see it once it is published.
 drop policy if exists "Who can see the schedule" on public.sections;

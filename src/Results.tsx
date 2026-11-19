@@ -1,29 +1,31 @@
 import { useState } from 'react';
-import { Badge, Button, Icon } from './ui';
+import { Badge, Button, Icon, downloadText } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { entryLoad, finalConflict, isFinal, loadLabel, preferenceFor } from './tournament';
+import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor } from './tournament';
 import { FINALISTS, NSAA_TEAM_POINTS, finalPlacings, prelimStandings, sampleFinals, teamStandings, type Placing, type Standing } from './results';
 
-const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
+/** "Informative" for varsity, "Novice Informative" for the novice division. */
+const eventName = (key: string) => { const { eventId, division } = parseContest(key); const name = ballotEvents.find(event => event.id === eventId)?.name ?? eventId; return division === 'novice' ? `Novice ${name}` : name; };
 const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : Math.min(n % 10, 4) % 4]}`;
 
 /** Breaks, finals, and team points for the director, following the NSAA Speech Manual. */
-export function ResultsBoard() {
+export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   const store = useStore();
   const { tournament, entries, prelimResults, finalResults } = store;
   const sections = store.sections.filter(section => !isFinal(section, tournament));
   const finalRooms = store.sections.filter(section => isFinal(section, tournament));
-  const events = tournament.eventIds.filter(id => entries.some(entry => entry.eventId === id));
+  // One tab per contest: an event in a division. Novice and varsity break and place separately.
+  const events = tournament.eventIds.flatMap(id => divisions.map(division => contestKey(id, division))).filter(key => entries.some(entry => contestOf(entry) === key));
   const [chosen, setChosen] = useState('');
   const eventId = events.includes(chosen) ? chosen : events[0] ?? '';
   const judges = tournament.finalJudges ?? 2;
   const points = tournament.teamPoints ?? NSAA_TEAM_POINTS;
 
-  const standingsFor = (id: string): Standing[] => prelimStandings(entries.filter(entry => entry.eventId === id), sections.filter(section => section.eventId === id), prelimResults);
+  const standingsFor = (id: string): Standing[] => prelimStandings(entries.filter(entry => contestOf(entry) === id), sections.filter(section => contestOf(section) === id), prelimResults);
   // With real final rooms, placings wait until every final-round judge has submitted.
-  const ballotsIn = (id: string) => finalRooms.filter(room => room.eventId === id && store.roomResults.some(result => result.sectionId === room.id)).length;
-  const finalReady = (id: string) => { const rooms = finalRooms.filter(room => room.eventId === id); return rooms.length === 0 || ballotsIn(id) === rooms.length; };
+  const ballotsIn = (id: string) => finalRooms.filter(room => contestOf(room) === id && store.roomResults.some(result => result.sectionId === room.id)).length;
+  const finalReady = (id: string) => { const rooms = finalRooms.filter(room => contestOf(room) === id); return rooms.length === 0 || ballotsIn(id) === rooms.length; };
   const placingsFor = (id: string): Placing[] => finalReady(id) ? finalPlacings(standingsFor(id).filter(standing => standing.advances), finalResults, points) : [];
   const standings = eventId ? standingsFor(eventId) : [];
   const finalists = standings.filter(standing => standing.advances);
@@ -33,20 +35,58 @@ export function ResultsBoard() {
   const finalsDone = allPlacings.filter(item => item.placings.length > 0).length;
   const hasPrelims = prelimResults.length > 0;
   const cutTie = finalists.length > FINALISTS;
-  const rooms = finalRooms.filter(room => room.eventId === eventId);
+  const rooms = finalRooms.filter(room => contestOf(room) === eventId);
   const seats = rooms.length || judges;
   const finalistSchools = finalists.map(finalist => finalist.school);
   const conflictOf = (judgeId: string | null) => { const judge = store.judges.find(item => item.id === judgeId); return judge ? finalConflict(judge, eventId, finalistSchools, store.sections, tournament) : ''; };
-  const conflictText = { '': '', school: 'from a finalist’s school', prelim: 'judged this event in prelims' };
+  const conflictText = { '': '', school: 'from a finalist’s school', knows: 'knows a finalist’s school', prelim: 'judged this event in prelims' };
   const levelText = { top: 'Top choice', willing: 'Willing', avoid: 'Prefers to avoid' };
+
+  // Where each contest is, so the director always knows the next thing to do.
+  const prelimRoomsIn = (id: string) => { const rooms = sections.filter(section => contestOf(section) === id); return { done: rooms.filter(room => prelimResults.some(result => result.sectionId === room.id)).length, total: rooms.length }; };
+  const stageOf = (id: string): 'prelims' | 'ready' | 'final' | 'done' => {
+    const prelim = prelimRoomsIn(id);
+    if (prelim.done < prelim.total) return 'prelims';
+    if (placingsFor(id).length > 0) return 'done';
+    return finalRooms.some(room => contestOf(room) === id) ? 'final' : 'ready';
+  };
+  const stages = events.map(id => ({ id, stage: stageOf(id) }));
+  const count = (stage: string) => stages.filter(item => item.stage === stage).length;
+  const roomsLeft = events.reduce((sum, id) => { const prelim = prelimRoomsIn(id); return sum + prelim.total - prelim.done; }, 0);
+  const finalBallotsLeft = finalRooms.filter(room => !store.roomResults.some(result => result.sectionId === room.id)).length;
+  const exportResults = () => {
+    const quote = (text: string | number) => `"${String(text).replace(/"/g, '""')}"`;
+    const lines = [['Event', 'Place', 'Speaker', 'School', 'Judges’ ranks', 'Team points'].map(quote).join(',')];
+    events.forEach(id => placingsFor(id).forEach(placing => lines.push([eventName(id), placing.place, placing.student, placing.school, placing.judgeRanks.join(' '), placing.teamPoints].map(quote).join(','))));
+    lines.push('', ['Team', 'Points'].map(quote).join(','), ...teamStandings(events.map(id => ({ eventName: eventName(id), placings: placingsFor(id) }))).map(team => [team.school, team.points].map(quote).join(',')));
+    downloadText(`${tournament.name.replace(/\W+/g, '-').toLowerCase() || 'tournament'}-results.csv`, lines.join('\n'));
+  };
+  const flow = <section className="panel results-flow" aria-label="Results progress">
+    <ol className="results-steps">
+      <li className={roomsLeft === 0 && prelimResults.length > 0 ? 'done' : 'current'}><span>{roomsLeft === 0 && prelimResults.length > 0 ? <Icon name="check" size={14}/> : 1}</span><div><strong>Preliminary ballots</strong><small>{prelimResults.length === 0 ? 'None in yet' : roomsLeft === 0 ? 'Every room is in' : `${roomsLeft} ${roomsLeft === 1 ? 'room' : 'rooms'} still out`}</small></div></li>
+      <li className={count('ready') + count('prelims') === 0 && events.length > 0 ? 'done' : count('ready') > 0 ? 'current' : ''}><span>{count('ready') + count('prelims') === 0 && events.length > 0 ? <Icon name="check" size={14}/> : 2}</span><div><strong>Create finals</strong><small>{count('ready') > 0 ? `${count('ready')} ready to create` : count('prelims') > 0 ? 'After prelims are in' : 'All created'}</small></div></li>
+      <li className={count('done') === events.length && events.length > 0 ? 'done' : count('final') > 0 ? 'current' : ''}><span>{count('done') === events.length && events.length > 0 ? <Icon name="check" size={14}/> : 3}</span><div><strong>Final ballots</strong><small>{count('done')} of {events.length} finals placed{finalBallotsLeft > 0 ? ` · ${finalBallotsLeft} ballots out` : ''}</small></div></li>
+      <li className={tournament.status === 'finished' ? 'done' : count('done') === events.length && events.length > 0 ? 'current' : ''}><span>{tournament.status === 'finished' ? <Icon name="check" size={14}/> : 4}</span><div><strong>End and announce</strong><small>{tournament.status === 'finished' ? 'Ballots locked, invoices sent' : 'Locks ballots, sends invoices'}</small></div></li>
+    </ol>
+    <div className="results-next">
+      {prelimResults.length === 0 ? <p><strong>Next:</strong> results appear as judges submit preliminary ballots.</p>
+      : count('ready') > 0 ? <><p><strong>Next:</strong> {count('ready')} {count('ready') === 1 ? 'final is' : 'finals are'} ready. Create them together so each judge lands on the final they most want.</p><Button icon="plus" onClick={store.createAllFinals}>Create {count('ready') === 1 ? 'the final' : `all ${count('ready')} finals`}</Button></>
+      : count('prelims') > 0 ? <p><strong>Next:</strong> waiting on {roomsLeft} preliminary {roomsLeft === 1 ? 'room' : 'rooms'}. Check the Issues tab if a judge is missing.</p>
+      : count('final') > 0 ? <p><strong>Next:</strong> waiting on {finalBallotsLeft} final {finalBallotsLeft === 1 ? 'ballot' : 'ballots'}. Placings fill in as each final’s judges submit.</p>
+      : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every final is placed. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
+      : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
+      {count('done') > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}
+    </div>
+  </section>;
 
   if (sections.length === 0) return <div className="issue-board"><section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>Build the schedule first</h3><p>Breaks and finals are worked out from the preliminary rounds. Build the schedule on the Setup tab, then come back here.</p></div></section></div>;
 
   return <div className="results-layout">
     <div className="results-main">
+      {flow}
       <section className="panel">
         <div className="panel-head"><div><h2>Preliminary rounds</h2><p>{tournament.rounds} rounds, one judge per room. The lowest cumulative rank advances; the top {FINALISTS} go to the final.</p></div>
-          <span className="panel-head-actions">{hasPrelims && events.some(id => !finalRooms.some(room => room.eventId === id)) && <Button icon="plus" onClick={store.createAllFinals}>Create all finals</Button>}{store.resultsAreReal ? <><Badge tone="success" icon="check">From {new Set(prelimResults.map(result => result.sectionId)).size} submitted {new Set(prelimResults.map(result => result.sectionId)).size === 1 ? 'ballot' : 'ballots'}</Badge><Button variant="secondary" onClick={() => store.refresh()}>Refresh</Button></> : <>{hasPrelims && <Button variant="secondary" onClick={store.clearResults}>Clear results</Button>}<Button icon="sparkle" variant={hasPrelims ? 'secondary' : 'primary'} onClick={store.fillSamplePrelims}>{hasPrelims ? 'New sample results' : 'Fill in sample results'}</Button></>}</span></div>
+          <span className="panel-head-actions">{store.resultsAreReal ? <><Badge tone="success" icon="check">From {new Set(prelimResults.map(result => result.sectionId)).size} submitted {new Set(prelimResults.map(result => result.sectionId)).size === 1 ? 'ballot' : 'ballots'}</Badge><Button variant="secondary" onClick={() => store.refresh()}>Refresh</Button></> : <>{hasPrelims && <Button variant="secondary" onClick={store.clearResults}>Clear results</Button>}<Button icon="sparkle" variant={hasPrelims ? 'secondary' : 'primary'} onClick={store.fillSamplePrelims}>{hasPrelims ? 'New sample results' : 'Fill in sample results'}</Button></>}</span></div>
         {!hasPrelims ? <div className="schedule-empty"><h3>No results yet</h3><p>{store.live ? 'Results appear here as judges submit their ballots. You can also fill in sample results to see how breaks, finals, and team points work.' : 'In a real tournament these come from judges’ submitted ballots. Fill in sample results to see how breaks, finals, and team points work.'}</p></div> : <>
           <div className="results-events" role="tablist" aria-label="Events">{events.map(id => { const done = placingsFor(id).length > 0; return <button key={id} role="tab" aria-selected={eventId === id} className={eventId === id ? 'active' : ''} onClick={() => setChosen(id)}>{eventName(id)}{done && <Icon name="check" size={14}/>}</button>; })}</div>
           <div className="results-table" role="list" tabIndex={0} aria-label={`${eventName(eventId)} preliminary standings`}>

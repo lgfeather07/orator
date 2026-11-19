@@ -1,9 +1,9 @@
 import { supabase } from './auth';
-import type { Entry, Judge, JudgePrefs, Section, Tournament, TournamentStatus } from './tournament';
+import type { Division, Entry, Judge, JudgePrefs, Section, Tournament, TournamentStatus } from './tournament';
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[] };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -14,8 +14,8 @@ const fail = (message: string): never => {
 };
 const db = () => supabase ?? fail('Accounts are not connected.');
 
-type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus };
-const toTournament = (row: TournamentRecord): TournamentRow => ({ id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status });
+type TournamentRecord = { id: string; director_id: string; name: string; date: string; host: string; rounds: number; section_size: number; max_entries: number; event_ids: string[]; status: TournamentStatus; entries_open?: boolean; show_rating?: boolean };
+const toTournament = (row: TournamentRecord): TournamentRow => ({ id: row.id, directorId: row.director_id, name: row.name, date: row.date, host: row.host, rounds: row.rounds, sectionSize: row.section_size, maxEntries: row.max_entries, eventIds: row.event_ids ?? [], status: row.status, entriesOpen: row.entries_open ?? true, showRating: row.show_rating ?? false });
 const tournamentColumns = (patch: Partial<Tournament>) => {
   const out: Record<string, unknown> = {};
   if (patch.name !== undefined) out.name = patch.name;
@@ -26,6 +26,8 @@ const tournamentColumns = (patch: Partial<Tournament>) => {
   if (patch.maxEntries !== undefined) out.max_entries = patch.maxEntries;
   if (patch.eventIds !== undefined) out.event_ids = patch.eventIds;
   if (patch.status !== undefined) out.status = patch.status;
+  if (patch.entriesOpen !== undefined) out.entries_open = patch.entriesOpen;
+  if (patch.showRating !== undefined) out.show_rating = patch.showRating;
   return out;
 };
 
@@ -46,8 +48,8 @@ export async function saveTournament(id: string, patch: Partial<Tournament>): Pr
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[] };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [] });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -80,6 +82,12 @@ export async function saveJudgePreferences(tournamentId: string, userId: string,
   if (error) fail(error.message);
 }
 
+/** A judge says they know none of the competitors, or names the other schools they know. */
+export async function saveJudgeConflicts(tournamentId: string, userId: string, profile: { clean: boolean; knows: string[] }): Promise<void> {
+  const { error } = await db().from('tournament_members').update({ clean_judge: profile.clean, known_schools: profile.clean ? [] : profile.knows }).eq('tournament_id', tournamentId).eq('user_id', userId).eq('role', 'judge');
+  if (error) fail(error.message);
+}
+
 /** A coach releases this tournament's results to their students. The database refuses until the tournament has ended. */
 export async function releaseResultsToStudents(tournamentId: string, userId: string): Promise<void> {
   const { data, error } = await db().from('tournament_members').update({ results_released: true }).eq('tournament_id', tournamentId).eq('user_id', userId).eq('role', 'coach').select('results_released');
@@ -92,17 +100,18 @@ export async function markEntriesSent(tournamentId: string, userId: string): Pro
   if (error) fail(error.message);
 }
 
-type EntryRecord = { id: string; school: string; student: string; event_id: string };
-const toEntry = (row: EntryRecord): Entry => ({ id: row.id, school: row.school, student: row.student, eventId: row.event_id });
+type EntryRecord = { id: string; school: string; student: string; event_id: string; division?: Division };
+const toEntry = (row: EntryRecord): Entry => ({ id: row.id, school: row.school, student: row.student, eventId: row.event_id, division: row.division ?? 'varsity' });
+const entryColumns = 'id, school, student, event_id, division';
 
 export async function listEntries(tournamentId: string): Promise<Entry[]> {
-  const { data, error } = await db().from('entries').select('id, school, student, event_id').eq('tournament_id', tournamentId).order('created_at');
+  const { data, error } = await db().from('entries').select(entryColumns).eq('tournament_id', tournamentId).order('created_at');
   if (error) fail(error.message);
   return (data ?? []).map(toEntry);
 }
 
-export async function insertEntry(tournamentId: string, student: string, school: string, eventId: string): Promise<Entry> {
-  const { data, error } = await db().from('entries').insert({ tournament_id: tournamentId, student, school, event_id: eventId }).select('id, school, student, event_id').single();
+export async function insertEntry(tournamentId: string, student: string, school: string, eventId: string, division: Division): Promise<Entry> {
+  const { data, error } = await db().from('entries').insert({ tournament_id: tournamentId, student, school, event_id: eventId, division }).select(entryColumns).single();
   if (error) fail(error.message);
   return toEntry(data as EntryRecord);
 }
@@ -112,8 +121,8 @@ export async function deleteEntry(id: string): Promise<void> {
   if (error) fail(error.message);
 }
 
-type SectionRecord = { id: string; round: number; event_id: string; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number };
-const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, label: row.label, room: row.room, judgeId: row.judge_id, judgeName: row.judge_name, entryIds: row.entry_ids ?? [] });
+type SectionRecord = { id: string; round: number; event_id: string; division?: Division; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number };
+const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, division: row.division ?? 'varsity', label: row.label, room: row.room, judgeId: row.judge_id, judgeName: row.judge_name, entryIds: row.entry_ids ?? [] });
 
 export async function listSections(tournamentId: string): Promise<Section[]> {
   const { data, error } = await db().from('sections').select('*').eq('tournament_id', tournamentId).order('position');
@@ -127,7 +136,7 @@ export async function replaceSections(tournamentId: string, sections: Section[],
   if (cleared.error) fail(cleared.error.message);
   if (sections.length === 0) return [];
   const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
-    tournament_id: tournamentId, round: section.round, event_id: section.eventId, label: section.label, room: section.room,
+    tournament_id: tournamentId, round: section.round, event_id: section.eventId, division: section.division ?? 'varsity', label: section.label, room: section.room,
     judge_id: section.judgeId, judge_name: judges.find(judge => judge.id === section.judgeId)?.name ?? '', entry_ids: section.entryIds, position: index,
   }))).select('*');
   if (error) fail(error.message);
@@ -137,7 +146,7 @@ export async function replaceSections(tournamentId: string, sections: Section[],
 /** Add sections (used for final rounds) without touching the rest of the schedule. */
 export async function addSections(tournamentId: string, sections: Section[], startAt: number): Promise<Section[]> {
   const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
-    tournament_id: tournamentId, round: section.round, event_id: section.eventId, label: section.label, room: section.room,
+    tournament_id: tournamentId, round: section.round, event_id: section.eventId, division: section.division ?? 'varsity', label: section.label, room: section.room,
     judge_id: section.judgeId, judge_name: section.judgeName ?? '', entry_ids: section.entryIds, position: startAt + index,
   }))).select('*');
   if (error) fail(error.message);

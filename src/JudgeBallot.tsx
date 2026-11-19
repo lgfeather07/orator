@@ -66,7 +66,9 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const speakers: Speaker[] = room?.speakers ?? roundSpeakers;
   const ballotKey = room?.key ?? THIS_ROUND;
   const link = room ? { tournamentId: room.tournamentId, sectionId: room.sectionId } : undefined;
-  const { speakerPresence, setSpeakerPresence, entries } = useStore();
+  const { speakerPresence, setSpeakerPresence, entries, tournament } = useStore();
+  // Most judges would rather not see a rating: it is still worked out from the marks for tiebreaks, just not shown.
+  const showRating = tournament.showRating ?? false;
   const { profile } = useAuth();
   const loadOf = (name: string) => loadLabel(entryLoadByName(entries, name));
   const firstName = (code: string) => speakers.find(item => item.code === code)!.name.split(' ')[0];
@@ -131,6 +133,8 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const time = timeStatus(secondsOf(ballot), event, classA);
   const commentProgress = Math.min(100, Math.round((feedbackLength(ballot) / MIN_COMMENT) * 100));
   const rating = ratingOf(ballot);
+  const scoreWord = showRating ? 'ratings' : 'section marks';
+  const lower = showRating ? 'a lower rating' : 'lower section marks', higher = showRating ? 'a higher rating' : 'higher section marks';
   const speakerIndex = speakers.findIndex(item => item.code === current);
   const goTo = (code: string) => { setCurrent(code); setOpen(0); };
   const flagsFor = (code: string) => { const data = ballots[code]; return { penalty: timeStatus(secondsOf(data), event, classA).penalty, dq: data.dq.length > 0 }; };
@@ -220,8 +224,8 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   if (submitted) return <div className="jb jb-done">
     <span className="success-icon"><Icon name="check" size={26}/></span>
     <h2>{room?.final ? 'Final round' : `Round ${ballotKey.round}`} ballot submitted</h2>
-    <p>Ranks, ratings, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
-    <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{ratingOf(ballots[code])} · {clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
+    <p>Ranks, {showRating ? 'ratings' : 'section marks'}, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
+    <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{showRating ? `${ratingOf(ballots[code])} · ` : ""}{clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
       <div className="field-label"><span>How is this tournament running?</span><small>Optional · goes to the director</small></div>
       {feedbackSent ? <p className="jb-sent"><Icon name="check" size={15}/> Thanks. Your feedback was sent to the tournament director.</p> : <>
@@ -245,7 +249,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         const data = ballots[item.code];
         const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.marks.some(Boolean) ? 'draft' : 'empty';
         return <button key={item.code} role="tab" aria-selected={current === item.code} className={`${current === item.code ? 'active' : ''} ${state}`} onClick={() => goTo(item.code)}>
-          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.name}</strong><span>{state === 'done' ? `Rated ${ratingOf(data)}` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
+          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.name}</strong><span>{state === 'done' ? (showRating ? `Rated ${ratingOf(data)}` : 'Marked') : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
         </button>;
       })}</div>
 
@@ -267,7 +271,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
                 <button key={value} className={value === ballot.marks[index] ? 'selected' : ''} aria-label={`Mark ${value}`} onClick={() => { update({ marks: ballot.marks.map((old, i) => i === index ? value : old) }); const next = ballot.marks.findIndex((old, i) => i > index && !old); if (next >= 0) setOpen(next); }}>{value}</button>)}</div></div>
             </div>}
           </div>)}
-          <p className="jb-extra"><Icon name="info" size={14}/> Every section needs a mark from 1 to {MARK_MAX}. The five marks add up to the speaker’s rating out of 50.</p>
+          <p className="jb-extra"><Icon name="info" size={14}/> Every section needs a mark from 1 to {MARK_MAX}. {showRating ? 'The five marks add up to the speaker’s rating out of 50.' : 'Orator totals the marks for tiebreaks; you don’t need to give a rating.'}</p>
         </section>
 
         <div className="jb-side">
@@ -277,7 +281,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
           </section>
 
           <section className="jb-card">
-            <div className="field-label"><span>Reason for decision</span><small>Why this rank and rating</small></div>
+            <div className="field-label"><span>Reason for decision</span><small>{showRating ? 'Why this rank and rating' : 'Why this rank'}</small></div>
             <textarea value={ballot.comment} onChange={change => update({ comment: change.target.value })} placeholder="Explain this speaker’s rank compared with the others in the round."/>
             <div className={`jb-meter ${commentProgress >= 100 ? 'ready' : ''}`}><Progress value={commentProgress} label="Feedback written"/><span>{commentProgress >= 100 ? 'Feedback minimum reached' : `Write at least ${MIN_COMMENT} characters across comments and reason for decision (${feedbackLength(ballot)} so far)`}</span></div>
           </section>
@@ -290,12 +294,12 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         </div>
 
         <div className="jb-foot">
-          <section className="jb-card jb-rating-card" aria-label="Rating">
+          {showRating && <section className="jb-card jb-rating-card" aria-label="Rating">
             <div className="field-label"><span>Rating</span><small>Calculated from the section marks</small></div>
             <div className="jb-rating-value"><strong>{rating || '—'}</strong><span>{rating ? bandOf(rating) : `${ballot.marks.filter(Boolean).length} of ${event.criteria.length} sections marked`}</span></div>
             <div className="jb-rating-scale" aria-hidden="true">{RATING_BANDS.map(band => <div key={band.label}><div>{band.values.map(value => <i key={value} className={rating === value ? 'on' : ''}>{value}</i>)}</div><small>{band.label}</small></div>)}</div>
             <p className="jb-rule">{rating ? `Section marks total ${markTotal(ballot)} of 50.${markTotal(ballot) < RATING_MIN ? ` The NSAA scale starts at ${RATING_MIN}, so the rating is recorded as ${RATING_MIN}.` : ''}` : 'The rating appears once all five sections are marked.'} Change a section mark to change the rating.</p>
-          </section>
+          </section>}
 
           <section className="jb-card jb-time-card">
             <div className={`jb-time ${time.kind}`}>
@@ -326,9 +330,9 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         {speakerIndex < speakers.length - 1 ? <Button icon="arrow" onClick={() => goTo(speakers[speakerIndex + 1].code)}>Next speaker</Button> : <Button icon="arrow" onClick={() => setTab('rank')}>Rank the round</Button>}
       </div>
     </> : <>
-      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>Sort by rating</Button></div>
+      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>{showRating ? 'Sort by rating' : 'Sort by section marks'}</Button></div>
       <div className="jb-rank-list">
-        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>Rating</span><span/></div>
+        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>{showRating ? 'Rating' : 'Marks'}</span><span/></div>
         {finalRanked.map((code, index) => {
           const item = speakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
           return <div key={code} className={`jb-rank-row ${outOfOrder.has(code) ? 'conflict' : ''} ${dragged === code ? 'dragging' : ''}`} draggable onDragStart={() => setDragged(code)} onDragEnd={() => setDragged(null)} onDragOver={drag => drag.preventDefault()} onDrop={() => dropOn(code)}>
@@ -336,7 +340,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
             <span className="jb-rank-number">{index + 1}</span>
             <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">{lowered(code) ? 'Lowered one rank for time' : 'Time penalty · already last'}</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small></span>
             <span className={flags.penalty ? 'jb-over' : ''}>{seconds === null ? '—' : clock(seconds)}</span>
-            <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span>
+            {showRating ? <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span> : <span>{ratingOf(data) ? <small>All marked</small> : <small>{data.marks.filter(Boolean).length} of {data.marks.length}</small>}</span>}
             <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={ranked.indexOf(code) === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={ranked.indexOf(code) === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
           </div>;
         })}
@@ -344,11 +348,11 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
       </div>
 
       <div className="jb-checks">
-        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? 'Ranks don’t match ratings' : 'Ranks follow ratings'}</strong><small>{outOfOrder.size ? 'A speaker with a lower rating is ranked above one with a higher rating. Reorder the highlighted rows or adjust their section marks.' : finalRanked.some(lowered) ? 'Time penalties are applied for you; no speaker is otherwise ranked above someone with a higher rating.' : 'No speaker is ranked above someone with a higher rating.'}</small></span></div>
+        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? `Ranks don’t match ${scoreWord}` : `Ranks follow ${scoreWord}`}</strong><small>{outOfOrder.size ? `A speaker with ${lower} is ranked above one with ${higher}. Reorder the highlighted rows or adjust their section marks.` : finalRanked.some(lowered) ? `Time penalties are applied for you; no speaker is otherwise ranked above someone with ${higher}.` : `No speaker is ranked above someone with ${higher}.`}</small></span></div>
         <div className={unfinished.length ? 'bad' : 'ok'}><Icon name={unfinished.length ? 'warning' : 'check'}/><span><strong>{unfinished.length ? `${unfinished.length} speaker${unfinished.length > 1 ? 's still need' : ' still needs'} scoring` : 'Every speaker is scored'}</strong><small>{unfinished.length ? `${firstNames(unfinished)} ${unfinished.length > 1 ? 'need' : 'needs'} all five section marks, a time, and written feedback.` : 'Section marks, times, and written feedback are complete.'}</small></span>{unfinished.length > 0 && <button onClick={() => { goTo(unfinished[0]); setTab('score'); }}>Finish {firstName(unfinished[0])}</button>}</div>
         <div className={notCheckedIn.length ? 'bad' : 'ok'}><Icon name={notCheckedIn.length ? 'warning' : 'check'}/><span><strong>{notCheckedIn.length ? `${notCheckedIn.length} speaker${notCheckedIn.length > 1 ? 's' : ''} not checked in` : 'Attendance recorded'}</strong><small>{notCheckedIn.length ? `Mark ${firstNames(notCheckedIn)} as present or no-show.` : 'Everyone is marked present or no-show.'}</small></span>{notCheckedIn.length > 0 && <button onClick={() => { goTo(notCheckedIn[0]); setTab('score'); }}>Check in {firstName(notCheckedIn[0])}</button>}</div>
       </div>
-      <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Anyone more than 30 seconds outside the time limit is placed one rank lower automatically, so they can finish below a speaker with a lower rating.</p>
+      <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Anyone more than 30 seconds outside the time limit is placed one rank lower automatically, so they can finish below a speaker with {lower}.</p>
 
       <div className="jb-nav"><Button variant="secondary" onClick={() => setTab('score')}>Back to scoring</Button>{saveLine}<Button disabled={!canSubmit || submitting} onClick={submit}>{submitting ? 'Submitting…' : 'Submit ballot'}</Button></div>
     </>}
