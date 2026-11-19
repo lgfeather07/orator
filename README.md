@@ -25,7 +25,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 
-**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
+**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
 
 ## Layout
 
@@ -47,6 +47,6 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/PastBallots.tsx` — past-tournament ballots for students and coaches
 - `src/EntryImport.tsx` — adding students by hand or from a roster file
 - `src/legal.tsx` — privacy, terms, cookies, refund and accessibility pages (drafts) and the footer; business details go in `BUSINESS` at the top
-- `src/Payments.tsx` — tournament fees (default $7.50 an entry and $75 per judge a school doesn't bring), each school's invoice, Orator's size-based fee (placeholder tiers in `ORATOR_PRICING` in `src/tournament.ts`), and the payment simulator (no real money moves)
+- `src/Payments.tsx` — tournament fees (default $7 an entry and $75 per judge a school doesn't bring), each school's invoice, Orator's size-based fee (placeholder tiers in `ORATOR_PRICING` in `src/tournament.ts`), and the payment simulator (no real money moves)
 - `supabase/` — database tables and access rules
 - `src/store.tsx` — demo data shared across roles

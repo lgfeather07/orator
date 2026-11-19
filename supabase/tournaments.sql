@@ -332,3 +332,23 @@ create policy "Students read their own released entries" on public.ballot_entrie
 drop policy if exists "Students read ballots holding their released entries" on public.ballots;
 create policy "Students read ballots holding their released entries" on public.ballots for select to authenticated
   using (tournament_id is not null and private.student_can_read_ballot(id));
+
+-- Notes from the director: changes to the published schedule, and entries opening or closing.
+-- Every approved member of the tournament can read them; only the director writes them.
+create table if not exists public.tournament_updates (
+  id uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments (id) on delete cascade,
+  kind text not null default 'schedule' check (kind in ('schedule', 'entries')),
+  message text not null check (char_length(btrim(message)) between 1 and 300),
+  created_at timestamptz not null default now()
+);
+create index if not exists tournament_updates_recent on public.tournament_updates (tournament_id, created_at desc);
+alter table public.tournament_updates enable row level security;
+revoke all on public.tournament_updates from anon, authenticated;
+grant select, insert on public.tournament_updates to authenticated;
+drop policy if exists "Members read the director's updates" on public.tournament_updates;
+create policy "Members read the director's updates" on public.tournament_updates for select to authenticated
+  using (private.is_director(tournament_id) or private.is_approved_member(tournament_id));
+drop policy if exists "Directors post updates" on public.tournament_updates;
+create policy "Directors post updates" on public.tournament_updates for insert to authenticated
+  with check (private.is_director(tournament_id));

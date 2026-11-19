@@ -7,7 +7,7 @@ import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type Pr
 
 /** What one judge's submitted ballot says about one speaker in one room. */
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
-import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type ScheduleChange, type Section, type Tournament } from './tournament';
+import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
 import { ballotEvents } from './ballots';
 
 export type Presence = 'present' | 'absent';
@@ -187,6 +187,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
   const [liveSections, setLiveSections] = useState<Section[]>([]);
   const [liveResults, setLiveResults] = useState<RoomResult[]>([]);
+  const [liveUpdates, setLiveUpdates] = useState<ScheduleChange[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -203,7 +204,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLiveEntries(entryRows); setLiveSections(sectionRows); setMembers(memberRows);
         // Only the director can read every submitted ballot; for everyone else this stays empty.
         setLiveResults(active.directorId === userId ? await listTournamentResults(active.id).catch(() => []) : []);
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); }
+        setLiveUpdates(await api.listUpdates(active.id).catch(() => []));
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -222,7 +224,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const liveJudges: Judge[] = members.filter(member => member.role === 'judge' && member.status === 'approved').map(member => ({ id: member.userId, name: member.name || 'Judge', school: member.school, clean: member.clean, knows: member.knows }));
   const myJudgeRow = myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge');
   // A note for coaches and judges whenever the director moves something after the schedule is out.
-  const logChange = (text: string, status: Tournament['status']) => { if (status !== 'registration') setScheduleChanges(list => [{ id: `c${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), text }, ...list].slice(0, 30)); };
+  // Schedule notes only once the schedule is out; entries notes whenever the director opens or closes entries.
+  const logChange = (text: string, status: Tournament['status'], kind: UpdateKind = 'schedule') => {
+    if (!text || (kind === 'schedule' && status === 'registration')) return;
+    const note: ScheduleChange = { id: `c${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), text, kind };
+    if (live && tournamentId) { setLiveUpdates(list => [note, ...list]); api.addUpdate(tournamentId, kind, text).catch(report); }
+    else setScheduleChanges(list => [note, ...list].slice(0, 30));
+  };
+  const entriesNote = (open: boolean) => open ? 'The director reopened entries. You can add and drop students again.' : 'The director closed entries. Report an issue if something still needs to change.';
   const describeMove = (section: Section | undefined, judge: Judge | null, t: Tournament) => section ? `${roundLabel(section, t)} ${ballotEvents.find(event => event.id === section.eventId)?.name ?? section.eventId}${divisionOf(section) === 'novice' ? ` (${divisionLabel.novice})` : ''}, ${section.label.replace('Novice · ', '')}, ${section.room}: ${judge ? `now judged by ${judge.name}` : 'judge removed'}` : '';
   const patchLiveTournament = (patch: Partial<Tournament>) => setTournaments(list => list.map(item => item.id === tournamentId ? { ...item, ...patch } : item));
 
@@ -234,10 +243,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateTournament: patch => {
       if (!tournamentId) return;
       patchLiveTournament(patch);
+      if (patch.entriesOpen !== undefined && liveTournament) logChange(entriesNote(patch.entriesOpen), liveTournament.status, 'entries');
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
       api.saveTournament(tournamentId, patch).catch(caught => { report(caught); refresh(); });
     },
     entries: liveEntries,
+    scheduleChanges: liveUpdates,
     entriesOpen: (liveTournament?.entriesOpen ?? true) && (liveTournament?.status ?? 'registration') === 'registration',
     addEntry: (student, school, eventId, division) => { if (tournamentId) api.insertEntry(tournamentId, student, school, eventId, division ?? 'varsity').then(entry => setLiveEntries(list => [...list, entry])).catch(report); },
     removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).catch(caught => { report(caught); refresh(); }); },
@@ -283,6 +294,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Ending the tournament sends every school its invoice; in the demo, other schools then pay.
       if (patch.status === 'finished') setPayments(all => seedSettlements(all, { ...tournament, ...patch }, entries));
       setTournament(current => ({ ...current, ...patch }));
+      if (patch.entriesOpen !== undefined) logChange(entriesNote(patch.entriesOpen), tournament.status, 'entries');
       // Leaving "finished" withdraws the release: students must never see results mid-tournament.
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
     },
@@ -294,7 +306,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeEntry: id => { setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) }))); },
     submittedSchools, submitSchool: school => setSubmittedSchools(current => current.includes(school) ? current : [...current, school]),
     sections,
-    generateSchedule: () => { setSections(buildSchedule(tournament, entries, demoJudges)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setScheduleChanges([]); },
+    generateSchedule: () => { setSections(buildSchedule(tournament, entries, demoJudges)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setScheduleChanges(list => list.filter(change => change.kind === 'entries')); },
     assignJudge: (sectionId, judgeId) => {
       logChange(describeMove(sections.find(item => item.id === sectionId), demoJudges.find(item => item.id === judgeId) ?? null, tournament), tournament.status);
       setSections(current => current.map(section => section.id === sectionId ? { ...section, judgeId } : section));

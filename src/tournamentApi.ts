@@ -1,5 +1,5 @@
 import { supabase } from './auth';
-import type { Division, Entry, Judge, JudgePrefs, Section, Tournament, TournamentStatus } from './tournament';
+import type { Division, Entry, Judge, JudgePrefs, ScheduleChange, Section, Tournament, TournamentStatus, UpdateKind } from './tournament';
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
@@ -155,5 +155,20 @@ export async function addSections(tournamentId: string, sections: Section[], sta
 
 export async function saveSectionJudge(sectionId: string, judge: Judge | null): Promise<void> {
   const { error } = await db().from('sections').update({ judge_id: judge?.id ?? null, judge_name: judge?.name ?? '' }).eq('id', sectionId);
+  if (error) fail(error.message);
+}
+
+type UpdateRecord = { id: string; kind: UpdateKind; message: string; created_at: string };
+const toUpdate = (row: UpdateRecord): ScheduleChange => ({ id: row.id, kind: row.kind, text: row.message, time: new Date(row.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+
+/** The director's notes to everyone in the tournament, newest first. */
+export async function listUpdates(tournamentId: string): Promise<ScheduleChange[]> {
+  const { data, error } = await db().from('tournament_updates').select('id, kind, message, created_at').eq('tournament_id', tournamentId).order('created_at', { ascending: false }).limit(30);
+  if (error) fail(error.message);
+  return ((data ?? []) as UpdateRecord[]).map(toUpdate);
+}
+
+export async function addUpdate(tournamentId: string, kind: UpdateKind, message: string): Promise<void> {
+  const { error } = await db().from('tournament_updates').insert({ tournament_id: tournamentId, kind, message: message.slice(0, 300) });
   if (error) fail(error.message);
 }

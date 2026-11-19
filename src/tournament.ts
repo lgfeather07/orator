@@ -18,6 +18,8 @@ export type Tournament = {
   entriesOpen?: boolean;
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
+  /** Whether novice finals earn team points. Usually not, so off by default. */
+  noviceTeamPoints?: boolean;
   eventIds: string[]; status: TournamentStatus;
 };
 
@@ -32,7 +34,7 @@ export const ORATOR_PRICING: { upTo: number; fee: number }[] = [
 export const oratorFeeFor = (entries: number) => entries === 0 ? 0 : ORATOR_PRICING.find(tier => entries <= tier.upTo)!.fee;
 export const pricingTierLabel = (entries: number) => { const index = Math.max(0, ORATOR_PRICING.findIndex(tier => entries <= tier.upTo)); const low = index === 0 ? 1 : ORATOR_PRICING[index - 1].upTo + 1; const high = ORATOR_PRICING[index].upTo; return high === Infinity ? `${low}+ entries` : `${low}–${high} entries`; };
 /** Typical Nebraska fees: $7–8 an entry, set by each director, and $75 for each judge a school owes but doesn't bring. */
-export const defaultFees: Fees = { entry: 7.5, school: 0, judge: 75, entriesPerJudge: 6 };
+export const defaultFees: Fees = { entry: 7, school: 0, judge: 75, entriesPerJudge: 6 };
 /** Dollars, with cents only when there are cents: $90, $7.50. */
 export const money = (amount: number) => { const cents = Math.round(amount * 100); return cents % 100 === 0 ? `$${(cents / 100).toLocaleString()}` : `$${(cents / 100).toFixed(2)}`; };
 
@@ -83,8 +85,12 @@ export const contestKey = (eventId: string, division: Division) => division === 
 export const contestOf = (item: { eventId: string; division?: Division }) => contestKey(item.eventId, divisionOf(item));
 export const parseContest = (key: string): { eventId: string; division: Division } => { const [eventId, division] = key.split(':'); return { eventId, division: division === 'novice' ? 'novice' : 'varsity' }; };
 
-/** A change the director made after the schedule went out, so coaches and judges can see what moved. */
-export type ScheduleChange = { id: string; time: string; text: string };
+/**
+ * A note from the director: a change to the published schedule (everyone sees it) or entries opening
+ * or closing (coaches see it).
+ */
+export type UpdateKind = 'schedule' | 'entries';
+export type ScheduleChange = { id: string; time: string; text: string; kind?: UpdateKind };
 
 export type IssueKind = 'no-judge' | 'injury' | 'schedule' | 'ballot' | 'other';
 export type Issue = {

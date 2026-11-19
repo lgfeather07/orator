@@ -31,7 +31,9 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   const finalists = standings.filter(standing => standing.advances);
   const placings = eventId ? placingsFor(eventId) : [];
   const allPlacings = events.map(id => ({ eventName: eventName(id), placings: placingsFor(id) }));
-  const teams = teamStandings(allPlacings);
+  // Novice finals count toward team points only if the director says so.
+  const countsForTeam = (id: string) => tournament.noviceTeamPoints || parseContest(id).division !== 'novice';
+  const teams = teamStandings(allPlacings.filter((_, index) => countsForTeam(events[index])));
   const finalsDone = allPlacings.filter(item => item.placings.length > 0).length;
   const hasPrelims = prelimResults.length > 0;
   const cutTie = finalists.length > FINALISTS;
@@ -58,7 +60,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
     const quote = (text: string | number) => `"${String(text).replace(/"/g, '""')}"`;
     const lines = [['Event', 'Place', 'Speaker', 'School', 'Judges’ ranks', 'Team points'].map(quote).join(',')];
     events.forEach(id => placingsFor(id).forEach(placing => lines.push([eventName(id), placing.place, placing.student, placing.school, placing.judgeRanks.join(' '), placing.teamPoints].map(quote).join(','))));
-    lines.push('', ['Team', 'Points'].map(quote).join(','), ...teamStandings(events.map(id => ({ eventName: eventName(id), placings: placingsFor(id) }))).map(team => [team.school, team.points].map(quote).join(',')));
+    lines.push('', ['Team', 'Points'].map(quote).join(','), ...teamStandings(events.filter(countsForTeam).map(id => ({ eventName: eventName(id), placings: placingsFor(id) }))).map(team => [team.school, team.points].map(quote).join(',')));
     downloadText(`${tournament.name.replace(/\W+/g, '-').toLowerCase() || 'tournament'}-results.csv`, lines.join('\n'));
   };
   const flow = <section className="panel results-flow" aria-label="Results progress">
@@ -138,6 +140,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
         <label><span>Judges in each final</span><select value={judges} onChange={event => store.updateTournament({ finalJudges: Number(event.target.value) })}><option value={2}>2 judges (districts)</option><option value={3}>3 judges (state)</option></select></label>
         <fieldset><legend>Team points for 1st to 6th</legend><div>{points.map((value, index) => <input key={index} aria-label={`Points for ${ordinal(index + 1)}`} inputMode="numeric" value={value} onChange={event => store.updateTournament({ teamPoints: points.map((old, i) => i === index ? Number(event.target.value.replace(/\D/g, '')) || 0 : old) })}/>)}</div>
           {points.join() !== NSAA_TEAM_POINTS.join() && <button type="button" onClick={() => store.updateTournament({ teamPoints: NSAA_TEAM_POINTS })}>Use the NSAA scale (20-18-16-14-12-10)</button>}</fieldset>
+        {events.some(id => parseContest(id).division === 'novice') && <label className="check-setting"><input type="checkbox" checked={tournament.noviceTeamPoints ?? false} onChange={event => store.updateTournament({ noviceTeamPoints: event.target.checked })}/><span><strong>Novice finals earn team points</strong><small>Usually off. Turn on if this tournament counts novice placings toward the team award.</small></span></label>}
       </section>
     </aside>
   </div>;
