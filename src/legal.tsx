@@ -43,6 +43,7 @@ const contact = BUSINESS.contactEmail
 
 export function LegalFooter({ onOpen }: { onOpen: (page: LegalPage) => void }) {
   return <footer className="legal-footer">
+    <nav aria-label="Public results"><a href="#/results">Tournament results</a></nav>
     <nav aria-label="Legal">{legalPages.map(page => <a key={page.id} href={`#/${page.id}`} onClick={event => { event.preventDefault(); onOpen(page.id); }}>{page.label}</a>)}</nav>
     <p>© 2026 {BUSINESS.operator || BUSINESS.name}{BUSINESS.contactEmail && <> · <a href={`mailto:${BUSINESS.contactEmail}`}>{BUSINESS.contactEmail}</a></>}{BUSINESS.mailingAddress && <> · {BUSINESS.mailingAddress}</>}</p>
     <p>Orator is not affiliated with or endorsed by the Nebraska School Activities Association (NSAA). Demo data, including people, results and payments, is fictional.</p>
@@ -80,6 +81,7 @@ const pages: Record<LegalPage, { title: string; intro: string; body: ReactNode }
           <li>Coaches see entries and submitted ballots for their own school, once the director has approved them.</li>
           <li>Judges see the rooms they are assigned, and their own ballots and notes.</li>
           <li>Students see their own events and rooms. They see their own rankings and comments only after the tournament has ended and their coach releases them, never during the tournament.</li>
+          <li>Once a tournament has ended, its director may publish its final results: each final’s placings (student name, school, event and place) and team points. Anyone can see published results, without an account. Ballots, judges’ comments and preliminary rankings are never published.</li>
         </ul>
         <p>We use this information only to run tournaments and show results. Access rules are enforced by the database, not just by the screens.</p>
       </Section>

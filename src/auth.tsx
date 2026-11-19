@@ -178,6 +178,7 @@ export function AuthPage({ onDemo }: { onDemo?: () => void }) {
           {current === 'forgot' && <div className="auth-links"><button type="button" onClick={() => go('signin')}>Back to sign in</button></div>}
         </form>}
       </section>
+      <a className="auth-demo auth-results" href="#/results"><Icon name="growth" size={16}/><span><strong>Tournament results</strong><small>Final placings and team points from finished tournaments. No account needed.</small></span><Icon name="arrow" size={16}/></a>
       {onDemo && <button className="auth-demo" onClick={onDemo}><Icon name="sparkle" size={16}/><span><strong>Explore the demo</strong><small>Look around every role with sample data. No account needed.</small></span><Icon name="arrow" size={16}/></button>}
       <p className="signin-security"><Icon name="lock" size={14}/> Your school and tournament permissions determine what you can access.</p>
     </main>

@@ -4,6 +4,7 @@ import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor } from './tournament';
 import { FINALISTS, NSAA_TEAM_POINTS, finalPlacings, prelimStandings, sampleFinals, teamStandings, type Placing, type Standing } from './results';
+import { PublishResults } from './PublishResults';
 
 /** "Informative" for varsity, "Novice Informative" for the novice division. */
 const eventName = (key: string) => { const { eventId, division } = parseContest(key); const name = ballotEvents.find(event => event.id === eventId)?.name ?? eventId; return division === 'novice' ? `Novice ${name}` : name; };
@@ -86,6 +87,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   return <div className="results-layout">
     <div className="results-main">
       {flow}
+      <PublishResults contests={events.map(id => ({ contest: id, placings: placingsFor(id) }))} teams={teams}/>
       <section className="panel">
         <div className="panel-head"><div><h2>Preliminary rounds</h2><p>{tournament.rounds} rounds, one judge per room. The lowest cumulative rank advances; the top {FINALISTS} go to the final.</p></div>
           <span className="panel-head-actions">{store.resultsAreReal ? <><Badge tone="success" icon="check">From {new Set(prelimResults.map(result => result.sectionId)).size} submitted {new Set(prelimResults.map(result => result.sectionId)).size === 1 ? 'ballot' : 'ballots'}</Badge><Button variant="secondary" onClick={() => store.refresh()}>Refresh</Button></> : <>{hasPrelims && <Button variant="secondary" onClick={store.clearResults}>Clear results</Button>}<Button icon="sparkle" variant={hasPrelims ? 'secondary' : 'primary'} onClick={store.fillSamplePrelims}>{hasPrelims ? 'New sample results' : 'Fill in sample results'}</Button></>}</span></div>

@@ -21,11 +21,11 @@ The demo includes a full tournament setup: a coach enters students, the director
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
-2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`.
+2. In the Supabase dashboard, open SQL Editor and run `supabase/schema.sql`, then `supabase/ballots.sql`, then `supabase/tournaments.sql`, then `supabase/public_results.sql`.
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 
-**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: issue reports, judge check-in, practice goals, director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data.
+**Updating an existing project:** after pulling new changes, run `supabase/tournaments.sql` again in the SQL Editor. It is safe to re-run and adds new columns (the latest: issue reports, judge check-in, practice goals, director updates to coaches and judges, entries open/closed, the judges-see-a-rating setting, varsity/novice divisions, and clean-judge conflicts) without touching existing data. Then run `supabase/public_results.sql` (also safe to re-run); it must come after `tournaments.sql`.
 
 ## Layout
 
@@ -48,5 +48,6 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/EntryImport.tsx` — adding students by hand or from a roster file
 - `src/legal.tsx` — privacy, terms, cookies, refund and accessibility pages (drafts) and the footer; business details go in `BUSINESS` at the top
 - `src/Payments.tsx` — tournament fees (default $7 an entry and $75 per judge a school doesn't bring), each school's invoice, Orator's size-based fee (placeholder tiers in `ORATOR_PRICING` in `src/tournament.ts`), and the payment simulator (no real money moves)
-- `supabase/` — database tables and access rules
+- `src/PublicResults.tsx`, `src/publicResultsApi.ts`, `src/PublishResults.tsx` — public results pages (`#/results`, `#/results/<id>`, `#/school/<school>`, `#/student/<school>/<student>`), open without an account, and the director's Publish results panel. Only final placings (place, student, school) and team points are public; ballots, comments, and preliminary rankings stay private. The demo shows a fictional sample season.
+- `supabase/` — database tables and access rules (`public_results.sql` holds the published-results tables, run after `tournaments.sql`)
 - `src/store.tsx` — demo data shared across roles
