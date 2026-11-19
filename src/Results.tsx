@@ -5,6 +5,7 @@ import { ballotEvents } from './ballots';
 import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor } from './tournament';
 import { NSAA_TEAM_POINTS, cutFor, finalPlacings, prelimStandings, sampleFinals, teamStandings, type Placing, type Standing } from './results';
 import { CutOverview, CutPreview, NextIn } from './CutPreview';
+import { PublishResults } from './PublishResults';
 
 /** "Informative" for varsity, "Novice Informative" for the novice division. */
 const eventName = (key: string) => { const { eventId, division } = parseContest(key); const name = ballotEvents.find(event => event.id === eventId)?.name ?? eventId; return division === 'novice' ? `Novice ${name}` : name; };
@@ -90,6 +91,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   return <div className="results-layout">
     <div className="results-main">
       {flow}
+      <PublishResults contests={events.map(id => ({ contest: id, placings: placingsFor(id) }))} teams={teams}/>
       {hasPrelims && <CutOverview events={events} eventName={eventName} standingsFor={standingsFor} onOpen={setChosen}/>}
       <section className="panel">
         <div className="panel-head"><div><h2>Preliminary rounds</h2><p>{tournament.rounds} rounds, one judge per room. The lowest cumulative rank advances; the top {cut} go to the final.</p></div>
