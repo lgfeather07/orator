@@ -28,6 +28,7 @@ import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyT
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
 import { CalendarLink, CalendarView, RegistrationNotice, useCalendarRoute, useRegistrationLanding, type CalendarExit } from './Calendar';
 import { PublicResultsView, schoolHref, studentHref, usePublicRoute } from './PublicResults';
+import { TeamCompare } from './TeamCompare';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
 
@@ -403,7 +404,7 @@ function CoachPage() {
   const lastMeet = pastBallots.filter(ballot => ballot.meetOrder === 4);
   const lastMeetRank = (lastMeet.reduce((sum, ballot) => sum + ballot.rank, 0) / lastMeet.length).toFixed(1);
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'team' | 'growth' | 'ballots' | 'entries' | 'import' | 'student' | 'practice'>('team');
+  const [view, setView] = useState<'team' | 'growth' | 'compare' | 'ballots' | 'entries' | 'import' | 'student' | 'practice'>('team');
   const [selectedStudent, setSelectedStudent] = useState('Maya Rodriguez');
   const ballots = [
     ['Maya Rodriguez','Judge Leather','Informative','Larkspur Invitational','1st','Oct 19'],
@@ -415,7 +416,7 @@ function CoachPage() {
     <div className="role-dashboard">
       <section className="role-hero coach-hero"><div><Badge tone="warning" icon="warning">3 items need attention</Badge><h2>{teamName} is on track</h2><p>{coachStore.tournament.name} · Round 2 underway · {teamStudents.length} students competing in {teamEntries.length} entries</p><div className="hero-actions"><Button icon="users" onClick={() => setView('entries')}>View team entries</Button><Button variant="secondary" icon="plus" onClick={() => setView('import')}>Add students</Button><a className="button button-secondary" href={schoolHref(account?.school || 'Wrenfield High')}><Icon name="growth"/><span>Season results</span></a></div></div><div className="hero-stat"><span>Finals breaks</span><strong>{totalFinals}</strong><small>this season · {finalists} of {teamGrowth.length} students</small></div></section>
       <div className="metric-grid"><Metric label="Students entered" value={String(teamStudents.length)} note={`${teamEntries.length} entries · ${multiEntered} in more than one event`} icon="users"/><Metric label="Average rank" value={lastMeetRank} note={`Last tournament · ${lastMeet.length} ballots`} icon="growth"/><Metric label="Ballots to review" value={String(pastBallots.length)} note="This season, under Past ballots" icon="ballot"/><Metric label="Next round" value="24m" note="Round 2 · 9:30" icon="clock"/></div>
-      <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
+      <div className="role-tabs"><button className={view === 'team' || view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('team')}>Team overview</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>Student growth</button><button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}>Compare teams</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballot review</button></div>
       {view === 'team' ? <div className="role-grid">
         <section className="panel coach-team-panel"><div className="panel-head"><div><h2>Team at Larkspur</h2><p>Live status across all six events</p></div><Badge tone="success" icon="check">18 checked in</Badge></div>
           <div className="coach-student-list">{[
@@ -431,6 +432,7 @@ function CoachPage() {
           ['plus','Add students','By hand or from a file'],
         ].map(([icon,title,note],i) => <button key={title} onClick={() => i < 2 ? setView('ballots') : setView('import')}><span><Icon name={icon as IconName}/></span><span><strong>{title}</strong><small>{note}</small></span><Icon name="arrow"/></button>)}</aside>
       </div> : view === 'entries' ? <CoachEntries onBack={() => setView('team')}/> : view === 'student' ? <section className="panel action-workspace student-record"><div className="panel-head"><div><h2>{selectedStudent}</h2><p>Student record · Wrenfield High School</p></div><Button variant="secondary" icon="arrow" onClick={() => setView('team')}>Back to overview</Button></div><div className="student-record-hero"><Avatar initials={selectedStudent.split(' ').map(part => part[0]).join('')} /><div><Badge tone="success" icon="check">Checked in</Badge><h3>{selectedStudent}</h3><p>Varsity Informative · Code V42 · Junior</p></div><div><strong>43.0</strong><small>Season average / 50</small></div><Button icon="comment" onClick={() => setView('ballots')}>View ballots</Button></div><div className="student-record-grid"><div><span>Next round</span><strong>Round 2 · 9:30 AM</strong><small>Room 214 · Speaks third</small></div><div><span>Season results</span><strong>6 finals · 2 wins</strong><small>8 tournaments entered</small></div><div><span>Coaching focus</span><strong>Delivery & pacing</strong><small>Based on recent ballots</small></div></div><StudentRecordExtras student={selectedStudent}/></section> : view === 'import' ? <CoachEntries importing onBack={() => setView('entries')}/>
+       : view === 'compare' ? <TeamCompare school={account?.school || 'Wrenfield High'} rival={account?.school ? undefined : 'Kestrel Prep'}/>
        : view === 'practice' ? <CoachPracticeSection bare/> : view === 'growth' ? <StudentGrowth onOpenStudent={name => { setSelectedStudent(name); setView('student'); }}/>
        : <><ReleaseResults/><TeamBallots/><section className="panel archive-panel coach-archive"><div className="panel-head"><div><h2>Ballot review</h2><p>Search feedback, resolve flags, and export team records.</p></div><Button icon="download" variant="secondary" onClick={() => downloadText('orator-ballots.csv','Student,Judge,Event,Rank\nMaya Rodriguez,Judge Leather,Informative,1')}>Export</Button></div>
         <div className="archive-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search student, judge, event, or tournament"/></label><select aria-label="Filter by event" onChange={event => setQuery(event.target.value)}><option value="">All events</option>{ballotEvents.slice(0,6).map(event => <option value={event.short} key={event.id}>{event.short}</option>)}</select><select aria-label="Filter by season"><option>This season</option><option>Last season</option><option>All time</option></select></div>
@@ -467,7 +469,7 @@ function StudentBallots() {
 
 function StudentPage() {
   const greeting = useGreeting('Maya');
-  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep' | 'growth' | 'ballots' | 'practice'>('today');
+  const [view, setView] = useState<'today' | 'feedback' | 'round' | 'prep' | 'growth' | 'compare' | 'ballots' | 'practice'>('today');
   const [openBallot, setOpenBallot] = useState<string | undefined>(undefined);
   // Each feedback card comes from one of Maya's ballots; clicking it opens that ballot in full.
   const mayaBallots = pastBallots.filter(ballot => ballot.student === 'Maya Rodriguez').sort((a, b) => b.meetOrder - a.meetOrder || a.round - b.round);
@@ -489,8 +491,8 @@ function StudentPage() {
       <div className="metric-grid"><Metric label="Next round" value="9:30" note="Room 214" icon="clock"/><Metric label="Current rank" value={rankVisible ? '2nd' : 'Hidden'} note={rankVisible ? 'Released by your coach' : 'Until your coach releases it'} icon={rankVisible ? 'growth' : 'lock'}/><Metric label="Feedback" value={commentsVisible ? '18' : '94'} note={commentsVisible ? 'New comments released' : 'From past tournaments'} icon="comment"/><Metric label="Season finals" value="6" note="Across 8 tournaments" icon="sparkle"/></div>
       <MyEntries/>
       {store.live && <StudentBallots/>}
-      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => { setOpenBallot(undefined); setView('ballots'); }}>My ballots</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button></div>
-      {view === 'practice' ? <StudentPracticeSection bare/> : view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'ballots' ? <PastBallots key={openBallot ?? 'all'} student="Maya Rodriguez" initialOpen={openBallot}/> : view === 'today' ? <div className="role-grid">
+      <div className="role-tabs"><button className={view === 'today' || view === 'round' || view === 'prep' ? 'active' : ''} onClick={() => setView('today')}>Today’s schedule</button><button className={view === 'feedback' ? 'active' : ''} onClick={() => setView('feedback')}>Recent feedback</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => { setOpenBallot(undefined); setView('ballots'); }}>My ballots</button><button className={view === 'growth' ? 'active' : ''} onClick={() => setView('growth')}>My growth</button><button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}>Compare teams</button></div>
+      {view === 'compare' ? <TeamCompare school="Wrenfield High" rival="Kestrel Prep" student="Maya Rodriguez"/> : view === 'practice' ? <StudentPracticeSection bare/> : view === 'growth' ? <MyGrowth name="Maya Rodriguez"/> : view === 'ballots' ? <PastBallots key={openBallot ?? 'all'} student="Maya Rodriguez" initialOpen={openBallot}/> : view === 'today' ? <div className="role-grid">
         <section className="panel role-panel"><div className="panel-head"><div><h2>Today’s rounds</h2><p>Larkspur Invitational · Varsity Informative</p></div><Badge tone="success" icon="check">Checked in</Badge></div>
           <div className="timeline-list">{[['8:00 AM','Round 1','Room 108','Completed'],['9:30 AM','Round 2','Room 214','Up next'],['11:00 AM','Round 3','Room 301','Scheduled'],['1:30 PM','Round 4','Room 122','Scheduled']].map(([time,round,room,status],i)=><div className={`timeline-row ${i===1?'current':''}`} key={round}><span className="timeline-dot">{i<1?<Icon name="check" size={14}/>:i+1}</span><span><small>{time}</small><strong>{round}</strong></span><span>{room}</span><Badge tone={i===0?'success':i===1?'info':'neutral'}>{status}</Badge></div>)}</div>
         </section>
@@ -569,7 +571,7 @@ function LiveCoachPage() {
   const store = useStore();
   const greeting = useGreeting('Coach');
   const { state, membership } = useAccess('coach');
-  const [view, setView] = useState<'entries' | 'import' | 'practice' | 'ballots'>('entries');
+  const [view, setView] = useState<'entries' | 'import' | 'practice' | 'ballots' | 'compare'>('entries');
   const school = state === 'approved' && membership ? membership.school : '';
   const mine = school ? store.entries.filter(entry => sameSchool(entry.school, school)) : [];
   const students = teamStudents(mine);
@@ -582,8 +584,8 @@ function LiveCoachPage() {
         <section className="role-hero coach-hero"><div><Badge tone="info" icon="clock">{statusText(store.tournament.status, store.entriesOpen)}</Badge><h2>{school} at {store.tournament.name}</h2><p>{[store.tournament.date, store.tournament.host && `hosted by ${store.tournament.host}`, `${students.length} ${students.length === 1 ? 'student' : 'students'} in ${mine.length} ${mine.length === 1 ? 'entry' : 'entries'}`].filter(Boolean).join(' · ')}</p>
           <div className="hero-actions"><Button icon="plus" disabled={!store.entriesOpen} onClick={() => setView('import')}>Add students</Button><Button variant="secondary" icon="sparkle" onClick={() => setView('practice')}>Practice goals</Button><a className="button button-secondary" href={schoolHref(school)}><Icon name="growth"/><span>Season results</span></a></div></div></section>
         <div className="metric-grid"><Metric label="Students entered" value={String(students.length)} note={`${mine.length} entries${multi ? ` · ${multi} in more than one event` : ''}`} icon="users"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Rooms and times are below' : 'The director publishes it'} icon="clock"/><Metric label="Practice goals" value={String(openGoals)} note="Still to work on" icon="sparkle"/><Metric label="Results" value={store.resultsReleased ? 'Released' : 'Held'} note={store.resultsReleased ? 'Your students can see them' : 'Release after the tournament'} icon={store.resultsReleased ? 'check' : 'lock'}/></div>
-        <div className="role-tabs"><button className={view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('entries')}>Team entries</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballots</button></div>
-        {view === 'practice' ? <CoachPractice school={school} students={students}/> : view === 'ballots' ? <><ReleaseResults/><TeamBallots/></> : <><CoachEntries importing={view === 'import'} onBack={view === 'import' ? () => setView('entries') : undefined}/>{view === 'entries' && <StudentLinks school={school}/>}</>}
+        <div className="role-tabs"><button className={view === 'entries' || view === 'import' ? 'active' : ''} onClick={() => setView('entries')}>Team entries</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>Ballots</button><button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}>Compare teams</button></div>
+        {view === 'compare' ? <TeamCompare school={school}/> : view === 'practice' ? <CoachPractice school={school} students={students}/> : view === 'ballots' ? <><ReleaseResults/><TeamBallots/></> : <><CoachEntries importing={view === 'import'} onBack={view === 'import' ? () => setView('entries') : undefined}/>{view === 'entries' && <StudentLinks school={school}/>}</>}
       </> : <AccessWait role="coach" what="Your team page opens"/>}
     </div>
   </DesktopShell>;
@@ -594,7 +596,7 @@ function LiveStudentPage() {
   const store = useStore();
   const greeting = useGreeting('Student');
   const { state, membership } = useAccess('student');
-  const [view, setView] = useState<'today' | 'practice' | 'ballots'>('today');
+  const [view, setView] = useState<'today' | 'practice' | 'ballots' | 'compare'>('today');
   const who = state === 'approved' && membership ? { name: membership.rosterName || membership.name, school: membership.school } : null;
   const mine = who ? store.entries.filter(entry => entry.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(entry.school, who.school)) : [];
   const goals = who ? store.practiceGoals.filter(goal => goal.student.trim().toLowerCase() === who.name.trim().toLowerCase() && sameSchool(goal.school, who.school)) : [];
@@ -608,8 +610,8 @@ function LiveStudentPage() {
         <section className="role-hero student-hero"><div><Badge tone="info">{statusText(store.tournament.status, store.entriesOpen)}</Badge><h2>{store.tournament.name}</h2><p>{[who.school, mine.length ? mine.map(entry => nsaaEvents.find(event => event.id === entry.eventId)?.name).join(', ') : 'No events entered yet'].join(' · ')}</p>
           <div className="hero-actions"><Button icon="sparkle" onClick={() => setView('practice')}>My practice goals</Button><a className="button button-secondary" href={studentHref(who.school, who.name)}><Icon name="growth"/><span>My season results</span></a></div></div></section>
         <div className="metric-grid"><Metric label="Events" value={String(mine.length)} note={mine.length > 1 ? loadLabel(mine.length) : mine.length ? 'One event' : 'Your coach enters you'} icon="ballot"/><Metric label="Schedule" value={published ? 'Out' : 'Not yet'} note={published ? 'Your rooms are below' : 'Appears once published'} icon="clock"/><Metric label="Practice goals" value={`${goals.filter(goal => goal.done).length}/${goals.length}`} note="Done so far" icon="sparkle"/><Metric label="Results" value={released ? 'Released' : 'Hidden'} note={released ? 'Your ballots are under My ballots' : 'Until your coach releases them'} icon={released ? 'growth' : 'lock'}/></div>
-        <div className="role-tabs"><button className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>My events</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>My ballots</button></div>
-        {view === 'practice' ? <StudentPractice student={who.name} school={who.school}/> : view === 'ballots' ? <MyTournamentBallots/> : <MyEntries/>}
+        <div className="role-tabs"><button className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>My events</button><button className={view === 'practice' ? 'active' : ''} onClick={() => setView('practice')}>Practice</button><button className={view === 'ballots' ? 'active' : ''} onClick={() => setView('ballots')}>My ballots</button><button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}>Compare teams</button></div>
+        {view === 'compare' ? <TeamCompare school={who.school} student={who.name}/> : view === 'practice' ? <StudentPractice student={who.name} school={who.school}/> : view === 'ballots' ? <MyTournamentBallots/> : <MyEntries/>}
       </> : <AccessWait role="student" what="Your events and ballots appear"/>}
     </div>
   </DesktopShell>;

@@ -17,8 +17,12 @@ export type PublishedPlacing = { tournamentId: string; contest: string; eventId:
 export type PublishedTeam = { tournamentId: string; school: string; points: number; place: number };
 export type PublishedResults = { tournaments: PublishedTournament[]; placings: PublishedPlacing[]; teams: PublishedTeam[] };
 
-/** What a director publishes: one row per finalist, and one per school with team points. */
-export type Snapshot = { placings: Omit<PublishedPlacing, 'tournamentId'>[]; teams: Omit<PublishedTeam, 'tournamentId'>[] };
+/** The team point scale a tournament used (1st to 6th), and whether novice finals counted. Stored by supabase/team_compare.sql. */
+export type TeamScoring = { scale: number[]; noviceCounts: boolean };
+export type PublishedScoring = TeamScoring & { tournamentId: string };
+
+/** What a director publishes: one row per finalist, and one per school with team points (plus, optionally, the scale behind them). */
+export type Snapshot = { placings: Omit<PublishedPlacing, 'tournamentId'>[]; teams: Omit<PublishedTeam, 'tournamentId'>[]; scoring?: TeamScoring };
 
 const fail = (message: string): never => {
   if (/could not find|schema cache|does not exist/i.test(message)) throw new Error('The database needs an update. Run supabase/public_results.sql in the Supabase SQL Editor.');
@@ -34,14 +38,14 @@ export const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.t
  * Build the public snapshot from the director's placings. Only place, student and school are kept.
  * Team places share a place when points are tied.
  */
-export function buildSnapshot(contests: { contest: string; placings: Placing[] }[], teams: TeamScore[]): Snapshot {
+export function buildSnapshot(contests: { contest: string; placings: Placing[] }[], teams: TeamScore[], scoring?: TeamScoring): Snapshot {
   const placings = contests.flatMap(({ contest, placings }) => placings.map(placing => {
     const { eventId, division } = parseContest(contest);
     return { contest: contestKey(eventId, division), eventId, division, place: placing.place, student: placing.student.trim(), school: placing.school.trim() };
   }));
   const ranked = [...teams].filter(team => team.points > 0).sort((a, b) => b.points - a.points);
   const teamRows = ranked.map(team => ({ school: team.school.trim(), points: team.points, place: ranked.findIndex(other => other.points === team.points) + 1 }));
-  return { placings, teams: teamRows };
+  return { placings, teams: teamRows, ...(scoring ? { scoring: { scale: [...scoring.scale], noviceCounts: scoring.noviceCounts } } : {}) };
 }
 
 // ── Season helpers ──
@@ -60,13 +64,18 @@ export const newestFirst = (a: PublishedTournament, b: PublishedTournament) => w
 const seeded = (key: string) => { let hash = 2166136261; for (let i = 0; i < key.length; i++) { hash ^= key.charCodeAt(i); hash = Math.imul(hash, 16777619); } return ((hash >>> 0) % 10000) / 10000; };
 const demoSchoolHost: Record<string, string> = { Ashgrove: 'Ashgrove', Brightwater: 'Brightwater High', 'Halden West': 'Halden West', Thornbury: 'Thornbury', 'Fallow Creek': 'Fallow Creek' };
 // The growth charts' five meets (this season), plus two from last season so school histories span seasons.
-const demoMeets: { id: string; name: string; date: string; host: string }[] = [
-  { id: 'demo-kestrel-2026', name: 'Kestrel Prep Classic', date: 'February 7, 2026', host: 'Kestrel Prep' },
-  { id: 'demo-wrenfield-2026', name: 'Wrenfield Invitational', date: 'March 14, 2026', host: 'Wrenfield High' },
+// Two meets show a tournament's own scoring rules: the Kestrel Prep Classic counts novice finals, and the
+// Wrenfield Invitational uses its own team point scale.
+type DemoMeet = { id: string; name: string; date: string; host: string; scoring?: TeamScoring };
+const demoMeets: DemoMeet[] = [
+  { id: 'demo-kestrel-2026', name: 'Kestrel Prep Classic', date: 'February 7, 2026', host: 'Kestrel Prep', scoring: { scale: NSAA_TEAM_POINTS, noviceCounts: true } },
+  { id: 'demo-wrenfield-2026', name: 'Wrenfield Invitational', date: 'March 14, 2026', host: 'Wrenfield High', scoring: { scale: [25, 20, 16, 12, 8, 4], noviceCounts: false } },
   ...growthMeets.map((meet, index) => ({ id: `demo-${meet.toLowerCase().replace(/\W+/g, '-')}`, name: `${meet} Invitational`, date: `${['September 12', 'September 19', 'September 26', 'October 3', 'October 10'][index]}, 2026`, host: demoSchoolHost[meet] ?? meet })),
 ];
 
-function sampleMeet(meet: { id: string; name: string; date: string; host: string }): PublishedResults {
+const scoringOf = (meet: DemoMeet): TeamScoring => meet.scoring ?? { scale: NSAA_TEAM_POINTS, noviceCounts: false };
+
+function sampleMeet(meet: DemoMeet): PublishedResults {
   const placings: PublishedPlacing[] = defaultTournament.eventIds.flatMap(eventId => divisions.map(division => {
     const field = seedEntries.filter(entry => entry.eventId === eventId && (entry.division ?? 'varsity') === division);
     // Each speaker has a steady level, some luck on the day, and a team that is on form or not.
@@ -74,10 +83,11 @@ function sampleMeet(meet: { id: string; name: string; date: string; host: string
     return order.map(({ entry }, index) => ({ tournamentId: meet.id, contest: contestKey(eventId, division), eventId, division, place: index + 1, student: entry.student, school: entry.school }));
   })).flat();
   const points = new Map<string, number>();
-  placings.filter(placing => placing.division === 'varsity').forEach(placing => points.set(placing.school, (points.get(placing.school) ?? 0) + (NSAA_TEAM_POINTS[placing.place - 1] ?? 0)));
+  const { scale, noviceCounts } = scoringOf(meet);
+  placings.filter(placing => noviceCounts || placing.division === 'varsity').forEach(placing => points.set(placing.school, (points.get(placing.school) ?? 0) + (scale[placing.place - 1] ?? 0)));
   const ranked = [...points.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const teams = ranked.map(([school, total]) => ({ tournamentId: meet.id, school, points: total, place: ranked.findIndex(other => other[1] === total) + 1 }));
-  return { tournaments: [{ ...meet, publishedAt: new Date(Date.parse(meet.date) + 86400000).toISOString() }], placings, teams };
+  return { tournaments: [{ id: meet.id, name: meet.name, date: meet.date, host: meet.host, publishedAt: new Date(Date.parse(meet.date) + 86400000).toISOString() }], placings, teams };
 }
 
 const sampleSeason: PublishedResults = demoMeets.map(sampleMeet).reduce((all, meet) => ({ tournaments: [...all.tournaments, ...meet.tournaments], placings: [...all.placings, ...meet.placings], teams: [...all.teams, ...meet.teams] }), { tournaments: [], placings: [], teams: [] } as PublishedResults);
@@ -102,6 +112,13 @@ function demoResults(includeDemoTournament: boolean): PublishedResults {
     placings: [...sampleSeason.placings, ...mine.snapshot.placings.map(row => ({ ...row, tournamentId: mine.tournament.id }))],
     teams: [...sampleSeason.teams, ...mine.snapshot.teams.map(row => ({ ...row, tournamentId: mine.tournament.id }))],
   };
+}
+
+/** The demo's published scoring rules: every sample meet, plus the demo tournament if it was published with them. */
+export function demoScoring(includeDemoTournament: boolean): PublishedScoring[] {
+  const mine = includeDemoTournament ? loadDemoPublished() : null;
+  const sample = demoMeets.map(meet => ({ tournamentId: meet.id, ...scoringOf(meet) }));
+  return mine?.snapshot.scoring ? [...sample, { tournamentId: mine.tournament.id, ...mine.snapshot.scoring }] : sample;
 }
 
 // ── Reading (anyone) ──
@@ -165,6 +182,11 @@ export async function publishResults(tournamentId: string, snapshot: Snapshot): 
     teams: snapshot.teams,
   });
   if (error) fail(error.message);
+  // The scale behind the team points (supabase/team_compare.sql). Older databases without it still publish.
+  if (snapshot.scoring) {
+    const saved = await db().rpc('publish_team_scoring', { target: tournamentId, scale: snapshot.scoring.scale, novice_counts: snapshot.scoring.noviceCounts });
+    if (saved.error && !/could not find|schema cache|does not exist/i.test(saved.error.message)) fail(saved.error.message);
+  }
   return data as string;
 }
 

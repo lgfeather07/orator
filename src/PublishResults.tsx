@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
-import type { Placing, TeamScore } from './results';
+import { NSAA_TEAM_POINTS, type Placing, type TeamScore } from './results';
 import { DEMO_TOURNAMENT_ID, buildSnapshot, loadDemoPublished, publishResults, publishedAt, saveDemoPublished, unpublishResults } from './publicResultsApi';
 import { tournamentHref } from './PublicResults';
 
@@ -36,7 +36,8 @@ export function PublishResults({ contests, teams }: { contests: { contest: strin
   if (!finished || (live && !isDirector) || !id) return null;
 
   const placed = contests.filter(item => item.placings.length > 0);
-  const snapshot = buildSnapshot(placed, teams);
+  // The scale goes with the snapshot so per-event team points can be worked out from the placings (Compare teams).
+  const snapshot = buildSnapshot(placed, teams, { scale: tournament.teamPoints ?? NSAA_TEAM_POINTS, noviceCounts: tournament.noviceTeamPoints ?? false });
   const run = async (action: () => Promise<void>) => {
     setBusy(true); setError('');
     try { await action(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.'); } finally { setBusy(false); }
