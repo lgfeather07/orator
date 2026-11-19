@@ -116,7 +116,8 @@ export async function listTournamentResults(tournamentId: string): Promise<{ ent
   const rows = await Promise.all((ballots ?? []).filter(ballot => ballot.section_id).map(async ballot => {
     const { data, error: entryError } = await db.from('ballot_entries').select('speaker_code, rank, rating, present').eq('ballot_id', ballot.id);
     if (entryError) fail(entryError.message);
-    return (data ?? []).filter(entry => entry.present && entry.rank && entry.rating).map(entry => ({ entryId: entry.speaker_code as string, sectionId: ballot.section_id as string, rank: entry.rank as number, rating: entry.rating as number }));
+    // Paper ballots entered by the tab room may have ranks without points; those count with 0 rating points.
+    return (data ?? []).filter(entry => entry.present && entry.rank).map(entry => ({ entryId: entry.speaker_code as string, sectionId: ballot.section_id as string, rank: entry.rank as number, rating: (entry.rating ?? 0) as number }));
   }));
   return rows.flat();
 }
