@@ -225,3 +225,9 @@ export async function removeGoal(id: string): Promise<void> {
   const { error } = await db().from('practice_goals').delete().eq('id', id);
   if (error) fail(error.message);
 }
+
+/** Change who speaks in a room, e.g. moving a "next in" speaker into a final. Order is the speaking order. */
+export async function saveSectionEntries(sectionId: string, entryIds: string[]): Promise<void> {
+  const { error } = await db().from('sections').update({ entry_ids: entryIds }).eq('id', sectionId);
+  if (error) fail(error.message);
+}

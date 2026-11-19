@@ -10,6 +10,10 @@ export type Tournament = {
   maxEntries: number;
   /** Judges in each final round: two at districts, three at state. */
   finalJudges?: number;
+  /** How many speakers make each final, tournament-wide. Defaults to six, the NSAA number. */
+  finalists?: number;
+  /** The director's cut for one contest (key from `contestKey`), overriding `finalists`. */
+  finalistsByContest?: Record<string, number>;
   /** Team points for 1st to 6th in a final. Defaults to the NSAA scale. */
   teamPoints?: number[];
   /** What the host charges, in dollars (cents allowed, e.g. 7.50 per entry). */

@@ -44,6 +44,7 @@ The demo includes a full tournament setup: a coach enters students, the director
 - `src/Access.tsx` — creating a tournament, asking to join, and the director's approval list
 - `src/JudgeRooms.tsx` — a judge's assigned rooms
 - `src/results.ts`, `src/Results.tsx` — breaks, finals, and team points following the NSAA manual
+- `src/CutPreview.tsx` — finals cut points: for each contest, what a cut of 4 to 8 would do (how many advance, ties at the line, which tie-break settled the last spot), an all-contests table to set every cut before "Create all finals" (default 6, the NSAA number; a final room holds 8), and "next in" alternates the director can move into a final before any final ballot is in. Cuts are kept in the browser (the demo's saved state, or per tournament for signed-in directors), like the other finals settings. `npm run test:cuts` runs the cut rules' tests (`tests/cuts.test.mjs`).
 - `src/PastBallots.tsx` — past-tournament ballots for students and coaches
 - `src/EntryImport.tsx` — adding students by hand or from a roster file
 - `src/legal.tsx` — privacy, terms, cookies, refund and accessibility pages (drafts) and the footer; business details go in `BUSINESS` at the top

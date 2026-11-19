@@ -3,7 +3,7 @@
  * ("Determining Final Rounds", "Determining Placings", "Team Scoring").
  * Pure functions: the same code serves the demo's sample results and, later, real ballots.
  */
-import type { Entry, Section } from './tournament';
+import type { Entry, Section, Tournament } from './tournament';
 
 /** One speaker's result in one preliminary section. */
 export type PrelimResult = { entryId: string; round: number; sectionId: string; rank: number; rating: number };
@@ -11,6 +11,13 @@ export type PrelimResult = { entryId: string; round: number; sectionId: string; 
 export type FinalResult = { entryId: string; judge: number; rank: number; rating: number };
 
 export const FINALISTS = 6;
+/** A final is one room, and a room holds at most this many speakers. */
+export const FINAL_ROOM_LIMIT = 8;
+/** Cut points the director can choose between. */
+export const CUT_CHOICES = [4, 5, 6, 7, 8];
+
+/** How many finalists a contest takes: the director's choice for that contest, then for the tournament, then the NSAA six. */
+export const cutFor = (tournament: Pick<Tournament, 'finalists' | 'finalistsByContest'>, contest: string) => tournament.finalistsByContest?.[contest] ?? tournament.finalists ?? FINALISTS;
 /** NSAA sweepstakes: final round only. Tournaments may use their own scale. */
 export const NSAA_TEAM_POINTS = [20, 18, 16, 14, 12, 10];
 
@@ -23,6 +30,8 @@ export type Standing = {
   place: number; advances: boolean;
   /** Which rule separated this speaker from someone they were tied with, if any. */
   decidedBy: string;
+  /** Which rule put this speaker ahead of the next one down ('Cumulative rank' when there was no tie, '' if still tied or last). */
+  aheadOfNextBy?: string;
 };
 
 type Tiebreak = { label: string; score: (id: string) => number; better: 'low' | 'high' };
@@ -32,34 +41,46 @@ type Tiebreak = { label: string; score: (id: string) => number; better: 'low' | 
  * rules before it; `headToHead` is tried between the rules, and only for an exact two-way tie.
  * Returns groups in order; a group of more than one is an unbroken tie.
  */
-function orderBy(ids: string[], rules: (Tiebreak | 'head-to-head')[], headToHead: (a: string, b: string) => string | null, decidedBy: Map<string, string>): string[][] {
+function orderBy(ids: string[], rules: (Tiebreak | 'head-to-head')[], headToHead: (a: string, b: string) => string | null, decidedBy: Map<string, string>, between: string[] = []): string[][] {
   let groups: string[][] = [ids];
+  // `between[i]` names the rule that split group i from group i + 1.
+  between.length = 0;
   rules.forEach((rule, ruleIndex) => {
-    groups = groups.flatMap(group => {
-      if (group.length < 2) return [group];
-      if (rule === 'head-to-head') {
-        if (group.length !== 2) return [group];
-        const winner = headToHead(group[0], group[1]);
-        if (!winner) return [group];
-        group.forEach(id => decidedBy.set(id, 'Head-to-head'));
-        return [[winner], [group.find(id => id !== winner)!]];
-      }
-      const buckets = new Map<number, string[]>();
-      group.forEach(id => { const key = Math.round(rule.score(id) * 10000) / 10000; buckets.set(key, [...(buckets.get(key) ?? []), id]); });
-      if (buckets.size === 1) return [group];
-      // The first rule is the main result, not a tie-break, so it isn't named as one.
-      if (ruleIndex > 0) group.forEach(id => { if (!decidedBy.has(id)) decidedBy.set(id, rule.label); });
-      return [...buckets.entries()].sort((a, b) => rule.better === 'low' ? a[0] - b[0] : b[0] - a[0]).map(([, members]) => members);
+    const label = rule === 'head-to-head' ? 'Head-to-head' : rule.label;
+    const nextBetween: string[] = [];
+    groups = groups.flatMap((group, groupIndex) => {
+      const parts = split(group, rule, ruleIndex);
+      parts.slice(1).forEach(() => nextBetween.push(label));
+      if (groupIndex < groups.length - 1) nextBetween.push(between[groupIndex]);
+      return parts;
     });
+    between.splice(0, between.length, ...nextBetween);
   });
   return groups;
+
+  function split(group: string[], rule: Tiebreak | 'head-to-head', ruleIndex: number): string[][] {
+    if (group.length < 2) return [group];
+    if (rule === 'head-to-head') {
+      if (group.length !== 2) return [group];
+      const winner = headToHead(group[0], group[1]);
+      if (!winner) return [group];
+      group.forEach(id => decidedBy.set(id, 'Head-to-head'));
+      return [[winner], [group.find(id => id !== winner)!]];
+    }
+    const buckets = new Map<number, string[]>();
+    group.forEach(id => { const key = Math.round(rule.score(id) * 10000) / 10000; buckets.set(key, [...(buckets.get(key) ?? []), id]); });
+    if (buckets.size === 1) return [group];
+    // The first rule is the main result, not a tie-break, so it isn't named as one.
+    if (ruleIndex > 0) group.forEach(id => { if (!decidedBy.has(id)) decidedBy.set(id, rule.label); });
+    return [...buckets.entries()].sort((a, b) => rule.better === 'low' ? a[0] - b[0] : b[0] - a[0]).map(([, members]) => members);
+  }
 }
 
 /**
  * Preliminary standings for one event and who advances to the final.
  * Tie-breaks, in order: opponents' average rank, head-to-head, reciprocals, rating points.
  */
-export function prelimStandings(entries: Entry[], sections: Section[], results: PrelimResult[]): Standing[] {
+export function prelimStandings(entries: Entry[], sections: Section[], results: PrelimResult[], finalists: number = FINALISTS): Standing[] {
   const mine = new Map(entries.map(entry => [entry.id, results.filter(result => result.entryId === entry.id).sort((a, b) => a.round - b.round)]));
   const scored = entries.filter(entry => (mine.get(entry.id) ?? []).length > 0);
   const cumulative = (id: string) => sum((mine.get(id) ?? []).map(result => result.rank));
@@ -78,29 +99,67 @@ export function prelimStandings(entries: Entry[], sections: Section[], results: 
     return aWins === shared.length ? a : aWins === 0 ? b : null;
   };
   const decidedBy = new Map<string, string>();
+  const between: string[] = [];
   const groups = orderBy(scored.map(entry => entry.id), [
     { label: 'Cumulative rank', score: cumulative, better: 'low' },
     { label: 'Opponents’ average rank', score: opponents, better: 'low' },
     'head-to-head',
     { label: 'Reciprocals', score: id => sum((mine.get(id) ?? []).map(result => reciprocal(result.rank))), better: 'high' },
     { label: 'Rating points', score: id => sum((mine.get(id) ?? []).map(result => result.rating)), better: 'high' },
-  ], headToHead, decidedBy);
+  ], headToHead, decidedBy, between);
 
   const standings: Standing[] = [];
   let place = 1;
-  groups.forEach(group => {
-    group.forEach(id => {
+  groups.forEach((group, groupIndex) => {
+    group.forEach((id, index) => {
       const entry = entries.find(item => item.id === id)!; const rows = mine.get(id) ?? [];
       standings.push({
         entryId: id, student: entry.student, school: entry.school, ranks: rows.map(result => result.rank), cumulativeRank: cumulative(id),
         opponentsAverageRank: opponents(id), reciprocals: sum(rows.map(result => reciprocal(result.rank))), ratingPoints: sum(rows.map(result => result.rating)),
         // An unbroken tie at the cut line advances together, as the manual allows the director to decide.
-        place, advances: place <= FINALISTS, decidedBy: group.length > 1 ? 'Still tied' : decidedBy.get(id) ?? '',
+        place, advances: place <= finalists, decidedBy: group.length > 1 ? 'Still tied' : decidedBy.get(id) ?? '',
+        aheadOfNextBy: index < group.length - 1 ? '' : between[groupIndex] ?? '',
       });
     });
     place += group.length;
   });
   return standings;
+}
+
+/** What one cut point would do to a contest's final. */
+export type CutOption = {
+  cut: number;
+  /** How many speakers make the final at this cut. */
+  advancing: number;
+  /** Speakers in an unbroken tie across the cut line (0 when the line is clean). They all advance. */
+  tiedAtCut: number;
+  /** True when the field is no bigger than the cut, so everyone advances. */
+  everyone: boolean;
+  /** The rule that put the last speaker in ahead of the first speaker out: 'Cumulative rank' when there was no tie, 'Still tied' when nothing could. */
+  decidedBy: string;
+  /** More speakers than one final room holds. */
+  overRoom: boolean;
+};
+
+/** What a cut of `cut` finalists would do, given standings in order (from `prelimStandings`). */
+export function cutAt(standings: Standing[], cut: number): CutOption {
+  if (standings.length <= cut) return { cut, advancing: standings.length, tiedAtCut: 0, everyone: true, decidedBy: '', overRoom: standings.length > FINAL_ROOM_LIMIT };
+  const advancing = standings.filter(standing => standing.place <= cut).length;
+  const line = standings[cut - 1];
+  const tiedAtCut = advancing > cut ? standings.filter(standing => standing.place === line.place).length : 0;
+  return { cut, advancing, tiedAtCut, everyone: false, decidedBy: tiedAtCut ? 'Still tied' : line.aheadOfNextBy ?? '', overRoom: advancing > FINAL_ROOM_LIMIT };
+}
+
+/** The cut points worth showing for a field this size: 4 to 8, but none past the size of the field. */
+export const cutChoices = (fieldSize: number) => CUT_CHOICES.filter(cut => cut <= Math.max(fieldSize, CUT_CHOICES[0]));
+
+/**
+ * "Next in": the speakers just below the cut, in order, who move up if a finalist withdraws before the
+ * final begins. `inFinal` is who is already in the final (by default, everyone who advanced).
+ */
+export function nextIn(standings: Standing[], inFinal: string[] = standings.filter(standing => standing.advances).map(standing => standing.entryId), count = 2): Standing[] {
+  const taken = new Set(inFinal);
+  return standings.filter(standing => !standing.advances && !taken.has(standing.entryId)).slice(0, count);
 }
 
 export type Placing = { entryId: string; student: string; school: string; judgeRanks: number[]; cumulativeRank: number; reciprocals: number; ratingPoints: number; place: number; decidedBy: string; teamPoints: number };
@@ -177,8 +236,9 @@ export function samplePrelims(entries: Entry[], sections: Section[]): PrelimResu
 
 /** Sample final-round results for the demo. */
 export function sampleFinals(finalists: Standing[], judges: number): FinalResult[] {
+  const size = Math.max(FINALISTS, ...finalists.map(finalist => finalist.place));
   return Array.from({ length: judges }, (_, judgeIndex) => {
-    const order = finalists.map(finalist => ({ id: finalist.entryId, score: (FINALISTS + 1 - finalist.place) / FINALISTS * 0.6 + seeded(`${finalist.entryId}|final|${judgeIndex}`) * 0.4 })).sort((a, b) => b.score - a.score);
+    const order = finalists.map(finalist => ({ id: finalist.entryId, score: (size + 1 - finalist.place) / size * 0.6 + seeded(`${finalist.entryId}|final|${judgeIndex}`) * 0.4 })).sort((a, b) => b.score - a.score);
     return order.map((item, index) => ({ entryId: item.id, judge: judgeIndex + 1, rank: index + 1, rating: Math.max(35, 50 - index * 2) }));
   }).flat();
 }

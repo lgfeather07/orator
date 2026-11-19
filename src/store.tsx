@@ -3,7 +3,7 @@ import { useAuth } from './auth';
 import * as api from './tournamentApi';
 import { listTournamentResults } from './ballotApi';
 import type { Member, MemberRole, MemberStatus, TournamentRow } from './tournamentApi';
-import { prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
+import { cutFor, prelimStandings, sampleFinals, samplePrelims, type FinalResult, type PrelimResult } from './results';
 
 /** What one judge's submitted ballot says about one speaker in one room. */
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
@@ -67,6 +67,16 @@ type Store = {
   createFinal: (contest: string) => void;
   /** Set up every event's final at once, so each judge can be placed on the final they most want. */
   createAllFinals: () => void;
+  /**
+   * How many make the final: for one contest, or (contest null) the tournament-wide default.
+   * `null` goes back to the default. Kept in the browser, like the other finals settings.
+   */
+  setCut: (contest: string | null, finalists: number | null) => void;
+  /**
+   * Move a "next in" speaker into a contest's final, optionally in place of a finalist who withdrew.
+   * Only before any final ballot for that contest is in.
+   */
+  addNextIn: (contest: string, entryId: string, replacing: string | null) => void;
   /** Simulated fee payments, keyed by school name in lower case. No real money moves. */
   payments: Record<string, Payment>;
   paymentFor: (school: string) => Payment;
@@ -96,6 +106,10 @@ type Store = {
 };
 
 const STORAGE_KEY = 'orator-demo-v7';
+/** Signed-in directors' cut points, by tournament id. The database has no column for them yet. */
+const CUTS_KEY = 'orator-cuts-v1';
+type Cuts = Pick<Tournament, 'finalists' | 'finalistsByContest'>;
+const loadCuts = (): Record<string, Cuts> => { try { return JSON.parse(localStorage.getItem(CUTS_KEY) ?? '{}') as Record<string, Cuts>; } catch { return {}; } };
 const allEventIds = ballotEvents.map(event => event.id);
 /** Judge Leather starts out preferring public-address events and avoiding group interpretation. */
 const defaultLeatherPreferences: JudgePrefs = allEventIds.map(id => ({ id, level: ['info', 'persuasive', 'extemp'].includes(id) ? 'top' as const : ['oid', 'duet', 'duo'].includes(id) ? 'avoid' as const : 'willing' as const }))
@@ -194,6 +208,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveUpdates, setLiveUpdates] = useState<ScheduleChange[]>([]);
   const [liveIssues, setLiveIssues] = useState<Issue[]>([]);
   const [liveGoals, setLiveGoals] = useState<PracticeGoal[]>([]);
+  const [liveCuts, setLiveCuts] = useState<Record<string, Cuts>>(loadCuts);
+  useEffect(() => { try { localStorage.setItem(CUTS_KEY, JSON.stringify(liveCuts)); } catch { /* storage disabled */ } }, [liveCuts]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -248,7 +264,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const demoJudges = judgePool.map(judge => judge.id === 'jl' ? { ...judge, ...myJudgeProfile, knows: myJudgeProfile.clean ? [] : myJudgeProfile.knows } : judge);
 
   const liveStore: Partial<Store> = !live ? {} : {
-    tournament: liveTournament ?? { ...defaultTournament, name: 'No tournament yet', date: '', host: '' },
+    tournament: { ...(liveTournament ?? { ...defaultTournament, name: 'No tournament yet', date: '', host: '' }), ...(tournamentId ? liveCuts[tournamentId] : undefined) },
     updateTournament: patch => {
       if (!tournamentId) return;
       patchLiveTournament(patch);
@@ -345,7 +361,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     myPreferences, savePreferences: setMyPreferences,
     roomResults,
     recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
-    createFinal: () => undefined, createAllFinals: () => undefined,
+    createFinal: () => undefined, createAllFinals: () => undefined, setCut: () => undefined, addNextIn: () => undefined,
     payments,
     paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
     setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
@@ -400,7 +416,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   store.finalResults = [...finalResults.filter(result => !contestsWithFinalRooms.has(entryContest.get(result.entryId) ?? '')), ...finalFromRooms];
   store.resultsAreReal = live && prelimFromRooms.length > 0;
   store.fillSamplePrelims = () => { setPrelimResults(samplePrelims(store.entries, prelimSections)); setFinalResults([]); };
-  const finalistsOf = (contest: string) => prelimStandings(store.entries.filter(entry => contestOf(entry) === contest), prelimSections.filter(section => contestOf(section) === contest), mergedPrelims).filter(standing => standing.advances);
+  const standingsOf = (contest: string) => prelimStandings(store.entries.filter(entry => contestOf(entry) === contest), prelimSections.filter(section => contestOf(section) === contest), mergedPrelims, cutFor(store.tournament, contest));
+  // Once a final exists, its finalists are whoever is in its room (a next-in speaker may have moved up).
+  const finalistsOf = (contest: string) => {
+    const room = finalSections.find(section => contestOf(section) === contest);
+    return standingsOf(contest).filter(standing => room ? room.entryIds.includes(standing.entryId) : standing.advances);
+  };
   store.fillSampleFinals = contest => {
     const ids = new Set(store.entries.filter(entry => contestOf(entry) === contest).map(entry => entry.id));
     setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalistsOf(contest), store.tournament.finalJudges ?? 2)]);
@@ -422,6 +443,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let soFar = store.sections; const all: Section[] = [];
     awaitingFinal(store.sections).forEach(contest => { const built = planFinal(contest, soFar); if (built.length && built[0].entryIds.length) { all.push(...built); soFar = [...soFar, ...built]; } });
     addFinals(all);
+  };
+  store.setCut = (contest, finalists) => {
+    const apply = (current: Cuts): Cuts => {
+      if (contest === null) return { ...current, finalists: finalists ?? undefined };
+      const byContest = { ...current.finalistsByContest };
+      if (finalists === null) delete byContest[contest]; else byContest[contest] = finalists;
+      return { ...current, finalistsByContest: byContest };
+    };
+    if (live) { if (tournamentId) setLiveCuts(all => ({ ...all, [tournamentId]: apply(all[tournamentId] ?? {}) })); }
+    else setTournament(current => ({ ...current, ...apply(current) }));
+  };
+  store.addNextIn = (contest, entryId, replacing) => {
+    const rooms = finalSections.filter(section => contestOf(section) === contest);
+    if (rooms.length === 0 || rooms.some(room => store.roomResults.some(result => result.sectionId === room.id)) || rooms[0].entryIds.includes(entryId)) return;
+    // The next-in speaker takes the withdrawn finalist's speaking slot, or speaks first if added.
+    const order = rooms[0].entryIds;
+    const next = replacing && order.includes(replacing) ? order.map(id => id === replacing ? entryId : id) : [entryId, ...order];
+    const name = (id: string | null) => store.entries.find(entry => entry.id === id)?.student ?? '';
+    const event = ballotEvents.find(item => item.id === rooms[0].eventId)?.name ?? rooms[0].eventId;
+    logChange(`${event}${divisionOf(rooms[0]) === 'novice' ? ` (${divisionLabel.novice})` : ''} final, ${rooms[0].room}: ${name(entryId)} moves up as next in${replacing ? `, replacing ${name(replacing)}` : ''}`, store.tournament.status);
+    const ids = new Set(rooms.map(room => room.id));
+    const update = (all: Section[]) => all.map(section => ids.has(section.id) ? { ...section, entryIds: next } : section);
+    if (live) { setLiveSections(update); Promise.all(rooms.map(room => api.saveSectionEntries(room.id, next))).catch(caught => { report(caught); refresh(); }); }
+    else setSections(update);
   };
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
