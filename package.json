@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:cuts": "tsc src/results.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/cuts.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

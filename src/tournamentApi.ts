@@ -19,7 +19,7 @@ type TournamentRecord = { id: string; director_id: string; name: string; date: s
  * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
  * They are saved together in the tournament's `settings` (see supabase/settings.sql).
  */
-const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints'] as const;
+const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest'] as const;
 type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
 const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
 export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);
@@ -247,5 +247,11 @@ export async function listSchoolStudents(tournamentId: string): Promise<{ userId
 /** A coach links a student account to the name on their entries ('' to unlink). */
 export async function linkStudent(tournamentId: string, userId: string, rosterName: string): Promise<void> {
   const { error } = await db().rpc('link_student', { target: tournamentId, student: userId, name: rosterName });
+  if (error) fail(error.message);
+}
+
+/** Change who speaks in a room, e.g. moving a "next in" speaker into a final. Order is the speaking order. */
+export async function saveSectionEntries(sectionId: string, entryIds: string[]): Promise<void> {
+  const { error } = await db().from('sections').update({ entry_ids: entryIds }).eq('id', sectionId);
   if (error) fail(error.message);
 }

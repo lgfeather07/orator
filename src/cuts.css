@@ -1,0 +1,60 @@
+/* Finals cut points and "next in" alternates (CutPreview.tsx). Colours come from the theme tokens, so dark mode follows. */
+.cut-preview .cut-options { margin: 0; padding: 12px 17px 6px; border: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cut-preview .cut-options legend { padding: 0; margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cut-preview .cut-option { padding: 9px 12px; display: grid; grid-template-columns: 20px minmax(110px, 160px) minmax(0, 1fr); align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.cut-preview .cut-option:hover { border-color: var(--brand); }
+.cut-preview .cut-option.chosen { border-color: var(--brand); background: var(--brand-soft); }
+.cut-preview .cut-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--brand); }
+.cut-preview .cut-option:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cut-option-main { display: flex; flex-direction: column; gap: 2px; }
+.cut-option-main strong { font-size: 13.5px; color: var(--ink); }
+.cut-option-main small, .cut-option-detail small { color: var(--muted); font-size: 12px; }
+.cut-option-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.cut-option-detail .badge { white-space: normal; line-height: 1.3; }
+.cut-preview .cut-warn { margin: 6px 17px 0; }
+.cut-preview .cut-warn svg { flex: none; margin-top: 2px; color: var(--amber); }
+.cut-preview .cut-bubble span { min-width: 0; }
+.cut-preview .cut-bubble strong { color: var(--ink); }
+
+.cut-overview .cut-toggle { min-height: 35px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--brand); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; font-weight: 700; }
+.cut-overview .cut-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.cut-overview .cut-default { padding: 12px 17px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; border-bottom: 1px solid var(--border); color: var(--ink); font-size: 13px; font-weight: 700; }
+.cut-overview .cut-default small { flex-basis: 100%; color: var(--muted); font-size: 12px; font-weight: 500; }
+.cut-overview select { min-height: 36px; max-width: 100%; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.cut-overview .cut-table-wrap { overflow-x: auto; }
+.cut-overview .cut-table-wrap:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.cut-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cut-table th, .cut-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.cut-table thead th { color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.cut-table td { color: var(--muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cut-table td:nth-child(4), .cut-table td:nth-child(5) { font-family: var(--font-body); }
+.cut-table tbody th button { padding: 0; color: var(--brand); background: transparent; border: 0; font-size: 13px; font-weight: 700; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.cut-table tr.over { background: var(--amber-soft); }
+.cut-table .cut-tie { color: var(--amber); font-weight: 650; }
+.cut-table .cut-tie svg, .cut-table .cut-created svg { display: inline-block; vertical-align: -2px; }
+.cut-table .cut-created { color: var(--green); font-weight: 650; white-space: nowrap; }
+
+.next-in { padding: 12px 17px 14px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); }
+.next-in-head { display: flex; flex-direction: column; gap: 3px; }
+.next-in-head strong { font-size: 13.5px; color: var(--ink); }
+.next-in-head small, .next-in-name small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.next-in-moved { margin: 0; display: flex; gap: 6px; align-items: flex-start; color: var(--green); font-size: 12.5px; font-weight: 650; }
+.next-in-moved svg { flex: none; margin-top: 2px; }
+.next-in-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.next-in-list li { padding: 8px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.next-in-place { width: 30px; height: 30px; flex: none; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; font-weight: 650; }
+.next-in-name { flex: 1 1 160px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.next-in-name strong { font-size: 13.5px; }
+.next-in-replace { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.next-in-replace select { min-height: 36px; max-width: 100%; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.next-in-replace small { flex-basis: 100%; color: var(--amber); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .cut-preview .cut-option { grid-template-columns: 20px minmax(0, 1fr); }
+  .cut-option-detail { grid-column: 2; }
+  .cut-table th, .cut-table td { padding: 8px 6px; }
+  .cut-table thead th { letter-spacing: .02em; }
+  /* Rooms matter less than the cut on a phone; dropping the column keeps the table on screen. */
+  .cut-table th:nth-child(3), .cut-table td:nth-child(3) { display: none; }
+  .next-in-list li .button { width: 100%; justify-content: center; }
+}
