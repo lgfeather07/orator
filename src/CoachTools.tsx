@@ -1,20 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Icon } from './ui';
+import { AlertSettingsPanel } from './Alerts';
 import { useStore } from './store';
 import { GoalList } from './Practice';
 import { useAuth } from './auth';
 import { listMyReleasedBallots, loadTeamBallots, type TeamBallotRow } from './ballotApi';
 import { ballotEvents, MARK_MAX } from './ballots';
 
-/** Student-facing opt-in for round reminders by text or email. */
+/** Student-facing opt-in for round alerts by text or email (the full settings live under Alerts in the menu). */
 export function ReminderSettings() {
-  const { reminders, setReminders } = useStore();
-  return <div className="reminder-card">
-    <span className="reminder-icon"><Icon name="bell"/></span>
-    <div><strong>Round reminders <Badge tone="neutral">Coming soon</Badge></strong><small>Your room and start time before each round, without opening Orator. Nothing is sent yet; you’ll be asked for permission before any texts.</small></div>
-    <label><input type="checkbox" disabled checked={false} onChange={() => setReminders(reminders)}/> Text me</label>
-    <label><input type="checkbox" disabled checked={false} onChange={() => setReminders(reminders)}/> Email me</label>
-  </div>;
+  return <div className="reminder-embed"><AlertSettingsPanel role="student"/></div>;
 }
 
 const seasonBallots = [
