@@ -14,6 +14,8 @@ export type Tournament = {
   finalists?: number;
   /** The director's cut for one contest (key from `contestKey`), overriding `finalists`. */
   finalistsByContest?: Record<string, number>;
+  /** Contests (key from `contestKey`) that hold semifinals before their final. A contest not listed has a final only. */
+  semisByContest?: Record<string, SemiPlan>;
   /** Team points for 1st to 6th in a final. Defaults to the NSAA scale. */
   teamPoints?: number[];
   /** What the host charges, in dollars (cents allowed, e.g. 7.50 per entry). */
@@ -38,6 +40,12 @@ export type Tournament = {
   autoApproveCoaches?: boolean;
   eventIds: string[]; status: TournamentStatus;
 };
+
+/**
+ * A semifinal round for one contest: the top `size` after prelims, split into two rooms, each heard by
+ * `judges` judges; the top `advance` in each room make the final.
+ */
+export type SemiPlan = { size: number; judges: number; advance: number };
 
 export type Fees = { entry: number; school: number; judge: number; entriesPerJudge: number };
 /**
@@ -90,8 +98,13 @@ export type Judge = { id: string; name: string; school: string; clean?: boolean;
 /** True if this judge shouldn't hear a speaker from this school. A clean judge knows nobody, so can judge any room. */
 export const judgeConflict = (judge: Judge, school: string) => !judge.clean && ((judge.school !== '' && sameSchool(judge.school, school)) || (judge.knows ?? []).some(known => sameSchool(known, school)));
 
-/** One room in one round: a judge hears these entries, in this speaking order. */
-export type Section = { id: string; round: number; eventId: string; division?: Division; label: string; room: string; judgeId: string | null; judgeName?: string; entryIds: string[] };
+/** Which part of the tournament a room belongs to. */
+export type SectionStage = 'prelim' | 'semi' | 'final';
+/**
+ * One room in one round: a judge hears these entries, in this speaking order.
+ * `stage` is only stored for semifinals; without it, rounds after the last preliminary round are finals.
+ */
+export type Section = { id: string; round: number; eventId: string; division?: Division; label: string; room: string; judgeId: string | null; judgeName?: string; entryIds: string[]; stage?: SectionStage };
 
 /**
  * A contest is one event in one division (Novice Informative is separate from Varsity Informative):
@@ -230,9 +243,14 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
 
 export const roundTimes = ['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM', '4:30 PM'];
 
-/** Finals are stored as the round after the last preliminary round. */
+/**
+ * True for any room after the preliminary rounds: a final, or a semifinal (an elimination round).
+ * Finals are stored as the round after the last preliminary round; a contest with semifinals holds
+ * them in that round and its final one round later. Use `stageOf` to tell a semifinal from a final.
+ */
 export const isFinal = (section: Section, tournament: Tournament) => section.round > tournament.rounds;
-export const roundLabel = (section: Section, tournament: Tournament) => isFinal(section, tournament) ? 'Final' : `Round ${section.round}`;
+export const stageOf = (section: Section, tournament: Tournament): SectionStage => section.stage ?? (isFinal(section, tournament) ? 'final' : 'prelim');
+export const roundLabel = (section: Section, tournament: Tournament) => { const stage = stageOf(section, tournament); return stage === 'semi' ? 'Semifinal' : stage === 'final' ? 'Final' : `Round ${section.round}`; };
 
 /** How willing a judge is to judge an event. Preferences are only used to choose finals judges. */
 export type PrefLevel = 'top' | 'willing' | 'avoid';
@@ -245,12 +263,14 @@ export const preferenceFor = (prefs: JudgePrefs | undefined, eventId: string): P
  * Why a judge can't sit on an event's final, or '' if they can:
  * they share a school with a finalist, or they judged that event in a preliminary round.
  */
-export function finalConflict(judge: Judge, contest: string, finalistSchools: string[], sections: Section[], tournament: Tournament): '' | 'school' | 'knows' | 'prelim' {
+export function finalConflict(judge: Judge, contest: string, finalistSchools: string[], sections: Section[], tournament: Tournament): '' | 'school' | 'knows' | 'prelim' | 'semi' {
   if (!judge.clean && judge.school && finalistSchools.some(school => sameSchool(school, judge.school))) return 'school';
   if (finalistSchools.some(school => judgeConflict(judge, school))) return 'knows';
   // Either division: a judge who heard Novice Informative in prelims doesn't judge the Varsity Informative final either.
   const { eventId } = parseContest(contest);
   if (sections.some(section => !isFinal(section, tournament) && section.eventId === eventId && section.judgeId === judge.id)) return 'prelim';
+  // A judge who heard this event's semifinal has already ranked the finalists; the final gets fresh judges.
+  if (sections.some(section => stageOf(section, tournament) === 'semi' && section.eventId === eventId && section.judgeId === judge.id)) return 'semi';
   return '';
 }
 
@@ -260,24 +280,27 @@ export function finalConflict(judge: Judge, contest: string, finalistSchools: st
  *
  * Finals judges are chosen by their preferences: top choices first, "prefer to avoid" last. A judge
  * is never given the final of an event they judged in preliminary rounds, a finalist from their own
- * school, or two finals. A seat nobody can fill is left for the director to assign.
+ * school, or two finals at once. A seat nobody can fill is left for the director to assign.
+ * (With semifinals, some finals are a round later: a judge already on a final at the other time is a last resort.)
  */
-export function buildFinal(tournament: Tournament, contest: string, finalistIds: string[], entries: Entry[], judges: Judge[], existing: Section[], preferences: Record<string, JudgePrefs> = {}, pendingContests: string[] = []): Section[] {
+export function buildFinal(tournament: Tournament, contest: string, finalistIds: string[], entries: Entry[], judges: Judge[], existing: Section[], preferences: Record<string, JudgePrefs> = {}, pendingContests: string[] = [], round = tournament.rounds + 1): Section[] {
   const { eventId, division } = parseContest(contest);
   const seats = tournament.finalJudges ?? 2;
   const schools = finalistIds.map(id => entries.find(entry => entry.id === id)?.school ?? '');
-  const finalsAlready = existing.filter(section => isFinal(section, tournament));
-  const busy = new Set(finalsAlready.map(section => section.judgeId));
+  const finalsAlready = existing.filter(section => stageOf(section, tournament) === 'final');
+  // No judge sits in two rooms at once (a final, or a semifinal held in the same round).
+  const busy = new Set(existing.filter(section => section.round === round && isFinal(section, tournament)).map(section => section.judgeId));
+  const onAFinal = new Set(finalsAlready.map(section => section.judgeId));
   // A judge who still has a top-choice final to come (one they didn't judge in prelims) is held back for it
   // unless this event is also one of their top choices.
   const wantedElsewhere = (judge: Judge) => pendingContests.some(key => key !== contest && preferenceFor(preferences[judge.id], parseContest(key).eventId) === 'top' && !existing.some(section => !isFinal(section, tournament) && section.eventId === parseContest(key).eventId && section.judgeId === judge.id));
   const order = (judge: Judge) => { const prefs = preferences[judge.id]; const level = preferenceFor(prefs, eventId); const index = prefs?.findIndex(item => item.id === eventId) ?? -1; return levelRank[level] * 1000 + (level !== 'top' && wantedElsewhere(judge) ? 500 : 0) + (index >= 0 ? index : 50); };
   // Among equally keen judges, a clean judge (one who knows none of the competitors) goes first.
   const free = judges.filter(judge => !busy.has(judge.id) && finalConflict(judge, contest, schools, existing, tournament) === '')
-    .map((judge, index) => ({ judge, score: order(judge) + (judge.clean ? 0 : 100), index })).sort((a, b) => a.score - b.score || a.index - b.index).map(item => item.judge);
+    .map((judge, index) => ({ judge, score: order(judge) + (judge.clean ? 0 : 100) + (onAFinal.has(judge.id) ? 10000 : 0), index })).sort((a, b) => a.score - b.score || a.index - b.index).map(item => item.judge);
   const room = rooms[(new Set(finalsAlready.map(section => section.room)).size) % rooms.length];
   return Array.from({ length: seats }, (_, seat) => ({
-    id: `final-${eventId}${division === 'novice' ? '-novice' : ''}-${seat + 1}`, round: tournament.rounds + 1, eventId, division, label: `${division === 'novice' ? 'Novice final' : 'Final'} · Judge ${seat + 1}`, room,
+    id: `final-${eventId}${division === 'novice' ? '-novice' : ''}-${seat + 1}`, round, eventId, division, label: `${division === 'novice' ? 'Novice final' : 'Final'} · Judge ${seat + 1}`, room,
     judgeId: free[seat]?.id ?? null, judgeName: free[seat]?.name ?? '', entryIds: [...finalistIds].reverse(),
   }));
 }

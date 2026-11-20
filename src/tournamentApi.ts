@@ -19,7 +19,7 @@ type TournamentRecord = { id: string; director_id: string; name: string; date: s
  * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
  * They are saved together in the tournament's `settings` (see supabase/fixes.sql). Fees are also kept in their own column for the public calendar..
  */
-const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest'] as const;
+const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest', 'semisByContest'] as const;
 type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
 const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
 export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);
@@ -175,8 +175,8 @@ export async function deleteEntry(id: string): Promise<void> {
   if (error) fail(error.message);
 }
 
-type SectionRecord = { id: string; round: number; event_id: string; division?: Division; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number };
-const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, division: row.division ?? 'varsity', label: row.label, room: row.room, judgeId: row.judge_id, judgeName: row.judge_name, entryIds: row.entry_ids ?? [] });
+type SectionRecord = { id: string; round: number; event_id: string; division?: Division; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number; stage?: Section['stage'] | null };
+const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, division: row.division ?? 'varsity', label: row.label, room: row.room, judgeId: row.judge_id, judgeName: row.judge_name, entryIds: row.entry_ids ?? [], ...(row.stage ? { stage: row.stage } : {}) });
 
 export async function listSections(tournamentId: string): Promise<Section[]> {
   const { data, error } = await db().from('sections').select('*').eq('tournament_id', tournamentId).order('position');
@@ -197,11 +197,13 @@ export async function replaceSections(tournamentId: string, sections: Section[],
   return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);
 }
 
-/** Add sections (used for final rounds) without touching the rest of the schedule. */
+/** Add sections (used for semifinal and final rounds) without touching the rest of the schedule. */
 export async function addSections(tournamentId: string, sections: Section[], startAt: number): Promise<Section[]> {
   const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
     tournament_id: tournamentId, round: section.round, event_id: section.eventId, division: section.division ?? 'varsity', label: section.label, room: section.room,
     judge_id: section.judgeId, judge_name: section.judgeName ?? '', entry_ids: section.entryIds, position: startAt + index,
+    // Only semifinals store a stage (supabase/semifinals.sql), so finals still save on a database without that column.
+    ...(section.stage ? { stage: section.stage } : {}),
   }))).select('*');
   if (error) fail(error.message);
   return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);

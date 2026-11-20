@@ -5,6 +5,7 @@ import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
 import { ListingSettings } from './Calendar';
 import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roundTimes, sameSchool, type Section } from './tournament';
+import { elimRoundLabel } from './semis';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -204,7 +205,7 @@ function LiveCheckInBoard() {
       <div className="panel-head"><div><h2>Judge check-in</h2><p>Mark each judge as they arrive. Saved for everyone running the tab room.</p></div><Badge tone={judges.length && arrived === judges.length ? 'success' : 'warning'} icon={judges.length && arrived === judges.length ? 'check' : 'clock'}>{arrived} of {judges.length} checked in</Badge></div>
       <div className="checkin-tools">
         <label className="search-box"><Icon name="search"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search judge, school, or room"/></label>
-        {rounds.length > 0 && <label className="inline-select"><span>Rooms for</span><select value={round} onChange={event => setRound(Number(event.target.value))}>{rounds.map(number => <option key={number} value={number}>{number > tournament.rounds ? 'Finals' : `Round ${number}`}</option>)}</select></label>}
+        {rounds.length > 0 && <label className="inline-select"><span>Rooms for</span><select value={round} onChange={event => setRound(Number(event.target.value))}>{rounds.map(number => <option key={number} value={number}>{number > tournament.rounds ? elimRoundLabel(number, tournament, sections) : `Round ${number}`}</option>)}</select></label>}
         <div className="segmented"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>All judges</button><button className={filter === 'missing' ? 'active' : ''} onClick={() => setFilter('missing')}>Not checked in</button></div>
       </div>
       {judges.length === 0 ? <p className="checkin-empty">No approved judges yet. Approve them on the People tab.</p> : <div className="checkin-list">{rows.map(judge => { const room = roomOf(judge.id); return <div key={judge.id} className={judgeCheckedIn[judge.id] ? 'in' : ''}>
