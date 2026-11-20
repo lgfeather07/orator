@@ -1,0 +1,70 @@
+/* Live tab sheets (TabSheet.tsx). Colours come from the theme tokens, so dark mode follows. */
+.ts-board { max-width: 1320px; margin: 0 auto; padding: 4px 32px 40px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.role-dashboard .ts-board { padding: 0; max-width: none; }
+.ts-head { flex-wrap: wrap; gap: 12px; }
+.ts-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ts-ago { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.ts-error { margin: 12px 18px 0; padding: 10px 12px; display: flex; gap: 8px; align-items: center; color: var(--red); background: var(--red-soft); border-radius: 9px; font-size: 13px; }
+.ts-demo-note { margin: 12px 18px 0; display: flex; gap: 8px; align-items: flex-start; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.ts-progress { padding: 14px 18px 0; display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 13px; }
+.ts-progress strong { color: var(--ink); }
+.ts-filters { padding: 12px 18px 16px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; }
+.ts-filter { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.ts-filter select { min-height: 40px; width: 100%; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font-size: 13px; }
+.ts-search input { font-size: 13px; }
+.ts-empty { margin: 0; padding: 18px; color: var(--muted); font-size: 13px; }
+
+.ts-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.ts-contests { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ts-contest { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.ts-contest-head { padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border); }
+.ts-contest-head h3 { margin: 0; font-size: 15px; }
+.ts-scroll { overflow-x: auto; max-width: 100%; }
+.ts-scroll:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; }
+.ts-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.ts-table th, .ts-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; white-space: nowrap; }
+.ts-table thead th { color: var(--muted); background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.ts-table tbody tr:last-child > * { border-bottom: 0; }
+.ts-table .ts-speaker { position: sticky; left: 0; z-index: 1; min-width: 150px; max-width: 220px; text-align: left; background: var(--surface); border-right: 1px solid var(--border); white-space: normal; }
+.ts-table thead .ts-speaker { background: var(--surface-2); z-index: 2; }
+.ts-table tbody .ts-speaker strong { display: block; font-size: 13px; font-weight: 650; }
+.ts-table tbody .ts-speaker small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.ts-cell { min-width: 58px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ts-rank { display: block; color: var(--ink); font-size: 16px; font-weight: 700; line-height: 1.1; }
+.ts-score { display: block; color: var(--muted); font-size: 11px; }
+.ts-first .ts-rank { color: var(--green); }
+.ts-out { background: var(--amber-soft); }
+.ts-out-label { display: block; color: var(--amber); font-family: var(--font-body); font-size: 12px; font-weight: 700; }
+.ts-out small { color: var(--ink); font-family: var(--font-body); font-size: 11px; }
+.ts-ns .ts-rank { color: var(--muted); font-size: 13px; }
+.ts-none { color: var(--muted); }
+.ts-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ts-place strong { display: block; font-size: 14px; }
+.ts-place small { color: var(--muted); font-size: 11px; }
+.ts-fresh { animation: ts-arrive 6s ease-out; box-shadow: inset 0 0 0 2px var(--brand); }
+@keyframes ts-arrive { 0% { background: var(--brand-soft); } 70% { background: var(--brand-soft); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ts-fresh { animation: none; background: var(--brand-soft); } }
+
+.ts-out-panel { overflow: hidden; position: sticky; top: 12px; }
+.ts-out-list { margin: 0; padding: 6px 10px 10px; list-style: none; max-height: 60vh; overflow-y: auto; }
+.ts-out-list li { padding: 8px 6px; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; border-bottom: 1px solid var(--border); }
+.ts-out-list li:last-child { border-bottom: 0; }
+.ts-out-list strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.ts-out-list small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ts-out-round { width: 32px; height: 32px; display: grid; place-items: center; color: var(--amber); background: var(--amber-soft); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+
+.ts-staff-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ts-staff-toggle input { width: 16px; height: 16px; accent-color: var(--brand); }
+
+.ts-print td, .ts-print th { text-align: center; }
+.ts-print td:first-child, .ts-print th:first-child { text-align: left; }
+
+@media (max-width: 1000px) { .ts-layout { grid-template-columns: minmax(0, 1fr); } .ts-out-panel { position: static; } }
+@media (max-width: 720px) {
+  .ts-board { padding: 4px 14px 30px; }
+  .ts-filters { grid-template-columns: 1fr 1fr; }
+  .ts-filters .ts-search { grid-column: 1 / -1; }
+  .ts-table .ts-speaker { min-width: 118px; max-width: 140px; }
+  .ts-table th, .ts-table td { padding: 7px 7px; }
+}
+.ts-out-list:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; }

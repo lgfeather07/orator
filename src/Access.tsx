@@ -6,6 +6,7 @@ import type { Member, MemberRole } from './tournamentApi';
 import { useAuth } from './auth';
 import { CalendarLink, clearRegistration, longDate, pendingRegistration } from './Calendar';
 import { DirectorCoachJudges } from './CoachJudges';
+import { TabStaffError, TabStaffToggle, useTabStaff } from './TabSheet';
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?';
 const roleWord: Record<MemberRole, string> = { coach: 'Coach', judge: 'Judge', student: 'Student' };
@@ -72,6 +73,7 @@ export function PeopleBoard() {
   // Judges who signed in with a coach's link are managed under "Judges entered by coaches" below.
   const members = everyone.filter(member => !member.coachJudgeId);
   const [busy, setBusy] = useState('');
+  const staff = useTabStaff();
   const key = (member: Member) => `${member.userId}-${member.role}`;
   const decide = async (member: Member, status: 'approved' | 'declined') => { setBusy(key(member)); await decideMember(member, status); setBusy(''); };
   const pending = members.filter(member => member.status === 'pending');
@@ -80,7 +82,7 @@ export function PeopleBoard() {
     <Avatar initials={initials(member.name)} size="sm"/>
     <div><strong>{member.name || 'Unnamed account'}</strong><small>{roleWord[member.role]}{member.school ? ` · ${member.school}` : ''}</small></div>
     {member.status === 'pending' ? <span className="people-actions"><Button variant="secondary" disabled={busy === key(member)} onClick={() => decide(member, 'declined')}>Decline</Button><Button icon="check" disabled={busy === key(member)} onClick={() => decide(member, 'approved')}>Approve</Button></span>
-      : <span className="people-actions"><Badge tone={member.status === 'approved' ? 'success' : 'danger'} icon={member.status === 'approved' ? 'check' : 'close'}>{member.status === 'approved' ? 'Approved' : 'Declined'}</Badge><button className="people-undo" onClick={() => decide(member, member.status === 'approved' ? 'declined' : 'approved')}>{member.status === 'approved' ? 'Remove access' : 'Approve instead'}</button></span>}
+      : <span className="people-actions"><TabStaffToggle member={member} staff={staff}/><Badge tone={member.status === 'approved' ? 'success' : 'danger'} icon={member.status === 'approved' ? 'check' : 'close'}>{member.status === 'approved' ? 'Approved' : 'Declined'}</Badge><button className="people-undo" onClick={() => decide(member, member.status === 'approved' ? 'declined' : 'approved')}>{member.status === 'approved' ? 'Remove access' : 'Approve instead'}</button></span>}
   </li>;
   return <div className="issue-board people-board">
     <section className="panel">
@@ -88,6 +90,7 @@ export function PeopleBoard() {
       {members.length === 0 ? <p className="issue-empty">Nobody has asked to join yet. Coaches, judges, and students sign in, pick this tournament, and ask to join; their requests appear here.</p> : <>
         {pending.length > 0 && <><h3 className="people-heading">Waiting for approval</h3><ul className="people-list">{pending.map(row)}</ul></>}
         {rest.length > 0 && <><h3 className="people-heading">Decided</h3><ul className="people-list">{rest.map(row)}</ul></>}
+        <TabStaffError staff={staff}/>
       </>}
     </section>
     <DirectorCoachJudges/>
