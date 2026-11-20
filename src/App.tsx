@@ -29,6 +29,7 @@ import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './au
 import { CalendarLink, CalendarView, RegistrationNotice, useCalendarRoute, useRegistrationLanding, type CalendarExit } from './Calendar';
 import { PublicResultsView, schoolHref, studentHref, usePublicRoute } from './PublicResults';
 import { TeamCompare } from './TeamCompare';
+import { AlertSettingsPanel, DirectorAlerts } from './Alerts';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
 
@@ -191,17 +192,17 @@ const personaDetails: Record<Persona, { name: string; detail: string; initials: 
 };
 
 const sidebarItems: Record<Persona, [IconName, string][]> = {
-  student: [['home','Overview'],['sparkle','Practice'],['archive','Past ballots']],
-  judge: [['home','Overview'],['ballot','Ballots'],['archive','Archive']],
-  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice'],['growth','Analytics'],['archive','Past ballots']],
+  student: [['home','Overview'],['sparkle','Practice'],['archive','Past ballots'],['bell','Alerts']],
+  judge: [['home','Overview'],['ballot','Ballots'],['archive','Archive'],['bell','Alerts']],
+  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice'],['growth','Analytics'],['archive','Past ballots'],['bell','Alerts']],
   director: [['home','Overview'],['settings','Tournament setup']],
 };
 
 /** Signed in, only pages backed by real data are listed. */
 const liveSidebarItems: Record<Persona, [IconName, string][]> = {
-  student: [['home','Overview'],['sparkle','Practice']],
-  judge: [['home','Overview']],
-  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice']],
+  student: [['home','Overview'],['sparkle','Practice'],['bell','Alerts']],
+  judge: [['home','Overview'],['bell','Alerts']],
+  coach: [['home','Overview'],['users','Entries'],['sparkle','Practice'],['bell','Alerts']],
   director: [['settings','Tournament setup']],
 };
 
@@ -269,6 +270,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     Archive: 'Find historical ballots, tournaments, and downloadable records.',
     'Past ballots': persona === 'student' ? 'Your ballots from finished tournaments. Only you and your coach can see them.' : 'Every ballot your team has received at finished tournaments.',
     'Tournament setup': 'Configure events, rounds, rooms, criteria, and permissions.',
+    Alerts: 'Get your rooms, ballots, and schedule changes by text or email.',
     Practice: persona === 'student' ? 'What your coach wants you to work on. Tick goals off as you get them.' : 'Set practice goals for each student. They see them on their own Practice tab.',
   };
   return <div className="desktop-shell">
@@ -288,7 +290,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       
       {live && persona !== 'director' && <div className="access-slot"><JoinTournament role={persona}/></div>}
       {persona === 'coach' && showingPrimary && <div className="access-slot coach-calendar-link"><CalendarLink/></div>}
-      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Practice' ? (persona === 'student' ? <StudentPracticeSection/> : <CoachPracticeSection/>) : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona} primary={active} onOpenPrimary={() => setSection(active)}/>}</main>
+      {showingPrimary ? children : persona === 'coach' && section === 'Entries' ? <div className="role-dashboard"><CoachEntries/></div> : section === 'Practice' ? (persona === 'student' ? <StudentPracticeSection/> : <CoachPracticeSection/>) : section === 'Alerts' && persona !== 'director' ? <div className="role-dashboard"><AlertSettingsPanel role={persona}/></div> : section === 'Past ballots' ? <PastBallots student={persona === 'student' ? 'Maya Rodriguez' : undefined}/> : <SidebarTopicView topic={section} persona={persona} primary={active} onOpenPrimary={() => setSection(active)}/>}</main>
     {helpModal && <HelpModal kind={helpModal} persona={persona} reporter={profile.name} onClose={() => setHelpModal(null)}/>}
     {reporting && <ReportIssueModal reporter={profile.name} role={persona} onClose={() => setReporting(false)}/>}
   </div>;
@@ -353,15 +355,15 @@ function SignInPage() {
 }
 
 function DirectorPage() {
-  const [view, setView] = useState<'setup' | 'people' | 'results' | 'checkin' | 'issues' | 'rounds'>('setup');
+  const [view, setView] = useState<'setup' | 'people' | 'results' | 'checkin' | 'issues' | 'rounds' | 'alerts'>('setup');
   const store = useStore();
   const openIssues = store.issues.filter(issue => issue.status === 'open').length;
   const waiting = store.members.filter(member => member.status === 'pending').length;
   const needsTournament = store.live && store.liveState === 'ready' && !store.isDirector;
-  const titles = { setup: ['Tournament setup', 'Details, entries, judges, the schedule, and running the day.'], people: ['People', 'Approve the coaches, judges, and students who ask to join.'], results: ['Results', 'Who breaks to finals, final placings, and team points.'], checkin: ['Check-in', 'See who has arrived and find any judge, room, or event.'], issues: ['Issues', 'What people at the tournament have reported, and where.'], rounds: ['Round management', 'Monitor ballot completion and make round-level corrections.'] };
+  const titles = { setup: ['Tournament setup', 'Details, entries, judges, the schedule, and running the day.'], people: ['People', 'Approve the coaches, judges, and students who ask to join.'], results: ['Results', 'Who breaks to finals, final placings, and team points.'], checkin: ['Check-in', 'See who has arrived and find any judge, room, or event.'], issues: ['Issues', 'What people at the tournament have reported, and where.'], rounds: ['Round management', 'Monitor ballot completion and make round-level corrections.'], alerts: ['Alerts', 'Send each round’s rooms by text and email, and see what was delivered.'] };
   return <DesktopShell active="Tournament setup" title={titles[view][0]} subtitle={titles[view][1]} persona="director">
-    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>Results</button><button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button>{!store.live && <button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button>}</div>
-    {store.live && store.liveState !== 'ready' ? <div className="issue-board"><section className="access-banner"><span className="spinner"/><div><strong>{store.liveState === 'failed' ? 'We couldn’t load your tournament. Check your connection and reload.' : 'Loading your tournament…'}</strong></div></section></div> : needsTournament ? <div className="issue-board"><CreateTournamentCard/></div> : view === 'people' ? <PeopleBoard/> : view === 'results' ? <ResultsBoard onOpenSetup={() => setView('setup')}/> : view === 'rounds' ? <div className="director-rounds"><RoundsPage director/></div> : view === 'checkin' ? <CheckInBoard/> : view === 'issues' ? <IssueBoard/> : <div className="setup-layout">
+    <div className="director-workspace"><div className="role-tabs director-tabs"><button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>Setup</button>{store.live && <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>People{waiting > 0 && <span className="tab-count">{waiting}</span>}</button>}<button className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>Results</button><button className={view === 'checkin' ? 'active' : ''} onClick={() => setView('checkin')}>Check-in</button><button className={view === 'issues' ? 'active' : ''} onClick={() => setView('issues')}>Issues{openIssues > 0 && <span className="tab-count">{openIssues}</span>}</button><button className={view === 'alerts' ? 'active' : ''} onClick={() => setView('alerts')}>Alerts</button>{!store.live && <button className={view === 'rounds' ? 'active' : ''} onClick={() => setView('rounds')}>Mobile rounds</button>}</div>
+    {store.live && store.liveState !== 'ready' ? <div className="issue-board"><section className="access-banner"><span className="spinner"/><div><strong>{store.liveState === 'failed' ? 'We couldn’t load your tournament. Check your connection and reload.' : 'Loading your tournament…'}</strong></div></section></div> : needsTournament ? <div className="issue-board"><CreateTournamentCard/></div> : view === 'people' ? <PeopleBoard/> : view === 'results' ? <ResultsBoard onOpenSetup={() => setView('setup')}/> : view === 'rounds' ? <div className="director-rounds"><RoundsPage director/></div> : view === 'checkin' ? <CheckInBoard/> : view === 'issues' ? <IssueBoard/> : view === 'alerts' ? <div className="issue-board"><DirectorAlerts/></div> : <div className="setup-layout">
       <DirectorSetup judges={<JudgeAssignments/>}/>
       <SetupSummary/>
     </div>}

@@ -5,6 +5,7 @@ import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
 import { RoomsEditor } from './Rooms';
 import { ListingSettings } from './Calendar';
+import { RoundAlertsCard } from './Alerts';
 import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, roundTimes, sameSchool, type Section } from './tournament';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
@@ -154,13 +155,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <div className="visibility-note"><Icon name="info"/><span>Try it: end the tournament here, open the <strong>Coach</strong> workspace and release results under Ballot review, then look at the <strong>Student</strong> workspace.</span></div>
       </div>
 
-      <div className="visibility">
-        <div className="visibility-head"><span className="eyebrow">ROUND REMINDERS · COMING SOON</span><h3>Text and email reminders</h3><p>Send each competitor and judge their room and start time before every round, so nobody has to log in between rounds. Not built yet: nothing is sent, and texts will need each person’s permission first.</p></div>
-        <div className="toggle-list">
-          <label><input type="checkbox" disabled checked={false} onChange={event => store.setReminders({ ...store.reminders, text: event.target.checked })}/><span><strong>Text message reminders</strong><small>15 minutes before each round, to people who opted in</small></span></label>
-          <label><input type="checkbox" disabled checked={false} onChange={event => store.setReminders({ ...store.reminders, email: event.target.checked })}/><span><strong>Email reminders</strong><small>Full schedule the night before, plus any room changes</small></span></label>
-        </div>
-      </div>
+      <RoundAlertsCard/>
     </section>}
 
     <div className="setup-nav">
