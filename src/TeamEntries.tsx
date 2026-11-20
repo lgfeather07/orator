@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Avatar, Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
+import { AccessRequestsPanel, useAccessDraft } from './Accessibility';
 import { divisionLabel, divisionOf, entryLoad, isFinal, loadLabel, roundTimes, sameSchool, stageOf, type Division, overCap } from './tournament';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -20,7 +21,8 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
   const duplicate = mine.some(entry => entry.eventId === eventId && entry.student.trim().toLowerCase() === student.trim().toLowerCase());
   const already = entryLoad(entries, student, school);
   const atCap = student.trim() !== '' && already >= tournament.maxEntries;
-  const add = () => { if (!student.trim() || duplicate || atCap) return; addEntry(student.trim(), school, eventId, known ? divisionOf(known) : division); setStudent(''); };
+  const accessDraft = useAccessDraft(school, student);
+  const add = () => { if (!student.trim() || duplicate || atCap) return; addEntry(student.trim(), school, eventId, known ? divisionOf(known) : division); accessDraft.apply(student); setStudent(''); };
   // A student already on the list keeps the division they were entered in.
   const known = mine.find(entry => entry.student.trim().toLowerCase() === student.trim().toLowerCase());
   const students = new Set(mine.map(entry => entry.student.toLowerCase())).size;
@@ -34,6 +36,7 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
       <label><span>Division</span><select value={known ? divisionOf(known) : division} disabled={!!known} onChange={event => setDivision(event.target.value as Division)}><option value="varsity">Varsity</option><option value="novice">Novice</option></select></label>
       <label><span>Event</span><select value={eventId} onChange={event => setEventId(event.target.value)}>{tournament.eventIds.map(id => <option key={id} value={id}>{eventName(id)}</option>)}</select></label>
       <button className="button button-primary" type="submit" disabled={!student.trim() || duplicate || atCap}><Icon name="plus"/><span>Add entry</span></button>
+      {accessDraft.fields}
       {student.trim() && !duplicate && !atCap && overCap(tournament, entries, school, eventId, known ? divisionOf(known) : division) && <p className="entry-hint">Your school or this event is at the tournament’s entry limit, so this entry goes on the waitlist. The director admits waitlisted entries as spots open.</p>}
       {duplicate ? <p role="alert">{student.trim()} is already entered in {eventName(eventId)}. A student can enter each event once.</p> : atCap ? <p role="alert">{student.trim()} is already in {already} events, the most this tournament allows.</p> : already > 0 && <p className="entry-hint">{student.trim()} is in {already} {already === 1 ? 'event' : 'events'} so far. Adding this makes {already + 1} of {tournament.maxEntries} allowed.</p>}
     </form> : <div className="entry-closed"><Icon name="lock"/><span><strong>Entries are closed.</strong> {published ? 'The director has published the schedule below.' : 'The director has closed entries for now. They may reopen them.'} Report an issue if something needs to change.</span></div>}
@@ -52,6 +55,8 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
         </div>;
       })}
     </div>}
+
+    <AccessRequestsPanel school={school}/>
 
     <div className="entry-footer">
       <span><strong>{students}</strong> {students === 1 ? 'student' : 'students'} · <strong>{mine.length}</strong> {mine.length === 1 ? 'entry' : 'entries'} across <strong>{new Set(mine.map(entry => entry.eventId)).size}</strong> {new Set(mine.map(entry => entry.eventId)).size === 1 ? 'event' : 'events'}</span>

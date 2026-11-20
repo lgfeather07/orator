@@ -26,6 +26,7 @@ import { eventCodes } from './ballots';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { CoachPractice, StudentPractice } from './Practice';
 import { PrintCenter } from './PrintCenter';
+import { MyAccessRequest } from './Accessibility';
 import { StudentLinks } from './StudentLinks';
 import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyTournamentBallots } from './CoachTools';
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
@@ -464,6 +465,7 @@ function MyEntries() {
   return <section className="my-entries">
     <div><Badge tone="info" icon="users">{loadLabel(mine.length) || 'One event'}</Badge><strong>{mine.length > 1 ? `You’re in ${mine.length} events${access.state === 'demo' ? ' this round' : ''}. You choose which room to go to first.` : 'You’re in one event.'}</strong>{mine.length > 1 && <small>Tell each judge you’re {loadLabel(mine.length).toLowerCase()} when you arrive. They can see it on their ballot too.</small>}</div>
     <ul>{mine.map(entry => { const rooms = myRooms(entry.id); const shown = access.state === 'demo' ? rooms.filter(section => section.round === round) : rooms; return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && shown.length ? shown.map(section => `${roundLabel(section, tournament)} · ${roundTimes[section.round - 1]} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}`).join('  /  ') : 'Room posted when the schedule is published'}</small></li>; })}</ul>
+    <MyAccessRequest entries={mine}/>
   </section>;
 }
 

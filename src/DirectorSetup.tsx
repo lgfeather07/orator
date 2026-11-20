@@ -10,6 +10,7 @@ import { ListingSettings } from './Calendar';
 import { RoundAlertsCard } from './Alerts';
 import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, roundTimes, sameSchool, type Section } from './tournament';
 import { elimRoundLabel } from './semis';
+import { AccessRequestsPanel, AccessScheduleSummary, AccessSectionFlag, accessibleSuffix } from './Accessibility';
 
 const steps = ['Details', 'Entries', 'Judges', 'Schedule', 'Review'];
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -105,6 +106,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       <div className="entry-counts">{offered.map(id => { const count = entries.filter(entry => entry.eventId === id).length; const novice = entries.filter(entry => entry.eventId === id && divisionOf(entry) === 'novice').length; const rooms = Math.ceil((count - novice) / tournament.sectionSize) + Math.ceil(novice / tournament.sectionSize); return <span key={id} className={count ? '' : 'empty'}><b>{count}</b>{eventName(id)}<small>{count ? `${novice ? `${count - novice} varsity · ${novice} novice · ` : ''}${rooms} room${rooms > 1 ? 's' : ''}` : 'no entries'}</small></span>; })}</div>
       <WaitlistPanel/>
       <PaymentsPanel/>
+      <AccessRequestsPanel director/>
       <div className="entry-browser">
         <label className="search-box"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search student, school, or event"/></label>
         <div className="entry-browser-list" tabIndex={0} role="region" aria-label="All entries">{shown.map(entry => <div key={entry.id}><strong>{entry.student}{entryLoad(entries, entry.student, entry.school) > 1 && <em className="load-tag" title={loadLabel(entryLoad(entries, entry.student, entry.school))}>{entryLoad(entries, entry.student, entry.school)}×</em>}</strong><span>{entry.school}</span><span>{divisionOf(entry) === 'novice' ? 'Novice ' : ''}{eventName(entry.eventId)}</span></div>)}{shown.length === 0 && <p>No entries match “{search}”.</p>}</div>
@@ -123,13 +125,15 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
           <Badge tone={problems.length ? 'warning' : 'success'} icon={problems.length ? 'warning' : 'check'}>{problems.length ? `${problems.length} room${problems.length > 1 ? 's need' : ' needs'} attention` : 'Every room has a judge'}</Badge></div>
         {tournament.status !== 'registration' && <div className="schedule-live"><Icon name="bell" size={16}/><div><strong>The schedule is published. Changes go out right away.</strong><small>Swap a judge below and coaches and judges see “Schedule updated” with what moved.{problems.length ? ' Rooms that need a judge are flagged.' : ''}</small>
           {store.scheduleChanges.some(change => change.kind !== 'entries') && <ul>{store.scheduleChanges.filter(change => change.kind !== 'entries').slice(0, 5).map(change => <li key={change.id}><time>{change.time}</time> {change.text}</li>)}</ul>}</div></div>}
+        <AccessScheduleSummary/>
         <p className="schedule-hint"><Icon name="info" size={14}/> Students tagged double or triple entered are in more than one room this round. They choose which to go to first, so judges see the same tag and know to expect them late or let them leave early.</p>
         <div className="section-grid">{roundSections.map(section => {
           const flagged = !section.judgeId || conflict(section) || doubleBooked(section);
           return <article key={section.id} className={flagged ? 'flagged' : ''}>
-            <header><div><label className="room-pick"><span className="sr-only">Room for {eventName(section.eventId)} {section.label}</span><select className={roomNeeded(section.room) ? 'needed' : ''} value={section.room} onChange={event => store.assignRoom(section.id, event.target.value)}>{[...new Set([section.room, ...roomsFor(tournament)])].map(room => { const taken = roundSections.some(other => other.id !== section.id && other.room === room); return <option key={room} value={room}>{room}{taken ? ' (in use)' : ''}</option>; })}</select></label><strong>{eventName(section.eventId)}</strong><small>{section.label} · {section.entryIds.length} speakers</small></div>
+            <header><div><label className="room-pick"><span className="sr-only">Room for {eventName(section.eventId)} {section.label}</span><select className={roomNeeded(section.room) ? 'needed' : ''} value={section.room} onChange={event => store.assignRoom(section.id, event.target.value)}>{[...new Set([section.room, ...roomsFor(tournament)])].map(room => { const taken = roundSections.some(other => other.id !== section.id && other.room === room); return <option key={room} value={room}>{room}{accessibleSuffix(tournament, room)}{taken ? ' (in use)' : ''}</option>; })}</select></label><strong>{eventName(section.eventId)}</strong><small>{section.label} · {section.entryIds.length} speakers</small></div>
               <label><span>Judge</span><select aria-label={`Judge for ${eventName(section.eventId)} ${section.label}`} value={section.judgeId ?? ''} onChange={event => store.assignJudge(section.id, event.target.value || null)}><option value="">Needs a judge</option>{judgePool.map(judge => <option key={judge.id} value={judge.id}>{judge.name}{judge.clean ? ' · clean' : judge.school ? ` · ${judge.school}` : ''}</option>)}</select></label></header>
             {flagged && <p className="section-flag"><Icon name="warning" size={14}/> {!section.judgeId ? 'No judge is free for this room. Pick one or add judges.' : conflict(section) ? 'This judge is from, or knows, the school of a speaker here.' : 'This judge is already in another room this round.'}</p>}
+            <AccessSectionFlag section={section}/>
             <ol>{section.entryIds.map(id => { const entry = entries.find(item => item.id === id); const load = entryLoad(entries, entry?.student ?? '', entry?.school ?? ''); return entry ? <li key={id}><span>{entry.student}</span><small>{entry.school}</small>{load > 1 && <em className="load-tag" title={loadLabel(load)}>{loadLabel(load)}</em>}</li> : null; })}</ol>
           </article>;
         })}</div>
