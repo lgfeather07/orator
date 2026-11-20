@@ -5,6 +5,7 @@ import { defaultTournament } from './tournament';
 import type { Member, MemberRole } from './tournamentApi';
 import { useAuth } from './auth';
 import { CalendarLink, clearRegistration, longDate, pendingRegistration } from './Calendar';
+import { DirectorCoachJudges } from './CoachJudges';
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?';
 const roleWord: Record<MemberRole, string> = { coach: 'Coach', judge: 'Judge', student: 'Student' };
@@ -67,7 +68,9 @@ export function JoinTournament({ role }: { role: MemberRole }) {
 
 /** The director's list of everyone who has asked to join, with pending requests first. */
 export function PeopleBoard() {
-  const { members, decideMember, refresh, tournament } = useStore();
+  const { members: everyone, decideMember, refresh, tournament } = useStore();
+  // Judges who signed in with a coach's link are managed under "Judges entered by coaches" below.
+  const members = everyone.filter(member => !member.coachJudgeId);
   const [busy, setBusy] = useState('');
   const key = (member: Member) => `${member.userId}-${member.role}`;
   const decide = async (member: Member, status: 'approved' | 'declined') => { setBusy(key(member)); await decideMember(member, status); setBusy(''); };
@@ -87,5 +90,6 @@ export function PeopleBoard() {
         {rest.length > 0 && <><h3 className="people-heading">Decided</h3><ul className="people-list">{rest.map(row)}</ul></>}
       </>}
     </section>
+    <DirectorCoachJudges/>
   </div>;
 }

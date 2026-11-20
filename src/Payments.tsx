@@ -80,7 +80,8 @@ export function TeamInvoice({ school }: { school: string }) {
         <div><dt>{invoice.entries} {invoice.entries === 1 ? 'entry' : 'entries'} <small>× {money(fees.entry)}</small></dt><dd>{money(invoice.entryTotal)}</dd></div>
         {invoice.schoolFee > 0 && <div><dt>School fee</dt><dd>{money(invoice.schoolFee)}</dd></div>}
         <div><dt>Judges <small>you owe {invoice.judgesOwed}, one per {fees.entriesPerJudge} entries</small>
-          <span className="judge-stepper"><button aria-label="Bring one fewer judge" disabled={due || payment.judgesBringing === 0} onClick={() => store.setJudgesBringing(school, payment.judgesBringing - 1)}>−</button><b>{payment.judgesBringing}</b><button aria-label="Bring one more judge" disabled={due} onClick={() => store.setJudgesBringing(school, payment.judgesBringing + 1)}>+</button><em>{due ? 'brought' : 'bringing'}</em></span>
+          {/* The judges a school brings are the ones its coach entered under "Your judges" (CoachJudges.tsx). */}
+          <span className="judge-stepper"><b>{payment.judgesBringing}</b><em>{due ? 'brought' : 'entered under Your judges'}</em></span>
         </dt><dd>{invoice.judgesShort ? money(invoice.judgeTotal) : 'Covered'}{invoice.judgesShort > 0 && <small>{invoice.judgesShort} hired × {money(fees.judge)}</small>}</dd></div>
         <div className="total"><dt>{due ? 'Total' : 'Estimated total'}</dt><dd>{money(invoice.total)}</dd></div>
         {payment.paid > 0 && <div><dt>Paid {payment.method === 'check' ? 'by check' : 'by card'} <small>{payment.paidAt} · {payment.reference}</small></dt><dd>{money(-payment.paid)}</dd></div>}

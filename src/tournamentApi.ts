@@ -3,7 +3,7 @@ import type { Division, Entry, Fees, Issue, IssueKind, Judge, JudgePrefs, Practi
 
 export type MemberRole = 'coach' | 'student' | 'judge';
 export type MemberStatus = 'pending' | 'approved' | 'declined';
-export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[]; checkedIn: boolean; rosterName: string };
+export type Member = { tournamentId: string; userId: string; role: MemberRole; school: string; name: string; status: MemberStatus; entriesSent: boolean; resultsReleased: boolean; preferences: JudgePrefs; clean: boolean; knows: string[]; checkedIn: boolean; rosterName: string; coachJudgeId?: string | null };
 export type TournamentRow = Tournament & { id: string; directorId: string };
 
 const fail = (message: string): never => {
@@ -102,8 +102,8 @@ export async function saveTournament(id: string, patch: Partial<Tournament>, who
   if (error) fail(error.message);
 }
 
-type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[]; checked_in?: boolean; roster_name?: string };
-const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [], checkedIn: row.checked_in ?? false, rosterName: row.roster_name ?? '' });
+type MemberRecord = { tournament_id: string; user_id: string; role: MemberRole; school: string; display_name: string; status: MemberStatus; entries_sent: boolean; results_released?: boolean; event_preferences?: JudgePrefs; clean_judge?: boolean; known_schools?: string[]; checked_in?: boolean; roster_name?: string; coach_judge_id?: string | null };
+const toMember = (row: MemberRecord): Member => ({ tournamentId: row.tournament_id, userId: row.user_id, role: row.role, school: row.school, name: row.display_name, status: row.status, entriesSent: row.entries_sent, resultsReleased: row.results_released ?? false, preferences: Array.isArray(row.event_preferences) ? row.event_preferences : [] , clean: row.clean_judge ?? false, knows: row.known_schools ?? [], checkedIn: row.checked_in ?? false, rosterName: row.roster_name ?? '', coachJudgeId: row.coach_judge_id ?? null });
 
 /** The signed-in user's own requests, across all tournaments. */
 export async function listMyMemberships(userId: string): Promise<Member[]> {
@@ -175,8 +175,12 @@ export async function deleteEntry(id: string): Promise<void> {
   if (error) fail(error.message);
 }
 
-type SectionRecord = { id: string; round: number; event_id: string; division?: Division; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number; stage?: Section['stage'] | null };
-const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, division: row.division ?? 'varsity', label: row.label, room: row.room, judgeId: row.judge_id, judgeName: row.judge_name, entryIds: row.entry_ids ?? [], ...(row.stage ? { stage: row.stage } : {}) });
+type SectionRecord = { id: string; round: number; event_id: string; division?: Division; label: string; room: string; judge_id: string | null; judge_name: string; entry_ids: string[]; position: number; coach_judge_id?: string | null; stage?: Section['stage'] | null };
+// A coach-entered judge nobody has signed in as yet is assigned by seat (supabase/judges.sql): `cj:<seat>`.
+const toSection = (row: SectionRecord): Section => ({ id: row.id, round: row.round, eventId: row.event_id, division: row.division ?? 'varsity', label: row.label, room: row.room, judgeId: row.judge_id ?? (row.coach_judge_id ? `cj:${row.coach_judge_id}` : null), judgeName: row.judge_name, entryIds: row.entry_ids ?? [], ...(row.stage ? { stage: row.stage } : {}) });
+
+/** The judge columns for a room. Only seat assignments send coach_judge_id, so projects without judges.sql keep working. */
+const judgeColumns = (judgeId: string | null, wasSeat = false): Record<string, string | null> => judgeId?.startsWith('cj:') ? { judge_id: null, coach_judge_id: judgeId.slice(3) } : wasSeat ? { judge_id: judgeId, coach_judge_id: null } : { judge_id: judgeId };
 
 export async function listSections(tournamentId: string): Promise<Section[]> {
   const { data, error } = await db().from('sections').select('*').eq('tournament_id', tournamentId).order('position');
@@ -191,7 +195,7 @@ export async function replaceSections(tournamentId: string, sections: Section[],
   if (sections.length === 0) return [];
   const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
     tournament_id: tournamentId, round: section.round, event_id: section.eventId, division: section.division ?? 'varsity', label: section.label, room: section.room,
-    judge_id: section.judgeId, judge_name: judges.find(judge => judge.id === section.judgeId)?.name ?? '', entry_ids: section.entryIds, position: index,
+    ...judgeColumns(section.judgeId), judge_name: judges.find(judge => judge.id === section.judgeId)?.name ?? '', entry_ids: section.entryIds, position: index,
   }))).select('*');
   if (error) fail(error.message);
   return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);
@@ -201,7 +205,7 @@ export async function replaceSections(tournamentId: string, sections: Section[],
 export async function addSections(tournamentId: string, sections: Section[], startAt: number): Promise<Section[]> {
   const { data, error } = await db().from('sections').insert(sections.map((section, index) => ({
     tournament_id: tournamentId, round: section.round, event_id: section.eventId, division: section.division ?? 'varsity', label: section.label, room: section.room,
-    judge_id: section.judgeId, judge_name: section.judgeName ?? '', entry_ids: section.entryIds, position: startAt + index,
+    ...judgeColumns(section.judgeId), judge_name: section.judgeName ?? '', entry_ids: section.entryIds, position: startAt + index,
     // Only semifinals store a stage (supabase/semifinals.sql), so finals still save on a database without that column.
     ...(section.stage ? { stage: section.stage } : {}),
   }))).select('*');
@@ -214,8 +218,9 @@ export async function saveSectionRoom(sectionId: string, room: string): Promise<
   if (error) fail(error.message);
 }
 
-export async function saveSectionJudge(sectionId: string, judge: Judge | null): Promise<void> {
-  const { error } = await db().from('sections').update({ judge_id: judge?.id ?? null, judge_name: judge?.name ?? '' }).eq('id', sectionId);
+/** `wasSeat`: the room was with a coach-entered judge (supabase/judges.sql), so the seat is cleared too. */
+export async function saveSectionJudge(sectionId: string, judge: Judge | null, wasSeat = false): Promise<void> {
+  const { error } = await db().from('sections').update({ ...judgeColumns(judge?.id ?? null, wasSeat), judge_name: judge?.name ?? '' }).eq('id', sectionId);
   if (error) fail(error.message);
 }
 

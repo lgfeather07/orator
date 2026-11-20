@@ -32,6 +32,7 @@ import { CalendarLink, CalendarView, RegistrationNotice, useCalendarRoute, useRe
 import { PublicResultsView, schoolHref, studentHref, usePublicRoute } from './PublicResults';
 import { TeamCompare } from './TeamCompare';
 import { AlertSettingsPanel, DirectorAlerts } from './Alerts';
+import { CoachJudgesPanel, DirectorCoachJudges, JudgeLinkView, useJudgeLinkRoute } from './CoachJudges';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
 
@@ -61,7 +62,7 @@ function PrototypeNav({ page, setPage, dark, setDark }: { page: Page; setPage: (
       <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { setPage(item.id); setMoreOpen(false); }}><Icon name={item.icon} size={15}/><span>{item.label}</span></button>
     )}</nav>
     <div className="preview-actions">
-      <div className="preview-more"><button className={utilityPage ? 'active' : ''} onClick={() => setMoreOpen(!moreOpen)}><Icon name="menu" size={16}/><span>{utilityPage?.label || 'More'}</span><Icon name="chevron" size={14}/></button>
+      <div className="preview-more"><button className={utilityPage ? 'active' : ''} aria-label={utilityPage?.label || 'More pages'} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}><Icon name="menu" size={16}/><span>{utilityPage?.label || 'More'}</span><Icon name="chevron" size={14}/></button>
         {moreOpen && <div className="preview-menu"><span>Prototype resources</span>{utilityPages.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { setPage(item.id); setMoreOpen(false); }}><strong>{item.label}</strong><small>{item.description}</small></button>)}</div>}
       </div>
       <button className="theme-button" aria-label="Toggle light or dark theme" onClick={() => setDark(!dark)}><Icon name={dark ? 'sun' : 'moon'}/></button>
@@ -241,7 +242,7 @@ function CoachEntries({ onBack, importing = false }: { onBack?: () => void; impo
   const { state, membership } = useAccess('coach');
   const school = state === 'demo' ? 'Wrenfield High' : state === 'approved' && membership ? membership.school : null;
   if (school && importing) return <EntryImport school={school} onDone={onBack ?? (() => undefined)}/>;
-  if (school) return <><TeamEntries school={school} onBack={onBack}/><TeamInvoice school={school}/></>;
+  if (school) return <><TeamEntries school={school} onBack={onBack}/><CoachJudgesPanel school={school}/><TeamInvoice school={school}/></>;
   return <section className="panel access-wait"><Icon name="lock"/><div><strong>Entries open once the director approves you</strong><small>{state === 'none' ? 'Ask to join a tournament using the form at the top of this page.' : state === 'pending' ? 'Your request is with the director.' : state === 'declined' ? 'Your request was declined.' : 'Checking your access…'}</small></div>{onBack && <Button variant="secondary" icon="arrow" onClick={onBack}>Back to overview</Button>}</section>;
 }
 
@@ -285,7 +286,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
       </nav>
       <div className="sidebar-bottom"><div className="save-chip"><Icon name="check"/> All changes saved</div><button className="profile" onClick={() => navigate('signin')}><Avatar initials={profile.initials}/><span><strong>{profile.name}</strong><small>{profile.detail}</small></span><Icon name="chevron" size={15}/></button></div>
     </aside>
-    <main id="main" className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button>{!live && <button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button>}<button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
+    <main id="main" className="desktop-main"><header className="desktop-header"><div><span className="workspace-context">{persona} <Icon name="arrow" size={12}/> {showingPrimary ? active : section}</span><h1>{showingPrimary ? title : section}</h1><p>{showingPrimary ? subtitle : sectionSubtitles[section]}</p></div><div className="header-actions"><button className="header-tool report-tool" aria-label="Report an issue" onClick={() => setReporting(true)}><Icon name="warning"/><span>Report issue</span></button>{!live && <button className="header-tool" aria-label="Search" onClick={() => setHeaderPanel(headerPanel === 'search' ? null : 'search')}><Icon name="search"/><span>Search</span></button>}<button className="header-tool" aria-label="Help and notifications" onClick={() => setHeaderPanel(headerPanel === 'help' ? null : 'help')}><Icon name="info"/><span>Help</span></button>{!account && <Avatar initials={profile.initials}/>}</div>{headerPanel === 'search' && <div className="header-popover"><label className="search-box"><Icon name="search"/><input autoFocus placeholder="Search this workspace"/></label><span>Try a student, event, ballot, or tournament.</span></div>}{headerPanel === 'help' && <div className="header-popover help-popover"><strong>How can we help?</strong><button onClick={() => { setHeaderPanel(null); setHelpModal('guide'); }}><Icon name="file"/> View quick-start guide</button><button onClick={() => { setHeaderPanel(null); setHelpModal('support'); }}><Icon name="comment"/> Report an issue to the tab room</button></div>}</header>
       <nav className="mobile-workspace-nav" aria-label={`${persona} workspace navigation`}>{items.map(([icon,label]) => <button key={label} className={section === label ? 'active' : ''} onClick={() => setSection(label)}><Icon name={icon}/><span>{label}</span></button>)}{(persona === 'coach' || persona === 'judge') && <button onClick={() => navigate(persona === 'coach' ? 'judge' : 'coach')}><Icon name={persona === 'coach' ? 'ballot' : 'users'}/><span>Switch to {persona === 'coach' ? 'Judge' : 'Coach'}</span></button>}</nav>
       {freshChanges.length > 0 && <div className="schedule-updated" role="status"><Icon name="bell" size={16}/><div><strong>{updateTitle}</strong><ul>{freshChanges.slice(0, 3).map(change => <li key={change.id}><time>{change.time}</time> {change.text}</li>)}</ul>{freshChanges.length > 3 && <small>and {freshChanges.length - 3} more</small>}</div><button onClick={() => dismiss(freshChanges[0].id)}>Got it</button></div>}
       {syncError && <div className="sync-error" role="alert"><Icon name="warning" size={16}/><span>{syncError}</span><button onClick={clearSyncError}>Dismiss</button></div>}
@@ -378,7 +379,7 @@ function JudgeAssignments() {
   const judgePool = store.judges;
   const events = toPreferenceList(store.myPreferences);
   const codes = (judgeId: string, level: 'top' | 'avoid') => nsaaEvents.filter(event => preferenceFor(store.judgePreferences[judgeId], event.id) === level).map(event => eventCodes[event.id]).join(' · ') || '—';
-  return <div className="preferences-layout">
+  return <><div className="preferences-layout">
       <section className="preference-builder">
         <div className="builder-head"><div><h2>Judge Leather</h2><p>Community judge · finals preferences</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
         <div className="preference-note"><Icon name="drag"/><span>Preferences decide which <strong>final</strong> a judge is given. Preliminary rooms are assigned without them.</span></div>
@@ -389,7 +390,7 @@ function JudgeAssignments() {
         <ul className="assign-rules"><li><strong>Preliminary rounds</strong><span>Any available judge, never with a speaker from their own school or a school they say they know. Preferences aren’t used.</span></li><li><strong>Finals</strong><span>By preference: top choices first, “prefer to avoid” last. Clean judges first among equals. Never the final of an event they judged in prelims, and never a finalist from a school they know.</span></li></ul>
         <div className="assignment-list pref-summary">{judgePool.map(judge => <div className="assignment-row" key={judge.id}><Avatar initials={judge.name.split(' ').map(part => part[0]).join('').slice(0, 2)} size="sm"/><span><strong>{judge.name}{judge.clean && <Badge tone="success" icon="check">Clean</Badge>}</strong><small>{judge.school || 'No school affiliation'}{judge.knows?.length ? ` · knows ${judge.knows.join(', ')}` : ''}</small></span><span className="pref-codes"><small>Top</small><b>{codes(judge.id, 'top')}</b><small>Avoid</small><b>{codes(judge.id, 'avoid')}</b></span></div>)}</div>
       </section>
-    </div>;
+    </div><DirectorCoachJudges/></>;
 }
 
 function CoachPage() {
@@ -671,6 +672,7 @@ function Workspace() {
   const [calendar, openCalendar] = useCalendarRoute();
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [publicRoute, openPublic] = usePublicRoute();
+  const [judgeLink, openJudgeLink] = useJudgeLinkRoute();
   const skip = <a className="skip-link" href="#main" onClick={event => { event.preventDefault(); const main = document.getElementById('main'); main?.setAttribute('tabindex', '-1'); main?.focus(); }}>Skip to main content</a>;
   const footer = <LegalFooter onOpen={openLegal}/>;
   const signedIn = authConfigured && profile !== null && !recovering;
@@ -697,6 +699,8 @@ function Workspace() {
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
   if (legal) return <div className={dark ? 'app dark' : 'app'}>{skip}<LegalView page={legal} onClose={() => openLegal(null)} onOpen={openLegal}/></div>;
   if (calendar) return <div className={dark ? 'app dark' : 'app'}>{skip}<CalendarView route={calendar} go={openCalendar} onExit={leaveCalendar} dark={dark} setDark={setDark}/>{footer}</div>;
+  // A judge's private sign-in link (CoachJudges.tsx), and their rooms page afterwards.
+  if (judgeLink) return <div className={dark ? 'app dark' : 'app'}>{skip}<JudgeLinkView key={judgeLink.token ?? 'rooms'} route={judgeLink} go={openJudgeLink} dark={dark} setDark={setDark} onExit={() => setPage(home)}/>{footer}</div>;
   if (publicRoute) return <div className={dark ? 'app dark' : 'app'}>{skip}<PublicResultsView route={publicRoute} onClose={() => openPublic(null)} dark={dark} setDark={setDark}/></div>;
   if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage key={authMode} initialMode={authMode} notice={<RegistrationNotice/>} onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;
   return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{skip}{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}{footer}</div></NavigationContext.Provider>;
