@@ -4,6 +4,7 @@ import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { divisionOf, entryLoad, loadLabel, roundLabel, roundTimes, sameSchool, type Section } from './tournament';
 import type { Placing } from './results';
+import { useEntryFormPages } from './EntryForm';
 import './print.css';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -13,12 +14,13 @@ const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n
 /** Opens the browser's print dialog for whatever `.print-doc` is on the page. */
 export const printNow = () => window.print();
 
-type Doc = 'postings' | 'ballots' | 'judges' | 'signs';
+type Doc = 'postings' | 'ballots' | 'judges' | 'signs' | 'entryforms';
 const docs: { id: Doc; label: string; note: string }[] = [
   { id: 'postings', label: 'Postings', note: 'Who speaks where, in order, for one round. Tape them up or hand them out.' },
   { id: 'ballots', label: 'Paper ballots', note: 'One sheet per room with its speakers, times, scores and ranks, for judges without a phone.' },
   { id: 'judges', label: 'Judge assignments', note: 'Each school’s judges and their rooms, round by round. One page per school.' },
   { id: 'signs', label: 'Room signs', note: 'A big sign for each room door: event, section and time.' },
+  { id: 'entryforms', label: 'Entry forms', note: 'Each school’s students, events, waitlist, judges and fees, with a coach signature line. One page per school; no schedule needed.' },
 ];
 
 /**
@@ -28,7 +30,9 @@ const docs: { id: Doc; label: string; note: string }[] = [
 export function PrintCenter() {
   const { sections, entries, judges, tournament } = useStore();
   const rounds = [...new Set(sections.map(section => section.round))].sort((a, b) => a - b);
-  const [doc, setDoc] = useState<Doc>('postings');
+  // Entry forms don't need a schedule, so they're where the tab opens before one exists.
+  const [doc, setDoc] = useState<Doc>(sections.length === 0 ? 'entryforms' : 'postings');
+  const forms = useEntryFormPages();
   const [chosen, setChosen] = useState<number | 'all'>(rounds[0] ?? 1);
   const round = chosen === 'all' || rounds.includes(chosen) ? chosen : rounds[0] ?? 1;
   const inRound = (section: Section) => round === 'all' || section.round === round;
@@ -38,10 +42,10 @@ export function PrintCenter() {
   const when = (section: Section) => `${roundLabel(section, tournament)} · ${roundTimes[section.round - 1] ?? ''}`;
   const speakerRows = (section: Section) => section.entryIds.map((id, index) => ({ order: index + 1, item: entry(id) })).filter(row => row.item);
 
-  if (sections.length === 0) return <div className="issue-board"><section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="file" size={30}/></span><h3>Nothing to print yet</h3><p>Postings, paper ballots, judge sheets and room signs are made from the schedule. Build it on the Setup tab first.</p></div></section></div>;
+  const nothing = sections.length === 0 && doc !== 'entryforms' ? <section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="file" size={30}/></span><h3>Nothing to print yet</h3><p>Postings, paper ballots, judge sheets and room signs are made from the schedule. Build it on the Setup tab first. Entry forms are ready now.</p></div></section> : null;
 
   const schools = [...new Set([...entries.map(item => item.school), ...judges.map(judge => judge.school).filter(Boolean)])].sort();
-  const pages = doc === 'postings' ? <div className="print-page">
+  const pages = doc === 'entryforms' ? forms.pages : doc === 'postings' ? <div className="print-page">
       <header className="print-head"><strong>{tournament.name}</strong><span>{round === 'all' ? 'All rounds' : `${shown[0] ? roundLabel(shown[0], tournament) : `Round ${round}`} · ${roundTimes[(round as number) - 1] ?? ''}`}</span></header>
       <div className="print-postings">{shown.map(section => <section key={section.id} className="print-posting">
         <h3>{contestName(section)} <small>{section.label.replace('Novice · ', '')}{round === 'all' ? ` · ${when(section)}` : ''}</small></h3>
@@ -75,14 +79,14 @@ export function PrintCenter() {
 
   return <div className="print-center">
     <section className="panel print-controls">
-      <div className="panel-head"><div><h2>Print</h2><p>Made from the current schedule. What you see below is exactly what prints.</p></div><Button icon="file" onClick={printNow}>Print</Button></div>
+      <div className="panel-head"><div><h2>Print</h2><p>{doc === 'entryforms' ? 'Made from the entries.' : 'Made from the current schedule.'} What you see below is exactly what prints.</p></div><Button icon="file" disabled={!!nothing} onClick={printNow}>Print</Button></div>
       <div className="print-options">
         <div className="segmented" role="tablist" aria-label="What to print">{docs.map(item => <button key={item.id} role="tab" aria-selected={doc === item.id} className={doc === item.id ? 'active' : ''} onClick={() => setDoc(item.id)}>{item.label}</button>)}</div>
-        {doc !== 'judges' && <label className="inline-select"><span>Round</span><select value={String(round)} onChange={event => setChosen(event.target.value === 'all' ? 'all' : Number(event.target.value))}>{rounds.map(number => { const sample = sections.find(section => section.round === number)!; return <option key={number} value={number}>{roundLabel(sample, tournament)}{roundTimes[number - 1] ? ` · ${roundTimes[number - 1]}` : ''}</option>; })}<option value="all">All rounds</option></select></label>}
+        {doc === 'entryforms' && forms.controls}{doc !== 'judges' && doc !== 'entryforms' && rounds.length > 0 && <label className="inline-select"><span>Round</span><select value={String(round)} onChange={event => setChosen(event.target.value === 'all' ? 'all' : Number(event.target.value))}>{rounds.map(number => { const sample = sections.find(section => section.round === number)!; return <option key={number} value={number}>{roundLabel(sample, tournament)}{roundTimes[number - 1] ? ` · ${roundTimes[number - 1]}` : ''}</option>; })}<option value="all">All rounds</option></select></label>}
       </div>
-      <p className="print-note"><Icon name="info" size={14}/> {docs.find(item => item.id === doc)!.note} {doc !== 'postings' && doc !== 'judges' ? <Badge tone="neutral">{shown.length} {shown.length === 1 ? 'page' : 'pages'}</Badge> : null}</p>
+      <p className="print-note"><Icon name="info" size={14}/> {docs.find(item => item.id === doc)!.note} {doc === 'entryforms' ? <Badge tone="neutral">{forms.count} {forms.count === 1 ? 'page' : 'pages'}</Badge> : doc !== 'postings' && doc !== 'judges' && !nothing ? <Badge tone="neutral">{shown.length} {shown.length === 1 ? 'page' : 'pages'}</Badge> : null}</p>
     </section>
-    <div className="print-doc" aria-label="Print preview">{pages}</div>
+    {nothing ?? <div className="print-doc" aria-label="Print preview">{pages}</div>}
   </div>;
 }
 
