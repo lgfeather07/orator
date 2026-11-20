@@ -19,7 +19,7 @@ type TournamentRecord = { id: string; director_id: string; name: string; date: s
  * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
  * They are saved together in the tournament's `settings` (see supabase/fixes.sql). Fees are also kept in their own column for the public calendar..
  */
-const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest', 'rooms', 'semisByContest', 'format', 'placesAwarded', 'sectionMarks'] as const;
+const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest', 'rooms', 'semisByContest', 'format', 'placesAwarded', 'sectionMarks', 'schoolEntryCap', 'eventEntryCap'] as const;
 type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
 const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
 export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);
@@ -154,9 +154,10 @@ export async function markEntriesSent(tournamentId: string, userId: string): Pro
   if (error) fail(error.message);
 }
 
-type EntryRecord = { id: string; school: string; student: string; event_id: string; division?: Division };
-const toEntry = (row: EntryRecord): Entry => ({ id: row.id, school: row.school, student: row.student, eventId: row.event_id, division: row.division ?? 'varsity' });
-const entryColumns = 'id, school, student, event_id, division';
+type EntryRecord = { id: string; school: string; student: string; event_id: string; division?: Division; waitlisted?: boolean };
+const toEntry = (row: EntryRecord): Entry => ({ id: row.id, school: row.school, student: row.student, eventId: row.event_id, division: row.division ?? 'varsity', waitlisted: row.waitlisted ?? false });
+// All columns, so entries still load on a database that hasn't run waitlist.sql yet.
+const entryColumns = '*';
 
 export async function listEntries(tournamentId: string): Promise<Entry[]> {
   const { data, error } = await db().from('entries').select(entryColumns).eq('tournament_id', tournamentId).order('created_at');
@@ -308,5 +309,11 @@ export async function linkStudent(tournamentId: string, userId: string, rosterNa
 /** Change who speaks in a room, e.g. moving a "next in" speaker into a final. Order is the speaking order. */
 export async function saveSectionEntries(sectionId: string, entryIds: string[]): Promise<void> {
   const { error } = await db().from('sections').update({ entry_ids: entryIds }).eq('id', sectionId);
+  if (error) fail(error.message);
+}
+
+/** The director admits a waitlisted entry (or moves one back to the waitlist). */
+export async function setEntryWaitlisted(id: string, waitlisted: boolean): Promise<void> {
+  const { error } = await db().from('entries').update({ waitlisted }).eq('id', id);
   if (error) fail(error.message);
 }

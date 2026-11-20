@@ -5,6 +5,7 @@ import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
 import { RoomsEditor } from './Rooms';
+import { EntryLimits, WaitlistPanel } from './Waitlist';
 import { ListingSettings } from './Calendar';
 import { RoundAlertsCard } from './Alerts';
 import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, roundTimes, sameSchool, type Section } from './tournament';
@@ -80,6 +81,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
       <FeeSettings editable={editable}/>
+      <EntryLimits editable={editable}/>
       <ListingSettings editable={editable}/>
       <div className="events-offered">
         <div className="field-label"><span>Events offered</span><small>{offered.length} of {ballotEvents.length} · official NSAA ballot built in for each</small></div>
@@ -101,6 +103,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
       <div className="load-mix"><span className="eyebrow">Entered in</span>{[[1, 'One event'], [2, 'Double entered'], [3, 'Triple entered'], [4, 'Four events']].map(([count, label]) => <span key={label}><b>{loadCount(count as number)}</b>{label}</span>)}<small>Worked out from the entries. Multi-entered students choose which room to go to first.</small></div>
       <div className="load-mix"><span className="eyebrow">Division</span><span><b>{entries.length - novices}</b>Varsity</span><span><b>{novices}</b>Novice</span><small>Novice and varsity compete in separate rooms and break to separate finals.</small></div>
       <div className="entry-counts">{offered.map(id => { const count = entries.filter(entry => entry.eventId === id).length; const novice = entries.filter(entry => entry.eventId === id && divisionOf(entry) === 'novice').length; const rooms = Math.ceil((count - novice) / tournament.sectionSize) + Math.ceil(novice / tournament.sectionSize); return <span key={id} className={count ? '' : 'empty'}><b>{count}</b>{eventName(id)}<small>{count ? `${novice ? `${count - novice} varsity · ${novice} novice · ` : ''}${rooms} room${rooms > 1 ? 's' : ''}` : 'no entries'}</small></span>; })}</div>
+      <WaitlistPanel/>
       <PaymentsPanel/>
       <div className="entry-browser">
         <label className="search-box"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search student, school, or event"/></label>

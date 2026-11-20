@@ -29,6 +29,10 @@ export type Tournament = {
   rooms?: string[];
   /** 'optional' (default): judges give a score out of 50 and may also mark each section 1–10. 'required': every section must be marked. */
   sectionMarks?: 'optional' | 'required';
+  /** Most entries one school may have before more go on the waitlist. Empty means no cap. */
+  schoolEntryCap?: number | null;
+  /** Most entries in one event (each division counted separately) before more go on the waitlist. Empty means no cap. */
+  eventEntryCap?: number | null;
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
   /**
@@ -88,7 +92,7 @@ export type Invoice = { entries: number; entryTotal: number; schoolFee: number; 
  */
 export function invoiceFor(tournament: Tournament, entries: Entry[], school: string, payment: Payment = noPayment): Invoice {
   const fees = tournament.fees ?? defaultFees;
-  const count = entries.filter(entry => entry.school.trim().toLowerCase() === school.trim().toLowerCase()).length;
+  const count = entries.filter(entry => !entry.waitlisted && entry.school.trim().toLowerCase() === school.trim().toLowerCase()).length;
   const judgesOwed = count === 0 ? 0 : Math.ceil(count / Math.max(1, fees.entriesPerJudge));
   const judgesShort = Math.max(0, judgesOwed - payment.judgesBringing);
   const entryTotal = Math.round(count * fees.entry * 100) / 100, schoolFee = count === 0 ? 0 : fees.school, judgeTotal = judgesShort * fees.judge;
@@ -102,7 +106,8 @@ export const divisionLabel: Record<Division, string> = { varsity: 'Varsity', nov
 /** Entries and sections saved before divisions existed are varsity. */
 export const divisionOf = (item: { division?: Division }): Division => item.division ?? 'varsity';
 
-export type Entry = { id: string; student: string; school: string; eventId: string; division?: Division };
+/** `waitlisted`: over the tournament's entry caps, so not scheduled or charged until the director admits it. */
+export type Entry = { id: string; student: string; school: string; eventId: string; division?: Division; waitlisted?: boolean };
 
 /**
  * A judge. `clean` means they don't know any of the competitors, so they can judge anyone.
@@ -239,7 +244,7 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
     let roomIndex = 0;
     tournament.eventIds.flatMap(eventId => divisions.map(division => ({ eventId, division }))).forEach(({ eventId, division }, contestIndex) => {
       const eventIndex = Math.floor(contestIndex / 2) + contestIndex % 2;
-      const field = entries.filter(entry => entry.eventId === eventId && divisionOf(entry) === division).sort((a, b) => a.school.localeCompare(b.school) || a.student.localeCompare(b.student));
+      const field = entries.filter(entry => !entry.waitlisted && entry.eventId === eventId && divisionOf(entry) === division).sort((a, b) => a.school.localeCompare(b.school) || a.student.localeCompare(b.student));
       if (field.length === 0) return;
       const count = Math.ceil(field.length / tournament.sectionSize);
       const groups: Entry[][] = Array.from({ length: count }, () => []);
@@ -338,4 +343,12 @@ export function samplePreferences(judgeId: string, eventIds: string[]): JudgePre
   const start = (hash >>> 0) % eventIds.length;
   const turned = [...eventIds.slice(start), ...eventIds.slice(0, start)];
   return turned.map((id, index) => ({ id, level: index < 3 ? 'top' as const : index >= turned.length - 2 ? 'avoid' as const : 'willing' as const }));
+}
+
+/** Whether a new entry would go on the waitlist: its school or its event is already at the tournament's cap. */
+export function overCap(tournament: Tournament, entries: Entry[], school: string, eventId: string, division: Division) {
+  const admitted = entries.filter(entry => !entry.waitlisted);
+  const schoolFull = tournament.schoolEntryCap != null && admitted.filter(entry => sameSchool(entry.school, school)).length >= tournament.schoolEntryCap;
+  const eventFull = tournament.eventEntryCap != null && admitted.filter(entry => entry.eventId === eventId && divisionOf(entry) === division).length >= tournament.eventEntryCap;
+  return schoolFull || eventFull;
 }

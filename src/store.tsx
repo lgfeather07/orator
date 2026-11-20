@@ -7,7 +7,7 @@ import { cutFor, prelimStandings, sampleFinals, samplePrelims, type FinalResult,
 
 /** What one judge's submitted ballot says about one speaker in one room. */
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
-import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type PracticeGoal, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
+import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type PracticeGoal, type ScheduleChange, type Section, type UpdateKind, type Tournament, overCap } from './tournament';
 import { ballotEvents } from './ballots';
 import { buildSemis, finalRoundFor, semiPlanFor, semiProgress } from './semis';
 import { sampleSemis } from './results';
@@ -43,6 +43,8 @@ export type PracticeNote = { id: number; date: string; text: string };
 type Store = {
   tournament: Tournament; updateTournament: (patch: Partial<Tournament>) => void;
   entries: Entry[]; addEntry: (student: string, school: string, eventId: string, division?: Division) => void; removeEntry: (id: string) => void;
+  /** The director admits a waitlisted entry, or moves one back to the waitlist. */
+  setWaitlisted: (id: string, waitlisted: boolean) => void;
   /** Coaches can add or drop entries only while the director has entries open (and the schedule isn't out yet). */
   entriesOpen: boolean;
   /** Changes the director made to the published schedule, newest first. */
@@ -304,6 +306,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       api.saveTournament(tournamentId, patch, liveTournament ? { ...liveTournament, ...patch } : patch).catch(caught => { report(caught); refresh(); });
     },
     entries: liveEntries,
+    setWaitlisted: (id, waitlisted) => { setLiveEntries(list => list.map(entry => entry.id === id ? { ...entry, waitlisted } : entry)); api.setEntryWaitlisted(id, waitlisted).catch(caught => { report(caught); refresh(); }); },
     scheduleChanges: liveUpdates,
     issues: liveIssues,
     reportIssue: issue => {
@@ -378,7 +381,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     entries,
     entriesOpen: (tournament.entriesOpen ?? true) && tournament.status === 'registration',
-    addEntry: (student, school, eventId, division = 'varsity') => setEntries(current => [...current, { id: `e${Date.now()}`, student, school, eventId, division }]),
+    addEntry: (student, school, eventId, division = 'varsity') => setEntries(current => [...current, { id: `e${Date.now()}`, student, school, eventId, division, waitlisted: overCap(tournament, current, school, eventId, division) }]),
+    setWaitlisted: (id, waitlisted) => setEntries(current => current.map(entry => entry.id === id ? { ...entry, waitlisted } : entry)),
     scheduleChanges,
     myJudgeProfile, saveJudgeProfile: setMyJudgeProfile,
     removeEntry: id => { setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) }))); },

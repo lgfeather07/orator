@@ -973,3 +973,18 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 .jb-score-input:disabled { color: var(--brand); background: var(--brand-soft); border-color: var(--brand-soft); }
 .jb-score-of { color: var(--muted); font-family: var(--font-mono); font-size: 18px; }
 .jb-score-band { padding: 3px 9px; color: var(--brand); background: var(--brand-soft); border-radius: 999px; font-size: 12px; font-weight: 700; }
+
+/* ── Entry limits and waitlist ── */
+.entry-limits { padding: 4px 18px 16px; }
+.entry-limits .fee-grid { grid-template-columns: repeat(2, minmax(0, 260px)); }
+.entry-limits input { min-height: 40px; padding: 0 11px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font: inherit; font-size: 14px; }
+.waitlist-panel { margin: 0 18px 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--amber); border-radius: 12px; background: var(--amber-soft); }
+.waitlist-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.waitlist-head h3 { margin: 0 0 3px; font-size: 14px; }
+.waitlist-head p, .waitlist-note { margin: 0; color: var(--ink); font-size: 12.5px; line-height: 1.45; }
+.waitlist-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.waitlist-list li { padding: 8px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; }
+.waitlist-list li > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.waitlist-list small { color: var(--muted); font-size: 12px; }
+.waitlist-note { display: flex; gap: 6px; }
+@media (max-width: 640px) { .waitlist-list li { grid-template-columns: 1fr; } .waitlist-head { flex-direction: column; } .entry-limits .fee-grid { grid-template-columns: 1fr; } }

@@ -6,7 +6,7 @@ import { contestOf, isFinal, roomNeeded, type Tournament } from './tournament';
 /** How many rooms the busiest round needs: every event and division split into rooms of `sectionSize`. */
 export function roomsNeeded(tournament: Tournament, entries: { eventId: string; division?: 'varsity' | 'novice' }[]) {
   const counts = new Map<string, number>();
-  entries.filter(entry => tournament.eventIds.includes(entry.eventId)).forEach(entry => { const key = contestOf(entry); counts.set(key, (counts.get(key) ?? 0) + 1); });
+  entries.filter(entry => !(entry as { waitlisted?: boolean }).waitlisted && tournament.eventIds.includes(entry.eventId)).forEach(entry => { const key = contestOf(entry); counts.set(key, (counts.get(key) ?? 0) + 1); });
   return [...counts.values()].reduce((sum, count) => sum + Math.ceil(count / tournament.sectionSize), 0);
 }
 
