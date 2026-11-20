@@ -29,6 +29,9 @@ revoke all on function public.waitlist_entry() from public, anon, authenticated;
 create or replace function public.guard_entry_update() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  -- Deleting a user account clears created_by on their entries (on delete set null). That runs with no one
+  -- signed in; let it through, changing nothing else.
+  if auth.uid() is null and new.created_by is null and old.created_by is not null and (to_jsonb(new) - 'created_by') = (to_jsonb(old) - 'created_by') then return new; end if;
   if not private.is_director(old.tournament_id) then raise exception 'Only the director can admit waitlisted entries.' using errcode = 'insufficient_privilege'; end if;
   new.id := old.id; new.tournament_id := old.tournament_id; new.school := old.school; new.student := old.student;
   new.event_id := old.event_id; new.division := old.division; new.created_by := old.created_by; new.created_at := old.created_at;

@@ -56,6 +56,16 @@ export type Tournament = {
   notes?: string;
   /** A coach's request to register their school is approved at once. Judges and students still wait. */
   autoApproveCoaches?: boolean;
+  /**
+   * Drops (see Drops.tsx). After `dropDeadline` (an ISO date and time) a coach who removes an entry or a judge
+   * owes `dropEntryFee` or `dropJudgeFee`, and with `freezeEntryFees` a dropped entry still owes its entry fee.
+   * No deadline (the default) means drops are never charged. Not the calendar's `registrationDeadline`,
+   * which is the last day to register a school and has no time of day.
+   */
+  dropDeadline?: string;
+  dropEntryFee?: number;
+  dropJudgeFee?: number;
+  freezeEntryFees?: boolean;
   eventIds: string[]; status: TournamentStatus;
 };
 
@@ -86,20 +96,71 @@ export const money = (amount: number) => { const cents = Math.round(amount * 100
 export type Payment = { judgesBringing: number; paid: number; method: 'card' | 'check' | null; checkPending: boolean; reference: string; paidAt: string };
 export const noPayment: Payment = { judgesBringing: 0, paid: 0, method: null, checkPending: false, reference: '', paidAt: '' };
 
-export type Invoice = { entries: number; entryTotal: number; schoolFee: number; judgesOwed: number; judgesBringing: number; judgesShort: number; judgeTotal: number; total: number; paid: number; balance: number };
+export type Invoice = {
+  entries: number; entryTotal: number; schoolFee: number; judgesOwed: number; judgesBringing: number; judgesShort: number; judgeTotal: number; total: number; paid: number; balance: number;
+  /** Charged drops (waived ones left out): entries and judges dropped after the drop deadline, and what they cost. */
+  entryDrops: number; entryDropTotal: number; judgeDrops: number; judgeDropTotal: number;
+  /** Dropped entries that still owe their entry fee because fees froze at the drop deadline. */
+  frozenEntries: number; frozenTotal: number;
+  /** Drops the director waived: shown, never charged. */
+  waivedDrops: number;
+};
+
+/**
+ * An entry or a judge a coach dropped after the drop deadline. `fee` is the drop fee and `entryFee` the frozen
+ * entry fee (0 unless fees froze), both as the tournament's settings stood when the drop happened.
+ * The director can waive a drop (with a reason); a waived drop costs nothing.
+ */
+export type DropKind = 'entry' | 'judge';
+export type EntryDrop = {
+  id: string; school: string; kind: DropKind; name: string; eventId: string | null; division: Division | null;
+  droppedAt: string; droppedBy: string; fee: number; entryFee: number; waived: boolean; waiveReason: string;
+};
+const cents = (amount: number) => Math.round(amount * 100) / 100;
+/** True once the tournament's drop deadline has passed. No deadline: never. */
+export const dropDeadlinePassed = (tournament: Tournament, now: Date = new Date()) => {
+  if (!tournament.dropDeadline) return false;
+  const deadline = new Date(tournament.dropDeadline).getTime();
+  return Number.isFinite(deadline) && now.getTime() > deadline;
+};
+/** What dropping one entry (or judge) now would cost, or 0 before the deadline. Waitlisted entries never cost anything. */
+export function dropCost(tournament: Tournament, kind: DropKind, now: Date = new Date(), waitlisted = false): { fee: number; entryFee: number; total: number } {
+  if (waitlisted || !dropDeadlinePassed(tournament, now)) return { fee: 0, entryFee: 0, total: 0 };
+  const fee = cents(Math.max(0, (kind === 'entry' ? tournament.dropEntryFee : tournament.dropJudgeFee) ?? 0));
+  const entryFee = kind === 'entry' && tournament.freezeEntryFees ? cents(Math.max(0, (tournament.fees ?? defaultFees).entry)) : 0;
+  return { fee, entryFee, total: cents(fee + entryFee) };
+}
+/**
+ * The drop to record when a coach removes an entry or judge now, or null when nothing is recorded:
+ * before the deadline (or with none), or for a waitlisted entry. A drop is recorded after the deadline even
+ * when it costs $0, so the director can see it. Dropping and re-adding the same event still counts as a drop.
+ */
+export function dropFor(tournament: Tournament, item: { kind: DropKind; school: string; name: string; eventId?: string | null; division?: Division | null; waitlisted?: boolean }, droppedBy: string, now: Date = new Date(), id = `d${now.getTime().toString(36)}`): EntryDrop | null {
+  if (item.waitlisted || !dropDeadlinePassed(tournament, now)) return null;
+  const { fee, entryFee } = dropCost(tournament, item.kind, now);
+  return { id, school: item.school, kind: item.kind, name: item.name, eventId: item.kind === 'entry' ? item.eventId ?? null : null, division: item.kind === 'entry' ? item.division ?? 'varsity' : null, droppedAt: now.toISOString(), droppedBy, fee, entryFee, waived: false, waiveReason: '' };
+}
 
 /**
  * What a school owes: a fee per entry, a flat school fee, and a fee for each judge the school
  * should supply (one per `entriesPerJudge` entries) but isn't bringing.
  */
-export function invoiceFor(tournament: Tournament, entries: Entry[], school: string, payment: Payment = noPayment): Invoice {
+export function invoiceFor(tournament: Tournament, entries: Entry[], school: string, payment: Payment = noPayment, drops: EntryDrop[] = []): Invoice {
   const fees = tournament.fees ?? defaultFees;
   const count = entries.filter(entry => !entry.waitlisted && entry.school.trim().toLowerCase() === school.trim().toLowerCase()).length;
   const judgesOwed = count === 0 ? 0 : Math.ceil(count / Math.max(1, fees.entriesPerJudge));
   const judgesShort = Math.max(0, judgesOwed - payment.judgesBringing);
+  // The flat school fee is charged only while the school still has entries; a school that dropped everything owes only its drops.
   const entryTotal = Math.round(count * fees.entry * 100) / 100, schoolFee = count === 0 ? 0 : fees.school, judgeTotal = judgesShort * fees.judge;
-  const total = entryTotal + schoolFee + judgeTotal;
-  return { entries: count, entryTotal, schoolFee, judgesOwed, judgesBringing: payment.judgesBringing, judgesShort, judgeTotal, total, paid: payment.paid, balance: total - payment.paid };
+  const mine = drops.filter(drop => sameSchool(drop.school, school));
+  const charged = mine.filter(drop => !drop.waived);
+  const entryDrops = charged.filter(drop => drop.kind === 'entry'), judgeDrops = charged.filter(drop => drop.kind === 'judge');
+  const sum = (list: EntryDrop[], pick: (drop: EntryDrop) => number) => cents(list.reduce((total, drop) => total + pick(drop), 0));
+  const entryDropTotal = sum(entryDrops, drop => drop.fee), judgeDropTotal = sum(judgeDrops, drop => drop.fee);
+  const frozen = entryDrops.filter(drop => drop.entryFee > 0), frozenTotal = sum(frozen, drop => drop.entryFee);
+  const total = cents(entryTotal + schoolFee + judgeTotal + entryDropTotal + judgeDropTotal + frozenTotal);
+  return { entries: count, entryTotal, schoolFee, judgesOwed, judgesBringing: payment.judgesBringing, judgesShort, judgeTotal, total, paid: payment.paid, balance: cents(total - payment.paid),
+    entryDrops: entryDrops.length, entryDropTotal, judgeDrops: judgeDrops.length, judgeDropTotal, frozenEntries: frozen.length, frozenTotal, waivedDrops: mine.length - charged.length };
 }
 
 export type Division = 'varsity' | 'novice';
