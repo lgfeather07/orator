@@ -103,7 +103,7 @@ function Empty({ title, children }: { title: string; children: ReactNode }) {
   return <section className="panel pr-empty"><span className="upload-illustration"><Icon name="search" size={28}/></span><h2>{title}</h2><p>{children}</p><a className="button button-secondary" href={resultsHref()}><Icon name="arrow"/><span>All tournament results</span></a></section>;
 }
 
-const PrivacyNote = () => <p className="pr-note"><Icon name="lock" size={14}/><span>Only final placings and team points are public. Ballots, judges’ comments, and preliminary rankings stay private to each school.</span></p>;
+const PrivacyNote = () => <p className="pr-note"><Icon name="lock" size={14}/><span>Only placings and team points are public. Ballots, judges’ comments, and round-by-round ranks stay private to each school.</span></p>;
 
 function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
   return <div className="pr-metric"><small>{label}</small><strong>{value}</strong>{note && <span>{note}</span>}</div>;
@@ -173,7 +173,7 @@ function TournamentResults({ id }: { id: string }) {
     return <>
       <header className="pr-intro"><span className="eyebrow">Tournament results</span><h1>{tournament.name}</h1>
         <p>{[tournament.date, tournament.host && `Hosted by ${tournament.host}`].filter(Boolean).join(' · ')}</p>
-        <div className="pr-intro-meta"><Badge tone="success" icon="check">Final results</Badge>{publishedOn(tournament.publishedAt) && <span>Published {publishedOn(tournament.publishedAt)}</span>}<span>{plural(contests.length, 'final')} · {plural(data.placings.length, 'finalist')}</span></div>
+        <div className="pr-intro-meta"><Badge tone="success" icon="check">Final results</Badge>{publishedOn(tournament.publishedAt) && <span>Published {publishedOn(tournament.publishedAt)}</span>}<span>{plural(contests.length, 'event')} placed · {plural(data.placings.length, 'speaker')} placed</span></div>
         <PrivacyNote/>
       </header>
       <div className="pr-columns">

@@ -368,3 +368,24 @@ export function sampleSemis(prelim: Standing[], roomIds: string[], judges: numbe
     return order.map((item, index) => ({ entryId: item.id, judge: judgeIndex + 1, rank: index + 1, rating: Math.max(35, 50 - index * 2) }));
   }).flat();
 }
+
+/**
+ * Places for a tournament with no final round: the preliminary standings are the result. The top `awarded`
+ * places are announced and earn team points on the tournament's scale. Speakers still tied after every
+ * tie-break share the place and split the points for the places they cover (two tied for 2nd each get the
+ * average of 2nd and 3rd).
+ */
+export function prelimPlacings(standings: Standing[], teamPoints: number[] = NSAA_TEAM_POINTS, awarded = FINALISTS): Placing[] {
+  const pointsFor = (place: number, tied: number) => {
+    const covered = Array.from({ length: tied }, (_, index) => teamPoints[place - 1 + index] ?? 0);
+    return Math.round((covered.reduce((total, value) => total + value, 0) / tied) * 10) / 10;
+  };
+  return standings.filter(standing => standing.place <= awarded).map(standing => {
+    const tied = standings.filter(other => other.place === standing.place).length;
+    return {
+      entryId: standing.entryId, student: standing.student, school: standing.school, judgeRanks: standing.ranks,
+      cumulativeRank: standing.cumulativeRank, reciprocals: standing.reciprocals, ratingPoints: standing.ratingPoints, place: standing.place,
+      decidedBy: tied > 1 ? `Tied for ${standing.place}` : standing.decidedBy, teamPoints: pointsFor(standing.place, tied),
+    };
+  });
+}

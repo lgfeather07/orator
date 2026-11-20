@@ -80,6 +80,10 @@ Judges don’t need accounts. On the Team entries page a coach adds the judges t
 - Anonymous users can’t create tournaments, ask to join, enter students, set goals, enter judges, or start a ballot without a seat; their profile is always a judge with no school.
 - In the demo, links look like `#/judge-link/demo-<judge>-<n>` and work in the same browser.
 
+## Tournaments without a final round
+
+Early-season meets often run three preliminary rounds and stop. In Setup → Details, set **Final round** to “No finals: place from the preliminary rounds” and choose how many places to announce (top 3 to top 10, default 6). Placings then come straight from the preliminary standings (lowest cumulative rank, with the NSAA tiebreaks), each event is placed as soon as all its rooms are in, and the top places earn team points on the tournament's scale. Speakers still tied after every tiebreak share the place and split the points for the places they cover. Finals, semifinals, the cut preview and finals judge preferences are hidden for these tournaments. `npm run test:prelims` covers the rules.
+
 ## Layout
 
 - `src/App.tsx` — the four role workspaces (student, judge, coach, director)

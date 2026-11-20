@@ -3,6 +3,9 @@
  * Everything here lives in the browser (see store.tsx); it is not yet saved to the database.
  */
 export type TournamentStatus = 'registration' | 'scheduled' | 'running' | 'finished';
+export type TournamentFormat = 'finals' | 'prelims';
+/** True when places come from the preliminary rounds alone. */
+export const prelimsOnly = (tournament: Tournament) => tournament.format === 'prelims';
 
 export type Tournament = {
   name: string; date: string; host: string; rounds: number; sectionSize: number;
@@ -26,6 +29,13 @@ export type Tournament = {
   rooms?: string[];
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
+  /**
+   * 'finals' (default): the top speakers after prelims go to a final (or semifinals) that decides places.
+   * 'prelims': no final round. Places come straight from the preliminary rounds, as at many early-season meets.
+   */
+  format?: TournamentFormat;
+  /** With no final round, how many places are announced in each event. Defaults to 6. */
+  placesAwarded?: number;
   /** Whether novice finals earn team points. Usually not, so off by default. */
   noviceTeamPoints?: boolean;
   /** Public calendar listing (see Calendar.tsx). Listed by default for new tournaments. */

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Badge, Button, Icon, downloadText } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor, stageOf as sectionStage } from './tournament';
-import { NSAA_TEAM_POINTS, cutFor, finalPlacings, prelimStandings, sampleFinals, semifinalistPlacings, teamStandings, type Placing, type Standing } from './results';
+import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor, stageOf as sectionStage, prelimsOnly } from './tournament';
+import { NSAA_TEAM_POINTS, cutFor, finalPlacings, prelimStandings, sampleFinals, semifinalistPlacings, teamStandings, type Placing, type Standing, FINALISTS, prelimPlacings } from './results';
 import { CutOverview, CutPreview, NextIn } from './CutPreview';
 import { SemifinalsPanel } from './Semifinals';
 import { semiPlanFor, semiProgress } from './semis';
@@ -37,7 +37,11 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   // With real final rooms, placings wait until every final-round judge has submitted.
   const ballotsIn = (id: string) => finalRooms.filter(room => contestOf(room) === id && store.roomResults.some(result => result.sectionId === room.id)).length;
   const finalReady = (id: string) => { const rooms = finalRooms.filter(room => contestOf(room) === id); return rooms.length === 0 || ballotsIn(id) === rooms.length; };
-  const placingsFor = (id: string): Placing[] => finalReady(id) ? finalPlacings(finalistsFor(id), finalResults, points) : [];
+  // No final round: once every preliminary room of a contest is in, its standings are the placings.
+  const noFinals = prelimsOnly(tournament);
+  const awarded = tournament.placesAwarded ?? FINALISTS;
+  const prelimComplete = (id: string) => { const rooms = sections.filter(section => contestOf(section) === id); return rooms.length > 0 && rooms.every(room => prelimResults.some(result => result.sectionId === room.id)); };
+  const placingsFor = (id: string): Placing[] => noFinals ? (prelimComplete(id) ? prelimPlacings(standingsFor(id), points, awarded) : []) : finalReady(id) ? finalPlacings(finalistsFor(id), finalResults, points) : [];
   /** Semifinalists who didn't make the final, placed after the finalists once the final is placed. */
   const semifinalistsFor = (id: string): Placing[] => semiPlan(id) && placingsFor(id).length > 0 ? semifinalistPlacings(semisFor(id).standings, points) : [];
   /** Final placings, plus semifinalists only where the team-point scale reaches their place. */
@@ -91,7 +95,20 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
     lines.push('', ['Team', 'Points'].map(quote).join(','), ...teamStandings(events.filter(countsForTeam).map(id => ({ eventName: eventName(id), placings: scoringPlacingsFor(id) }))).map(team => [team.school, team.points].map(quote).join(',')));
     downloadText(`${tournament.name.replace(/\W+/g, '-').toLowerCase() || 'tournament'}-results.csv`, lines.join('\n'));
   };
-  const flow = <section className="panel results-flow" aria-label="Results progress">
+  const placedCount = events.filter(id => placingsFor(id).length > 0).length;
+  const flow = noFinals ? <section className="panel results-flow" aria-label="Results progress">
+    <ol className="results-steps two">
+      <li className={roomsLeft === 0 && prelimResults.length > 0 ? 'done' : 'current'}><span>{roomsLeft === 0 && prelimResults.length > 0 ? <Icon name="check" size={14}/> : 1}</span><div><strong>Preliminary ballots</strong><small>{prelimResults.length === 0 ? 'None in yet' : roomsLeft === 0 ? 'Every room is in' : `${roomsLeft} ${roomsLeft === 1 ? 'room' : 'rooms'} still out · ${placedCount} of ${events.length} events placed`}</small></div></li>
+      <li className={tournament.status === 'finished' ? 'done' : roomsLeft === 0 && prelimResults.length > 0 ? 'current' : ''}><span>{tournament.status === 'finished' ? <Icon name="check" size={14}/> : 2}</span><div><strong>End and announce</strong><small>{tournament.status === 'finished' ? 'Ballots locked, invoices sent' : 'Locks ballots, sends invoices'}</small></div></li>
+    </ol>
+    <div className="results-next">
+      {prelimResults.length === 0 ? <p><strong>No final round.</strong> Places come from the {tournament.rounds} preliminary rounds and appear as each event’s ballots are all in.</p>
+      : roomsLeft > 0 ? <p><strong>Next:</strong> waiting on {roomsLeft} preliminary {roomsLeft === 1 ? 'room' : 'rooms'}. {placedCount > 0 ? `${placedCount} ${placedCount === 1 ? 'event is' : 'events are'} already placed.` : ''} Check the Issues tab if a judge is missing.</p>
+      : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every event is placed from the preliminary rounds. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
+      : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
+      {placedCount > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}
+    </div>
+  </section> : <section className="panel results-flow" aria-label="Results progress">
     <ol className={`results-steps ${semiContests.length ? 'five' : ''}`}>
       <li className={roomsLeft === 0 && prelimResults.length > 0 ? 'done' : 'current'}><span>{roomsLeft === 0 && prelimResults.length > 0 ? <Icon name="check" size={14}/> : 1}</span><div><strong>Preliminary ballots</strong><small>{prelimResults.length === 0 ? 'None in yet' : roomsLeft === 0 ? 'Every room is in' : `${roomsLeft} ${roomsLeft === 1 ? 'room' : 'rooms'} still out`}</small></div></li>
       <li className={count('ready') + count('prelims') === 0 && events.length > 0 ? 'done' : count('ready') > 0 ? 'current' : ''}><span>{count('ready') + count('prelims') === 0 && events.length > 0 ? <Icon name="check" size={14}/> : 2}</span><div><strong>{semiContests.length ? 'Create semifinals and finals' : 'Create finals'}</strong><small>{count('ready') > 0 ? (readySemis ? `${readySemis} ${readySemis === 1 ? 'semifinal round' : 'semifinal rounds'}${readyFinals ? ` and ${readyFinals} ${readyFinals === 1 ? 'final' : 'finals'}` : ''} ready to create` : `${count('ready')} ready to create · ${events.filter(id => stageOf(id) === 'ready').reduce((total, id) => total + finalistsFor(id).length, 0)} finalists`) : count('prelims') > 0 ? 'After prelims are in' : count('semis') > 0 ? 'Finals follow the semifinals' : 'All created'}</small></div></li>
@@ -117,15 +134,15 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
     <div className="results-main">
       {flow}
       <PublishResults contests={events.map(id => ({ contest: id, placings: placingsFor(id) }))} teams={teams}/>
-      {hasPrelims && <CutOverview events={events} eventName={eventName} standingsFor={standingsFor} onOpen={setChosen}/>}
+      {hasPrelims && !noFinals && <CutOverview events={events} eventName={eventName} standingsFor={standingsFor} onOpen={setChosen}/>}
       <section className="panel">
-        <div className="panel-head"><div><h2>Preliminary rounds</h2><p>{tournament.rounds} rounds, one judge per room. The lowest cumulative rank advances; the top {cut} go to the {usesSemis ? 'semifinals' : 'final'}.</p></div>
+        <div className="panel-head"><div><h2>{noFinals ? 'Placings' : 'Preliminary rounds'}</h2><p>{noFinals ? `${tournament.rounds} rounds, one judge per room, no final. Lowest cumulative rank wins; the top ${awarded} places are announced and earn team points.` : `${tournament.rounds} rounds, one judge per room. The lowest cumulative rank advances; the top ${cut} go to the ${usesSemis ? 'semifinals' : 'final'}.`}</p></div>
           <span className="panel-head-actions">{store.resultsAreReal ? <><Badge tone="success" icon="check">From {new Set(prelimResults.map(result => result.sectionId)).size} submitted {new Set(prelimResults.map(result => result.sectionId)).size === 1 ? 'ballot' : 'ballots'}</Badge><Button variant="secondary" onClick={() => store.refresh()}>Refresh</Button></> : <>{hasPrelims && <Button variant="secondary" onClick={store.clearResults}>Clear results</Button>}<Button icon="sparkle" variant={hasPrelims ? 'secondary' : 'primary'} onClick={store.fillSamplePrelims}>{hasPrelims ? 'New sample results' : 'Fill in sample results'}</Button></>}</span></div>
         {!hasPrelims ? <div className="schedule-empty"><h3>No results yet</h3><p>{store.live ? 'Results appear here as judges submit their ballots. You can also fill in sample results to see how breaks, finals, and team points work.' : 'In a real tournament these come from judges’ submitted ballots. Fill in sample results to see how breaks, finals, and team points work.'}</p></div> : <>
           <div className="results-events" role="tablist" aria-label="Events">{events.map(id => { const done = placingsFor(id).length > 0; return <button key={id} role="tab" aria-selected={eventId === id} className={eventId === id ? 'active' : ''} onClick={() => setChosen(id)}>{eventName(id)}{done && <Icon name="check" size={14}/>}</button>; })}</div>
           <div className="results-table" role="list" tabIndex={0} aria-label={`${eventName(eventId)} preliminary standings`}>
             <div className="results-row results-head" role="listitem"><span>Place</span><span>Speaker</span><span>Ranks</span><span>Total</span><span title="Average preliminary rank of everyone this speaker shared a room with">Opp. avg</span><span>Recip.</span><span>Rating pts</span><span/></div>
-            {standings.map((standing, index) => <div key={standing.entryId} role="listitem" className={`results-row ${standing.advances ? 'in' : ''} ${standing.advances && !standings[index + 1]?.advances ? 'cut' : ''}`}>
+            {standings.map((standing, index) => <div key={standing.entryId} role="listitem" className={`results-row ${noFinals ? (standing.place <= awarded ? 'in' : '') : standing.advances ? 'in' : ''} ${noFinals ? (standing.place <= awarded && !(standings[index + 1]?.place <= awarded) ? 'cut' : '') : standing.advances && !standings[index + 1]?.advances ? 'cut' : ''} ${noFinals && standing.place === 1 && prelimComplete(eventId) ? 'champion' : ''}`}>
               <span className="results-place">{standing.place}</span>
               <span className="results-name"><strong>{standing.student}{entryLoad(entries, standing.student, standing.school) > 1 && <em className="load-tag" title={loadLabel(entryLoad(entries, standing.student, standing.school))}>{entryLoad(entries, standing.student, standing.school)}×</em>}</strong><small>{standing.school}</small></span>
               <span className="results-num">{standing.ranks.join(' · ')}</span>
@@ -133,16 +150,16 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
               <span className="results-num">{standing.opponentsAverageRank.toFixed(2)}</span>
               <span className="results-num">{standing.reciprocals.toFixed(2)}</span>
               <span className="results-num">{standing.ratingPoints}</span>
-              <span className="results-status">{standing.advances ? <Badge tone="success" icon="check">{usesSemis ? 'Semifinalist' : 'Finalist'}</Badge> : null}{standing.decidedBy && <small>{standing.decidedBy === 'Still tied' ? 'Still tied' : `Tie broken by ${standing.decidedBy.toLowerCase()}`}</small>}</span>
+              <span className="results-status">{noFinals ? (standing.place <= awarded ? <Badge tone="success" icon={prelimComplete(eventId) ? 'check' : 'clock'}>{prelimComplete(eventId) ? `${ordinal(standing.place)} place${placings.find(placing => placing.entryId === standing.entryId)?.teamPoints ? ` · ${placings.find(placing => placing.entryId === standing.entryId)!.teamPoints} pts` : ''}` : `${ordinal(standing.place)} so far`}</Badge> : null) : standing.advances ? <Badge tone="success" icon="check">{usesSemis ? 'Semifinalist' : 'Finalist'}</Badge> : null}{standing.decidedBy && <small>{standing.decidedBy === 'Still tied' ? 'Still tied' : `Tie broken by ${standing.decidedBy.toLowerCase()}`}</small>}</span>
             </div>)}
           </div>
           <p className="results-rule"><Icon name="info" size={14}/> {standings.length <= cut ? `With ${standings.length} entries, everyone advances to the ${usesSemis ? 'semifinals' : 'final'}.` : cutTie ? `${standings.filter(standing => standing.advances).length} speakers advance because a tie at the cut line could not be broken.` : 'Ties are broken in order: opponents’ average rank, head-to-head, reciprocals, then rating points.'}</p>
         </>}
       </section>
 
-      {hasPrelims && rooms.length === 0 && placings.length === 0 && eventId && !semiState?.rooms.length && <CutPreview contest={eventId} name={eventName(eventId)} standings={standings}/>}
-      {hasPrelims && usesSemis && eventId && <SemifinalsPanel contest={eventId} name={eventName(eventId)} standings={standings}/>}
-      {hasPrelims && <section className="panel">
+      {hasPrelims && !noFinals && rooms.length === 0 && placings.length === 0 && eventId && !semiState?.rooms.length && <CutPreview contest={eventId} name={eventName(eventId)} standings={standings}/>}
+      {hasPrelims && !noFinals && usesSemis && eventId && <SemifinalsPanel contest={eventId} name={eventName(eventId)} standings={standings}/>}
+      {hasPrelims && !noFinals && <section className="panel">
         <div className="panel-head"><div><h2>{eventName(eventId)} final</h2><p>{usesSemis && finalists.length === 0 ? `Finalists are the top ${semiPlan(eventId)!.advance} in each semifinal room, once every semifinal ballot is in. ${seats} judges.` : `${finalists.length} finalists${usesSemis ? ' from the semifinals' : ''}, ${seats} judges.`} Placed on lowest cumulative rank{seats >= 3 ? ', then judge’s preference' : ''}, then reciprocals and rating points.</p></div>
           {rooms.length === 0 && finalists.length > 0 && <span className="panel-head-actions"><Button icon="sparkle" variant="secondary" onClick={() => store.fillSampleFinals(eventId)}>{placings.length ? 'New sample final' : 'Fill in sample final'}</Button>{placings.length === 0 && <Button icon="plus" onClick={() => store.createFinal(eventId)}>Create final round</Button>}</span>}</div>
         {rooms.length > 0 && <div className="final-seats"><div className="final-seats-head"><strong>{rooms[0].room}</strong><Badge tone={ballotsIn(eventId) === rooms.length ? 'success' : 'warning'} icon={ballotsIn(eventId) === rooms.length ? 'check' : 'clock'}>{ballotsIn(eventId)} of {rooms.length} ballots in</Badge></div>
@@ -177,12 +194,12 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
 
     <aside className="results-aside">
       <section className="panel">
-        <div className="panel-head"><div><h2>Team points</h2><p>{finalsDone} of {events.length} finals in</p></div></div>
-        {teams.length === 0 ? <p className="team-ballots-empty">Team points come from final rounds only. They appear here as each final is scored.</p> : <ol className="team-points">{teams.map((team, index) => <li key={team.school} className={index === 0 ? 'lead' : ''}><span>{index + 1}</span><div><strong>{team.school}</strong><small>{team.finalists} {team.finalists === 1 ? 'finalist' : 'finalists'}</small></div><b>{team.points}</b></li>)}</ol>}
+        <div className="panel-head"><div><h2>Team points</h2><p>{finalsDone} of {events.length} {noFinals ? 'events placed' : 'finals in'}</p></div></div>
+        {teams.length === 0 ? <p className="team-ballots-empty">{noFinals ? `Team points come from the top ${awarded} places in each event. They appear as each event’s preliminary ballots are all in.` : 'Team points come from final rounds only. They appear here as each final is scored.'}</p> : <ol className="team-points">{teams.map((team, index) => <li key={team.school} className={index === 0 ? 'lead' : ''}><span>{index + 1}</span><div><strong>{team.school}</strong><small>{team.finalists} {noFinals ? 'placed' : team.finalists === 1 ? 'finalist' : 'finalists'}</small></div><b>{team.points}</b></li>)}</ol>}
       </section>
       <section className="panel results-settings">
         <div className="panel-head"><div><h2>Rules for this tournament</h2><p>Defaults follow the NSAA manual</p></div></div>
-        <label><span>Judges in each final</span><select value={judges} onChange={event => store.updateTournament({ finalJudges: Number(event.target.value) })}><option value={2}>2 judges (districts)</option><option value={3}>3 judges (state)</option></select></label>
+        {!noFinals && <label><span>Judges in each final</span><select value={judges} onChange={event => store.updateTournament({ finalJudges: Number(event.target.value) })}><option value={2}>2 judges (districts)</option><option value={3}>3 judges (state)</option></select></label>}
         <fieldset><legend>Team points for 1st to 6th</legend><div>{points.map((value, index) => <input key={index} aria-label={`Points for ${ordinal(index + 1)}`} inputMode="numeric" value={value} onChange={event => store.updateTournament({ teamPoints: points.map((old, i) => i === index ? Number(event.target.value.replace(/\D/g, '')) || 0 : old) })}/>)}</div>
           {points.join() !== NSAA_TEAM_POINTS.join() && <button type="button" onClick={() => store.updateTournament({ teamPoints: NSAA_TEAM_POINTS })}>Use the NSAA scale (20-18-16-14-12-10)</button>}</fieldset>
         {events.some(id => parseContest(id).division === 'novice') && <label className="check-setting"><input type="checkbox" checked={tournament.noviceTeamPoints ?? false} onChange={event => store.updateTournament({ noviceTeamPoints: event.target.checked })}/><span><strong>Novice finals earn team points</strong><small>Usually off. Turn on if this tournament counts novice placings toward the team award.</small></span></label>}

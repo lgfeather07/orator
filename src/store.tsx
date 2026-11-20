@@ -485,6 +485,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     else setSections(all => [...all, ...built]);
   };
   store.createFinal = contest => {
+    if (store.tournament.format === 'prelims') return; // No final round at this tournament.
     if (finalSections.some(section => contestOf(section) === contest)) return;
     const built = planFinal(contest, store.sections);
     if (built.length && built[0].entryIds.length) addFinals(built);
@@ -492,6 +493,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // A contest is ready for its next round only once every one of its preliminary rooms has results.
   const prelimsDone = (contest: string) => { const own = prelimSections.filter(section => contestOf(section) === contest); return own.length > 0 && own.every(section => mergedPrelims.some(result => result.sectionId === section.id)); };
   store.createAllFinals = () => {
+    if (store.tournament.format === 'prelims') return; // No final round at this tournament.
     let soFar = store.sections; const all: Section[] = [];
     const ready = (sectionsSoFar: Section[]) => awaitingFinal(sectionsSoFar).filter(prelimsDone);
     // Semifinals first: they run in the same round as finals of contests without semifinals, and need fewer judges.
@@ -500,6 +502,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addFinals(all);
   };
   store.createSemis = contest => {
+    if (store.tournament.format === 'prelims') return; // No final round at this tournament.
     if (hasSemis(contest, store.sections) || finalSections.some(section => contestOf(section) === contest) || !prelimsDone(contest)) return;
     addFinals(planSemis(contest, store.sections));
   };
