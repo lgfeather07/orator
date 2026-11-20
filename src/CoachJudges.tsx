@@ -10,6 +10,7 @@ import type { Member } from './tournamentApi';
 import * as links from './judgeLinks';
 import type { CoachJudge, JudgeLinkRoute, SeatInput } from './judgeLinks';
 import './judges.css';
+import { JudgeDropWarning } from './Drops';
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?';
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -123,6 +124,8 @@ export function CoachJudgesPanel({ school }: { school: string }) {
   const remove = (seat: CoachJudge) => run(seat.id, async () => {
     if (live) { await links.removeCoachJudge(seat.id); links.forgetLink(seat.id); }
     setCoachJudges(list => list.filter(item => item.id !== seat.id)); setConfirmRemove(null);
+    // After the drop deadline this is a drop (Drops.tsx): recorded in the demo, already recorded by the database when signed in.
+    store.noteJudgeDrop(seat);
   });
 
   return <section className="panel coach-judges" aria-labelledby="coach-judges-title">
@@ -144,7 +147,7 @@ export function CoachJudgesPanel({ school }: { school: string }) {
               : <button type="button" className="icon-button" aria-label={`Remove ${seat.name}`} onClick={() => setConfirmRemove(seat.id)}><Icon name="close" size={16}/></button>}
           </span>
         </div>
-        {confirmRemove === seat.id && <p className="cj-confirm" role="alert">Remove {seat.name}? Their link stops working and any rooms they had go back to the director.</p>}
+        {confirmRemove === seat.id && <p className="cj-confirm" role="alert">Remove {seat.name}? Their link stops working and any rooms they had go back to the director.{seat.status === 'approved' && <JudgeDropWarning/>}</p>}
         {editing === seat.id ? <JudgeForm idPrefix={`edit-${seat.id}`} initial={{ name: seat.name, email: seat.email, phone: seat.phone, clean: seat.clean, knows: seat.knows }} schools={schools} ownSchool={school} submitLabel="Save" busy={busy === seat.id} onSubmit={input => save(seat, input)} onCancel={() => setEditing(null)}/>
           : !finished && <LinkTools seat={seat} tournament={tournament.name} busy={busy === seat.id} onNewLink={() => newLink(seat)} onRevoke={() => revoke(seat)}/>}
       </li>;

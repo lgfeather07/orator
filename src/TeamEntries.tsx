@@ -3,6 +3,7 @@ import { Avatar, Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { divisionLabel, divisionOf, entryLoad, isFinal, loadLabel, roundTimes, sameSchool, stageOf, type Division, overCap } from './tournament';
+import { DropEntryButton } from './Drops';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
@@ -48,7 +49,7 @@ export function TeamEntries({ school, onBack }: { school: string; onBack?: () =>
           <strong>{entry.student}{entry.waitlisted && <Badge tone="warning" icon="clock">Waitlisted</Badge>}{loadLabel(entryLoad(entries, entry.student, school)) && <Badge tone="info">{loadLabel(entryLoad(entries, entry.student, school))}</Badge>}</strong>
           <span>{eventName(entry.eventId)}{divisionOf(entry) === 'novice' ? <em className="division-tag">{divisionLabel.novice}</em> : <small className="division-plain"> · {divisionLabel.varsity}</small>}</span>
           <span className="entry-rounds">{published ? rounds.map(section => <small key={section.id}><b>{isFinal(section, tournament) ? (stageOf(section, tournament) === 'semi' ? 'Semi' : 'Final') : `R${section.round}`}</b> {roundTimes[section.round - 1]} · {section.room} · speaks {section.entryIds.indexOf(entry.id) + 1} of {section.entryIds.length}{isFinal(section, tournament) ? '' : section.judgeId ? ` · ${section.judgeName || judgePool.find(judge => judge.id === section.judgeId)?.name || 'Judge assigned'}` : ''}</small>) : null}</span>
-          {open ? <button className="icon-button" aria-label={`Remove ${entry.student} from ${eventName(entry.eventId)}`} onClick={() => removeEntry(entry.id)}><Icon name="close" size={16}/></button> : <span/>}
+          {open ? <DropEntryButton entry={entry} label={`Remove ${entry.student} from ${eventName(entry.eventId)}`} onRemove={() => removeEntry(entry.id)}/> : <span/>}
         </div>;
       })}
     </div>}

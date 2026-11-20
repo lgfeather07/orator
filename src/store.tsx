@@ -13,6 +13,8 @@ import { buildSemis, finalRoundFor, semiPlanFor, semiProgress } from './semis';
 import { sampleSemis } from './results';
 import { stageOf, type SemiPlan } from './tournament';
 import { enteredJudgeCount, listCoachJudges, seatAsJudge, type CoachJudge } from './judgeLinks';
+import { dropFor, type EntryDrop } from './tournament';
+import * as dropsApi from './dropsApi';
 
 export type Presence = 'present' | 'absent';
 
@@ -110,6 +112,12 @@ type Store = {
    * Approved ones are in `judges`, and a school's count is what its invoice says it brings.
    */
   coachJudges: CoachJudge[]; setCoachJudges: (update: (list: CoachJudge[]) => CoachJudge[]) => void;
+  /** Entries and judges dropped after the drop deadline (Drops.tsx): a coach sees their school's, the director every school's. */
+  drops: EntryDrop[];
+  /** The director waives a drop fee (with a reason), or restores it. */
+  waiveDrop: (id: string, waived: boolean, reason: string) => void;
+  /** Call after a coach removes one of their judges: the demo records the drop; signed in, the database already has, so drops reload. */
+  noteJudgeDrop: (seat: CoachJudge) => void;
   createLiveTournament: (tournament: Tournament) => Promise<void>;
   requestJoin: (tournamentId: string, role: MemberRole, school: string) => Promise<void>;
   decideMember: (member: Member, status: MemberStatus) => Promise<void>;
@@ -143,7 +151,7 @@ const seedGoals: PracticeGoal[] = [
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { coachJudges?: CoachJudge[]; practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { drops?: EntryDrop[]; coachJudges?: CoachJudge[]; practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -160,12 +168,12 @@ const seedCoachJudges: CoachJudge[] = [{ id: 'ej', tournamentId: 'demo', school:
 const seedCoachJudgeIds = seedCoachJudges.map(seat => seat.id);
 
 /** What other schools do once their invoice arrives, so the director's list shows a realistic mix in the demo. */
-function seedSettlements(current: Record<string, Payment>, tournament: Tournament, entries: Entry[]): Record<string, Payment> {
+function seedSettlements(current: Record<string, Payment>, tournament: Tournament, entries: Entry[], drops: EntryDrop[] = []): Record<string, Payment> {
   const next = { ...current };
   const settle = (school: string, how: 'card' | 'check' | 'promised', reference: string) => {
     const key = school.toLowerCase(); const payment = next[key] ?? noPayment;
     if (payment.paid > 0 || payment.checkPending) return;
-    const total = invoiceFor(tournament, entries, school, payment).total;
+    const total = invoiceFor(tournament, entries, school, payment, drops).total;
     next[key] = how === 'promised' ? { ...payment, method: 'check', checkPending: true } : { ...payment, paid: total, method: how, reference, paidAt: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }) };
   };
   settle('Kestrel Prep', 'card', 'ORA-7K2M4Q'); settle('Halden West', 'card', 'ORA-9D1XTB'); settle('Brightwater High', 'check', 'ORA-3HV8RC'); settle('Larkspur High', 'card', 'ORA-5W6NPA'); settle('Ashgrove', 'promised', '');
@@ -198,10 +206,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [scheduleChanges, setScheduleChanges] = useState<ScheduleChange[]>(saved?.scheduleChanges ?? []);
   const [myJudgeProfile, setMyJudgeProfile] = useState(saved?.myJudgeProfile ?? { clean: false, knows: ['Ashgrove'] });
   const [demoCoachJudges, setDemoCoachJudges] = useState<CoachJudge[]>(saved?.coachJudges ?? seedCoachJudges);
+  // The demo has no drop deadline until the director sets one, so no drops to start with.
+  const [demoDrops, setDemoDrops] = useState<EntryDrop[]>(saved?.drops ?? []);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, coachJudges: demoCoachJudges })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, demoCoachJudges]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, coachJudges: demoCoachJudges, drops: demoDrops })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, demoCoachJudges, demoDrops]);
   // A judge link opened in another tab changes the saved demo; pick that up.
   useEffect(() => {
     const onStorage = (event: StorageEvent) => { if (event.key === STORAGE_KEY) { const next = loadSaved(); if (next?.coachJudges) setDemoCoachJudges(next.coachJudges); } };
@@ -235,6 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveIssues, setLiveIssues] = useState<Issue[]>([]);
   const [liveGoals, setLiveGoals] = useState<PracticeGoal[]>([]);
   const [liveCoachJudges, setLiveCoachJudges] = useState<CoachJudge[]>([]);
+  const [liveDrops, setLiveDrops] = useState<EntryDrop[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -256,7 +267,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLiveUpdates(await api.listUpdates(active.id).catch(() => []));
         setLiveIssues(await api.listIssues(active.id).catch(() => []));
         setLiveCoachJudges(await listCoachJudges(active.id).catch(() => []));
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); setLiveCoachJudges([]); }
+        setLiveDrops(await dropsApi.listDrops(active.id).catch(() => []));
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); setLiveCoachJudges([]); setLiveDrops([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -287,6 +299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const entriesNote = (open: boolean) => open ? 'The director reopened entries. You can add and drop students again.' : 'The director closed entries. Report an issue if something still needs to change.';
   const describeRoomMove = (section: Section, room: string, t: Tournament) => `${roundLabel(section, t)} ${ballotEvents.find(event => event.id === section.eventId)?.name ?? section.eventId}${divisionOf(section) === 'novice' ? ` (${divisionLabel.novice})` : ''}, ${section.label.replace('Novice · ', '')}: moved from ${section.room} to ${room}`;
   const describeMove = (section: Section | undefined, judge: Judge | null, t: Tournament) => section ? `${roundLabel(section, t)} ${ballotEvents.find(event => event.id === section.eventId)?.name ?? section.eventId}${divisionOf(section) === 'novice' ? ` (${divisionLabel.novice})` : ''}, ${section.label.replace('Novice · ', '')}, ${section.room}: ${judge ? `now judged by ${judge.name}` : 'judge removed'}` : '';
+  const reloadDrops = () => { if (tournamentId) dropsApi.listDrops(tournamentId).then(setLiveDrops).catch(() => undefined); };
   const patchLiveTournament = (patch: Partial<Tournament>) => setTournaments(list => list.map(item => item.id === tournamentId ? { ...item, ...patch } : item));
 
   // In the demo, Judge Leather's conflicts are whatever she has set on her own page.
@@ -326,7 +339,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeGoal: id => { setLiveGoals(list => list.filter(item => item.id !== id)); api.removeGoal(id).catch(caught => { report(caught); refresh(); }); },
     entriesOpen: (liveTournament?.entriesOpen ?? true) && (liveTournament?.status ?? 'registration') === 'registration',
     addEntry: (student, school, eventId, division) => { if (tournamentId) api.insertEntry(tournamentId, student, school, eventId, division ?? 'varsity').then(entry => setLiveEntries(list => [...list, entry])).catch(report); },
-    removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).catch(caught => { report(caught); refresh(); }); },
+    // The database records a drop after the deadline (supabase/drops.sql), so drops reload once the delete is in.
+    removeEntry: id => { setLiveEntries(list => list.filter(entry => entry.id !== id)); api.deleteEntry(id).then(reloadDrops).catch(caught => { report(caught); refresh(); }); },
+    drops: liveDrops,
+    waiveDrop: (id, waived, reason) => { setLiveDrops(list => list.map(drop => drop.id === id ? { ...drop, waived, waiveReason: waived ? reason.trim() : '' } : drop)); dropsApi.setDropWaived(id, waived, reason).catch(caught => { report(caught); reloadDrops(); }); },
+    noteJudgeDrop: () => { reloadDrops(); },
     submittedSchools: members.filter(member => member.role === 'coach' && member.entriesSent).map(member => member.school),
     submitSchool: () => { if (tournamentId) api.markEntriesSent(tournamentId, userId).then(refresh).catch(report); },
     // For a signed-in coach, releasing is saved, and the database only allows it once the tournament has ended.
@@ -373,7 +390,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     tournament,
     updateTournament: patch => {
       // Ending the tournament sends every school its invoice; in the demo, other schools then pay.
-      if (patch.status === 'finished') setPayments(all => seedSettlements(all, { ...tournament, ...patch }, entries));
+      if (patch.status === 'finished') setPayments(all => seedSettlements(all, { ...tournament, ...patch }, entries, demoDrops));
       setTournament(current => ({ ...current, ...patch }));
       if (patch.entriesOpen !== undefined) logChange(entriesNote(patch.entriesOpen), tournament.status, 'entries');
       // Leaving "finished" withdraws the release: students must never see results mid-tournament.
@@ -385,7 +402,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setWaitlisted: (id, waitlisted) => setEntries(current => current.map(entry => entry.id === id ? { ...entry, waitlisted } : entry)),
     scheduleChanges,
     myJudgeProfile, saveJudgeProfile: setMyJudgeProfile,
-    removeEntry: id => { setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) }))); },
+    removeEntry: id => {
+      // Only a coach removes entries in the demo (TeamEntries), so a removal after the drop deadline is a drop.
+      const entry = entries.find(item => item.id === id);
+      const drop = entry ? dropFor(tournament, { kind: 'entry', school: entry.school, name: entry.student, eventId: entry.eventId, division: divisionOf(entry), waitlisted: entry.waitlisted }, `${entry.school} coach`) : null;
+      if (drop) setDemoDrops(list => [...list, drop]);
+      setEntries(current => current.filter(entry => entry.id !== id)); setSections(current => current.map(section => ({ ...section, entryIds: section.entryIds.filter(entryId => entryId !== id) })));
+    },
+    drops: demoDrops,
+    waiveDrop: (id, waived, reason) => setDemoDrops(list => list.map(drop => drop.id === id ? { ...drop, waived, waiveReason: waived ? reason.trim() : '' } : drop)),
+    noteJudgeDrop: seat => { if (seat.status !== 'approved') return; const drop = dropFor(tournament, { kind: 'judge', school: seat.school, name: seat.name }, `${seat.school} coach`); if (drop) setDemoDrops(list => [...list, drop]); },
     submittedSchools, submitSchool: school => setSubmittedSchools(current => current.includes(school) ? current : [...current, school]),
     sections,
     generateSchedule: () => { setSections(buildSchedule(tournament, entries, demoJudges)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setScheduleChanges(list => list.filter(change => change.kind === 'entries')); },
@@ -402,7 +428,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); setDemoCoachJudges(seedCoachJudges); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); setDemoCoachJudges(seedCoachJudges); setDemoDrops([]); },
     judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
     myPreferences, savePreferences: setMyPreferences,
     roomResults,

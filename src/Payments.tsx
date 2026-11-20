@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Badge, Button, Icon, downloadText, useDialog } from './ui';
 import { useStore } from './store';
 import { ORATOR_PRICING, defaultFees, invoiceFor, money as dollars, oratorFeeFor, pricingTierLabel, type Fees, type Invoice } from './tournament';
+import { DirectorDrops, DropSettings } from './Drops';
 
 const money = (amount: number) => `${amount < 0 ? '−' : ''}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -16,8 +17,19 @@ const testCards = [
 
 function receiptText(tournament: string, school: string, invoice: Invoice, amount: number, reference: string) {
   return [`ORATOR — SIMULATED RECEIPT (no real payment was made)`, ``, `Tournament: ${tournament}`, `School: ${school}`, `Reference: ${reference}`, ``,
-    `Entries (${invoice.entries}): ${money(invoice.entryTotal)}`, ...(invoice.schoolFee > 0 ? [`School fee: ${money(invoice.schoolFee)}`] : []), `Judges not supplied (${invoice.judgesShort}): ${money(invoice.judgeTotal)}`, `Total due: ${money(invoice.total)}`, ``, `Paid now: ${money(amount)}`].join('\n');
+    `Entries (${invoice.entries}): ${money(invoice.entryTotal)}`, ...(invoice.schoolFee > 0 ? [`School fee: ${money(invoice.schoolFee)}`] : []), `Judges not supplied (${invoice.judgesShort}): ${money(invoice.judgeTotal)}`, ...dropLines(invoice).map(([label, amount]) => `${label}: ${money(amount)}`), `Total due: ${money(invoice.total)}`, ``, `Paid now: ${money(amount)}`].join('\n');
 }
+
+/** Drop charges on an invoice (supabase/drops.sql, Drops.tsx), as [label, amount] lines. Waived drops cost nothing. */
+function dropLines(invoice: Invoice): [string, number][] {
+  return [
+    ...(invoice.entryDrops > 0 ? [[`Entries dropped after the deadline (${invoice.entryDrops})`, invoice.entryDropTotal] as [string, number]] : []),
+    ...(invoice.frozenEntries > 0 ? [[`Entry fees for dropped entries (${invoice.frozenEntries}, fees froze at the deadline)`, invoice.frozenTotal] as [string, number]] : []),
+    ...(invoice.judgeDrops > 0 ? [[`Judges dropped after the deadline (${invoice.judgeDrops})`, invoice.judgeDropTotal] as [string, number]] : []),
+    ...(invoice.waivedDrops > 0 ? [[`Drop fees waived by the director (${invoice.waivedDrops})`, 0] as [string, number]] : []),
+  ];
+}
+const dropCharges = (invoice: Invoice) => invoice.entryDropTotal + invoice.frozenTotal + invoice.judgeDropTotal;
 
 /** A stand-in for a card checkout. Nothing is charged and no card details can be entered. */
 function PaymentSimulator({ school, amount: amountDue, invoice: currentInvoice, onClose }: { school: string; amount: number; invoice: Invoice; onClose: () => void }) {
@@ -65,10 +77,10 @@ export function TeamInvoice({ school }: { school: string }) {
   const store = useStore();
   const { tournament, entries } = store;
   const payment = store.paymentFor(school);
-  const invoice = invoiceFor(tournament, entries, school, payment);
+  const invoice = invoiceFor(tournament, entries, school, payment, store.drops);
   const fees = tournament.fees ?? defaultFees;
   const [paying, setPaying] = useState(false);
-  if (invoice.entries === 0) return null;
+  if (invoice.entries === 0 && invoice.total === 0 && invoice.waivedDrops === 0) return null;
   // Schools are invoiced after the tournament, on their final entries and the judges they brought.
   const due = tournament.status === 'finished';
   const settled = due && invoice.balance <= 0;
@@ -83,6 +95,7 @@ export function TeamInvoice({ school }: { school: string }) {
           {/* The judges a school brings are the ones its coach entered under "Your judges" (CoachJudges.tsx). */}
           <span className="judge-stepper"><b>{payment.judgesBringing}</b><em>{due ? 'brought' : 'entered under Your judges'}</em></span>
         </dt><dd>{invoice.judgesShort ? money(invoice.judgeTotal) : 'Covered'}{invoice.judgesShort > 0 && <small>{invoice.judgesShort} hired × {money(fees.judge)}</small>}</dd></div>
+        {dropLines(invoice).map(([label, amount]) => <div key={label} className="invoice-drop"><dt>{label}</dt><dd>{money(amount)}</dd></div>)}
         <div className="total"><dt>{due ? 'Total' : 'Estimated total'}</dt><dd>{money(invoice.total)}</dd></div>
         {payment.paid > 0 && <div><dt>Paid {payment.method === 'check' ? 'by check' : 'by card'} <small>{payment.paidAt} · {payment.reference}</small></dt><dd>{money(-payment.paid)}</dd></div>}
         {payment.paid > 0 && <div className="total"><dt>{invoice.balance < 0 ? 'Credit' : 'Balance due'}</dt><dd>{money(Math.abs(invoice.balance))}</dd></div>}
@@ -121,6 +134,7 @@ export function FeeSettings({ editable }: { editable: boolean }) {
       <label><span>One judge owed per</span><span className="money-input"><AmountInput whole label="Entries per judge owed" value={fees.entriesPerJudge} disabled={!editable} onChange={value => set('entriesPerJudge', value)}/><i>entries</i></span></label>
       <label><span>Per school <small>optional</small></span><span className="money-input"><i>$</i><AmountInput label="Flat fee per school" value={fees.school} disabled={!editable} onChange={value => set('school', value)}/></span></label>
     </div>
+    <DropSettings editable={editable}/>
     <p className="fee-orator"><Icon name="info" size={14}/> <span>Orator bills you once, after the tournament, by size: {ORATOR_PRICING.map(tier => `${dollars(tier.fee)} up to ${tier.upTo === Infinity ? 'any size' : `${tier.upTo} entries`}`).join(' · ')}. With {entries.length} entries so far that’s <strong>{dollars(oratorFeeFor(entries.length))}</strong>. <em>Placeholder pricing.</em></span></p>
   </div>;
 }
@@ -130,8 +144,9 @@ export function PaymentsPanel() {
   const store = useStore();
   const { tournament, entries } = store;
   const [reminded, setReminded] = useState<string[]>([]);
-  const schools = [...new Set(entries.map(entry => entry.school))].sort();
-  const rows = schools.map(school => ({ school, payment: store.paymentFor(school), invoice: invoiceFor(tournament, entries, school, store.paymentFor(school)) }));
+  // A school that dropped every entry after the deadline still owes its drop fees.
+  const schools = [...new Set([...entries.map(entry => entry.school), ...store.drops.filter(drop => !entries.some(entry => entry.school.trim().toLowerCase() === drop.school.trim().toLowerCase())).map(drop => drop.school)])].sort();
+  const rows = schools.map(school => ({ school, payment: store.paymentFor(school), invoice: invoiceFor(tournament, entries, school, store.paymentFor(school), store.drops) }));
   const billed = rows.reduce((sum, row) => sum + row.invoice.total, 0);
   const collected = rows.reduce((sum, row) => sum + Math.min(row.invoice.paid, row.invoice.total), 0);
   const unpaid = rows.filter(row => row.invoice.balance > 0);
@@ -146,11 +161,12 @@ export function PaymentsPanel() {
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>
         <strong>{school}</strong><span>{invoice.entries}</span>
         <span>{invoice.judgesBringing} of {invoice.judgesOwed}{invoice.judgesShort > 0 && <small> · {invoice.judgesShort} to hire</small>}</span>
-        <span>{money(invoice.total)}</span>
+        <span>{money(invoice.total)}{dropCharges(invoice) > 0 && <small className="payments-drops"> incl. {money(dropCharges(invoice))} drops</small>}</span>
         <span>{!sent ? <Badge tone="neutral">Not invoiced yet</Badge> : invoice.balance <= 0 ? <Badge tone="success" icon="check">{invoice.balance < 0 ? `Paid · refund ${money(-invoice.balance)}` : `Paid by ${payment.method === 'check' ? 'check' : 'card'}`}</Badge> : payment.checkPending ? <Badge tone="warning" icon="file">Check expected</Badge> : payment.paid > 0 ? <Badge tone="warning" icon="clock">{money(invoice.balance)} still due</Badge> : <Badge tone="danger" icon="warning">Not paid</Badge>}</span>
         <span className="payments-action">{sent && invoice.balance > 0 && (payment.checkPending ? <button onClick={() => store.recordPayment(school, invoice.balance, 'check')}>Mark check received</button> : reminded.includes(school) ? <small>Marked as reminded</small> : <button onClick={() => setReminded(list => [...list, school])}>Send reminder</button>)}{sent && invoice.balance <= 0 && payment.reference && <small>{payment.reference}</small>}</span>
       </div>)}
     </div>
+    <DirectorDrops/>
     <p className="payments-note"><Icon name="info" size={14}/> Payments here are simulated so you can see the flow. Schools are invoiced when the tournament ends. In the real product they pay digitally, Orator keeps its per-tournament fee, and the rest is transferred to the host school through a payment provider.</p>
   </div>;
 }
