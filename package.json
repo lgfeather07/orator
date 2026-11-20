@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test:paper": "tsc src/paperBallots.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './ballots'#from './ballots.js'#\" .test-out/paperBallots.js && node tests/paperBallots.test.mjs",
     "test:cuts": "tsc src/results.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/cuts.test.mjs",
     "test:alerts": "tsc src/alerts.ts supabase/functions/send-notifications/lib.ts --rootDir . --outDir .test-out/alerts --module es2022 --target es2022 --moduleResolution bundler --strict --skipLibCheck && node tests/alerts.test.mjs"
   },

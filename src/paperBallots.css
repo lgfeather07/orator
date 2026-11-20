@@ -1,0 +1,117 @@
+/* Tab-room entry for paper ballots (PaperBallots.tsx). Colours come from the theme tokens, so dark mode follows. */
+.pb-board { max-width: 1320px; margin: auto; padding: 4px 32px 40px; display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.pb-live { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pb-list-panel { overflow: hidden; }
+.pb-head { gap: 10px; flex-wrap: wrap; }
+.pb-progress { padding: 12px 17px 0; }
+.pb-filters { padding: 12px 17px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-bottom: 1px solid var(--border); }
+.pb-filter { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pb-filters select { min-height: 40px; width: 100%; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font-size: 13px; }
+.pb-filters .pb-search, .pb-filters .pb-toggle { grid-column: 1 / -1; }
+.pb-search input { font-size: 13px; }
+.pb-toggle { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.pb-toggle input { margin-top: 2px; }
+.pb-toggle span { display: flex; flex-direction: column; gap: 2px; }
+.pb-toggle strong { color: var(--ink); font-size: 13px; }
+.pb-toggle small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.pb-empty { padding: 26px 17px; }
+
+.pb-rooms { margin: 0; padding: 6px 8px 10px; list-style: none; max-height: 70vh; overflow-y: auto; }
+.pb-room { width: 100%; min-height: 58px; margin: 3px 0; padding: 8px 10px; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--ink); text-align: left; background: transparent; border: 1px solid transparent; border-radius: 10px; cursor: pointer; }
+.pb-room:hover { background: var(--surface-2); border-color: var(--border); }
+.pb-room[aria-current="true"] { background: var(--brand-soft); border-color: var(--brand); }
+.pb-room.missing { border-left: 4px solid var(--amber); background: var(--amber-soft); }
+.pb-room.missing[aria-current="true"] { border-color: var(--brand); border-left-color: var(--amber); }
+.pb-room-round { width: 36px; height: 36px; display: grid; place-items: center; color: var(--brand); background: var(--brand-soft); border-radius: 9px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.pb-room.missing .pb-room-round { color: var(--amber); background: var(--surface); }
+.pb-room-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pb-room-main strong { font-size: 13px; overflow-wrap: anywhere; }
+.pb-room-main small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.pb-room .badge { white-space: nowrap; }
+
+.pb-pick { padding: 18px; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; color: var(--brand); }
+.pb-pick > div { display: flex; flex-direction: column; gap: 5px; }
+.pb-pick strong { color: var(--ink); font-size: 14px; }
+.pb-pick small { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.pb-pick .button { grid-column: 2; justify-self: start; }
+
+.pb-form { overflow: hidden; }
+.pb-form-head { gap: 10px; align-items: flex-start; }
+.pb-form-head h2 { overflow-wrap: anywhere; }
+.pb-close { flex: none; width: 36px; height: 36px; display: grid; place-items: center; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; }
+.pb-banner { margin: 12px 17px 0; padding: 11px 13px; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; border-radius: 10px; border: 1px solid var(--border); }
+.pb-banner > svg { margin-top: 1px; }
+.pb-banner > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pb-banner strong { color: var(--ink); font-size: 13.5px; }
+.pb-banner small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.pb-banner.info { background: var(--brand-soft); border-color: var(--brand); }
+.pb-banner.info > svg { color: var(--brand); }
+.pb-banner.warn { background: var(--amber-soft); border-color: var(--amber); }
+.pb-banner.warn > svg { color: var(--amber); }
+.pb-override { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+.pb-note { display: flex; flex-direction: column; gap: 4px; color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.pb-note input { min-height: 38px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 500; }
+.pb-options { padding: 12px 17px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; border-bottom: 1px solid var(--border); }
+.pb-hint { color: var(--muted); font-size: 12px; }
+.pb-hint kbd { padding: 1px 5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; font-family: var(--font-mono); font-size: 11px; }
+.pb-loading { padding: 20px 17px; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+
+.pb-summary { margin: 12px 17px 0; padding: 11px 13px; color: var(--ink); background: var(--red-soft); border: 1px solid var(--red); border-radius: 10px; font-size: 13px; }
+.pb-summary ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45; }
+.pb-summary button { padding: 0; color: var(--red); background: transparent; border: 0; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pb-error-banner { margin: 12px 17px 0; padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; color: var(--red); background: var(--red-soft); border-radius: 9px; font-size: 13px; font-weight: 600; }
+.pb-error-banner svg { flex: none; margin-top: 2px; }
+
+.pb-rows { margin: 0; padding: 6px 17px; list-style: none; }
+.pb-row { padding: 10px 0; display: grid; grid-template-columns: 28px minmax(130px, 1fr) auto; align-items: center; gap: 6px 12px; border-bottom: 1px solid var(--border); }
+.pb-row:last-child { border-bottom: 0; }
+.pb-order { width: 26px; height: 26px; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); border-radius: 7px; font-family: var(--font-mono); font-size: 12px; }
+.pb-speaker { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pb-speaker strong { font-size: 13.5px; overflow-wrap: anywhere; }
+.pb-speaker small { color: var(--muted); font-size: 12px; }
+.pb-row.no-show .pb-speaker strong { color: var(--muted); text-decoration: line-through; }
+.pb-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.pb-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.pb-field input, .pb-marks input { height: 40px; padding: 0 6px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 15px; font-weight: 600; text-align: center; letter-spacing: 0; text-transform: none; }
+.pb-field input:focus, .pb-marks input:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+.pb-field input:disabled, .pb-marks input:disabled { color: var(--muted); background: var(--surface-2); }
+.pb-field input::placeholder { color: var(--muted); font-size: 12px; font-weight: 500; }
+.pb-rank input { width: 52px; }
+.pb-points input { width: 66px; }
+.pb-time input { width: 70px; }
+.pb-field input[aria-invalid="true"], .pb-marks input[aria-invalid="true"] { border-color: var(--red); background: var(--red-soft); }
+.pb-marks { margin: 0; padding: 0; border: 0; display: flex; align-items: flex-end; gap: 4px; min-width: 0; }
+.pb-marks legend { float: left; width: 100%; margin-bottom: 3px; padding: 0; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.pb-marks input { width: 38px; }
+.pb-marks output { min-width: 34px; height: 40px; display: grid; place-items: center; color: var(--ink); font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+.pb-check { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.pb-row-msgs { grid-column: 2 / -1; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pb-row-msgs li { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; line-height: 1.4; }
+.pb-row-msgs svg { flex: none; margin-top: 2px; }
+.pb-msg-error { color: var(--red); font-weight: 600; }
+.pb-msg-hint { color: var(--amber); }
+
+.pb-actions { padding: 14px 17px; display: flex; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--border); }
+.pb-history { padding: 12px 17px 16px; border-top: 1px solid var(--border); }
+.pb-history h3 { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.pb-history ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.pb-history li { color: var(--ink); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.pb-history li small { display: block; color: var(--muted); font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .pb-board { grid-template-columns: 1fr; }
+  /* On narrower screens the open ballot comes first, so it is right there after choosing a room. */
+  .pb-form-slot { order: -1; }
+  .pb-rooms { max-height: none; }
+}
+@media (max-width: 640px) {
+  .pb-board { padding: 4px 14px 30px; gap: 14px; }
+  .pb-row { grid-template-columns: 28px minmax(0, 1fr); }
+  .pb-fields { grid-column: 1 / -1; }
+  .pb-row-msgs { grid-column: 1 / -1; }
+  .pb-room { grid-template-columns: 34px minmax(0, 1fr); }
+  .pb-room .badge { grid-column: 2; justify-self: start; }
+  .pb-actions .button { flex: 1 1 100%; justify-content: center; }
+  .pb-pick { grid-template-columns: 1fr; }
+  .pb-pick .button { grid-column: 1; }
+}
