@@ -959,3 +959,17 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 .jb-title input:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 3px var(--brand-soft); }
 .jb-rank-title { display: block; margin-top: 2px; color: var(--ink); font-size: 12.5px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .results-steps.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ── Score out of 50, with optional section marks ── */
+.jb-mark-toggle { margin: 0 0 6px; padding: 10px 14px; display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.jb-mark-toggle input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--brand); }
+.jb-mark-toggle span { display: flex; flex-direction: column; gap: 2px; }
+.jb-mark-toggle strong { font-size: 13px; }
+.jb-mark-toggle small { color: var(--muted); font-size: 12px; }
+.jb-score-card .field-label label { font-weight: 700; }
+.jb-score-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.jb-score-input { width: 84px; height: 56px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 2px solid var(--border); border-radius: 12px; font-family: var(--font-mono); font-size: 28px; font-weight: 700; text-align: center; }
+.jb-score-input:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 3px var(--brand-soft); }
+.jb-score-input:disabled { color: var(--brand); background: var(--brand-soft); border-color: var(--brand-soft); }
+.jb-score-of { color: var(--muted); font-family: var(--font-mono); font-size: 18px; }
+.jb-score-band { padding: 3px 9px; color: var(--brand); background: var(--brand-soft); border-radius: 999px; font-size: 12px; font-weight: 700; }

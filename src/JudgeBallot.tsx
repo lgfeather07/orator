@@ -7,18 +7,18 @@ import { useAuth } from './auth';
 import { loadBallot, saveBallot, type BallotKey, type EntryInput } from './ballotApi';
 import { ballotRoundLabel } from './semis';
 
-/** `marks` are Orator's required 1–10 section marks; everything else is a field on the NSAA ballot. */
-type SpeakerBallot = { marks: number[]; minutes: string; seconds: string; general: string; comment: string; note: string; dq: string[]; title?: string };
+/** `score` is the judge's points out of 50. `marks` are optional 1–10 section marks; when all five are given, they make the score. */
+type SpeakerBallot = { marks: number[]; score?: string; minutes: string; seconds: string; general: string; comment: string; note: string; dq: string[]; title?: string };
 
 const MIN_COMMENT = 40;
 
-const blank = (): SpeakerBallot => ({ marks: [0, 0, 0, 0, 0], minutes: '', seconds: '', general: '', comment: '', note: '', dq: [] });
+const blank = (): SpeakerBallot => ({ marks: [0, 0, 0, 0, 0], score: '', minutes: '', seconds: '', general: '', comment: '', note: '', dq: [] });
 
 const startingBallots: Record<string, SpeakerBallot> = {
-  C1: { marks: [10, 9, 10, 8, 9], minutes: '9', seconds: '41', general: 'Memorable opening story. Sources were current and well attributed. Vary your pace in the second point.', comment: 'Clearest thesis in the round, with the strongest supporting material and the most polished delivery.', note: 'Green blazer. Poster about volunteering.', dq: [] },
-  C2: { marks: [9, 8, 8, 7, 8], minutes: '10', seconds: '24', general: 'You ran a little over ten minutes, so consider trimming the third example.', comment: 'Strong analysis of how apps hold attention, but less polished in language than the top speaker.', note: 'Glasses. Phone-screen visual aid.', dq: [] },
-  C3: { marks: [7, 8, 6, 7, 8], minutes: '8', seconds: '52', general: 'Steady eye contact throughout. Add more supporting material for the after-school claims.', comment: 'Good structure, but the content needed more evidence to compete with the top of the round.', note: 'Tall, navy suit. No visual aid.', dq: [] },
-  C4: { ...blank(), marks: [9, 0, 0, 0, 0] },
+  C1: { marks: [0, 0, 0, 0, 0], score: '46', minutes: '9', seconds: '41', general: 'Memorable opening story. Sources were current and well attributed. Vary your pace in the second point.', comment: 'Clearest thesis in the round, with the strongest supporting material and the most polished delivery.', note: 'Green blazer. Poster about volunteering.', dq: [] },
+  C2: { marks: [0, 0, 0, 0, 0], score: '40', minutes: '10', seconds: '24', general: 'You ran a little over ten minutes, so consider trimming the third example.', comment: 'Strong analysis of how apps hold attention, but less polished in language than the top speaker.', note: 'Glasses. Phone-screen visual aid.', dq: [] },
+  C3: { marks: [0, 0, 0, 0, 0], score: '36', minutes: '8', seconds: '52', general: 'Steady eye contact throughout. Add more supporting material for the after-school claims.', comment: 'Good structure, but the content needed more evidence to compete with the top of the round.', note: 'Tall, navy suit. No visual aid.', dq: [] },
+  C4: { ...blank(), score: '' },
   C5: blank(),
   C6: blank(),
 };
@@ -26,10 +26,13 @@ const startingBallots: Record<string, SpeakerBallot> = {
 const secondsOf = (ballot: SpeakerBallot) => ballot.minutes === '' && ballot.seconds === '' ? null : (Number(ballot.minutes) || 0) * 60 + (Number(ballot.seconds) || 0);
 const clock = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 const markTotal = (ballot: SpeakerBallot) => ballot.marks.reduce((sum, mark) => sum + mark, 0);
-/** The rating is the total of the five section marks; the NSAA scale stops at 35, so lower totals are recorded as 35. Zero until every section is marked. */
-const ratingOf = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) ? Math.max(RATING_MIN, markTotal(ballot)) : 0;
+const fullyMarked = (ballot: SpeakerBallot) => ballot.marks.every(Boolean);
+/** The judge's points out of 50: the five section marks' total when every section is marked, otherwise the score they typed. 0 if neither. */
+const pointsOf = (ballot: SpeakerBallot) => { if (fullyMarked(ballot)) return markTotal(ballot); const typed = Number(ballot.score); return Number.isInteger(typed) && typed >= 1 && typed <= 50 ? typed : 0; };
+/** The rating recorded on the ballot: the points, except the NSAA scale stops at 35, so lower scores are recorded as 35. */
+const ratingOf = (ballot: SpeakerBallot) => pointsOf(ballot) ? Math.max(RATING_MIN, pointsOf(ballot)) : 0;
 const feedbackLength = (ballot: SpeakerBallot) => ballot.general.trim().length + ballot.comment.trim().length;
-const isScored = (ballot: SpeakerBallot) => ballot.marks.every(Boolean) && secondsOf(ballot) !== null && feedbackLength(ballot) >= MIN_COMMENT;
+const isScored = (ballot: SpeakerBallot) => pointsOf(ballot) > 0 && secondsOf(ballot) !== null && feedbackLength(ballot) >= MIN_COMMENT;
 const THIS_ROUND: BallotKey = { tournament: 'Larkspur Invitational', round: 2, room: 'Room 214' };
 type Speaker = { code: string; name: string; school: string; title?: string };
 const emptyRound = (list: Speaker[]) => Object.fromEntries(list.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
@@ -70,6 +73,15 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const { speakerPresence, setSpeakerPresence, entries, tournament } = useStore();
   // Most judges would rather not see a rating: it is still worked out from the marks for tiebreaks, just not shown.
   const showRating = tournament.showRating ?? false;
+  // Section marks are optional unless the director requires them. A judge's choice is remembered on this device.
+  const marksRequired = tournament.sectionMarks === 'required';
+  const [markingChoice, setMarkingChoice] = useState(() => { try { return localStorage.getItem('orator-mark-sections') === 'on'; } catch { return false; } });
+  const marking = marksRequired || markingChoice;
+  const setMarking = (on: boolean) => {
+    setMarkingChoice(on); try { localStorage.setItem('orator-mark-sections', on ? 'on' : 'off'); } catch { /* storage off */ }
+    // Turning marks off keeps each speaker's score: a fully marked total becomes their typed score, and the hidden marks are cleared.
+    if (!on) { dirty.current = true; setBallots(all => Object.fromEntries(Object.entries(all).map(([code, ballot]) => [code, { ...ballot, score: fullyMarked(ballot) ? String(markTotal(ballot)) : ballot.score, marks: ballot.marks.map(() => 0) }]))); }
+  };
   const { profile } = useAuth();
   const loadOf = (name: string) => loadLabel(entryLoadByName(entries, name));
   const firstName = (code: string) => speakers.find(item => item.code === code)!.name.split(' ')[0];
@@ -102,7 +114,9 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
 
   const ranked = order.filter(code => !absent(code));
   const noShows = order.filter(absent);
-  const unfinished = ranked.filter(code => !isScored(ballots[code]));
+  // Section marks are all or none (all five when the director requires them).
+  const partlyMarked = (ballot: SpeakerBallot) => (marksRequired || ballot.marks.some(Boolean)) && !fullyMarked(ballot);
+  const unfinished = ranked.filter(code => !isScored(ballots[code]) || partlyMarked(ballots[code]));
   const notCheckedIn = ranked.filter(code => !speakerPresence[code]);
   const timePenalty = (code: string) => timeStatus(secondsOf(ballots[code]), event, classA).penalty;
   // A speaker may not be ranked above someone the judge gave a higher rating, unless that
@@ -134,8 +148,8 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const time = timeStatus(secondsOf(ballot), event, classA);
   const commentProgress = Math.min(100, Math.round((feedbackLength(ballot) / MIN_COMMENT) * 100));
   const rating = ratingOf(ballot);
-  const scoreWord = showRating ? 'ratings' : 'section marks';
-  const lower = showRating ? 'a lower rating' : 'lower section marks', higher = showRating ? 'a higher rating' : 'higher section marks';
+  const scoreWord = 'scores';
+  const lower = 'a lower score', higher = 'a higher score';
   const speakerIndex = speakers.findIndex(item => item.code === current);
   const goTo = (code: string) => { setCurrent(code); setOpen(0); };
   const flagsFor = (code: string) => { const data = ballots[code]; return { penalty: timeStatus(secondsOf(data), event, classA).penalty, dq: data.dq.length > 0 }; };
@@ -176,6 +190,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
             marks: [0, 1, 2, 3, 4].map(index => entry.marks[index] || 0),
             minutes: entry.timeSeconds === null ? '' : String(Math.floor(entry.timeSeconds / 60)), seconds: entry.timeSeconds === null ? '' : String(entry.timeSeconds % 60).padStart(2, '0'),
             general: entry.comments, comment: entry.reason, note: entry.note, dq: entry.disqualifications, title: entry.title ?? '',
+            score: entry.marks.some(Boolean) || entry.rating === null ? '' : String(entry.rating),
           };
           setSpeakerPresence(entry.code, entry.present === null ? undefined : entry.present ? 'present' : 'absent');
         });
@@ -227,7 +242,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   if (submitted) return <div className="jb jb-done">
     <span className="success-icon"><Icon name="check" size={26}/></span>
     <h2>{ballotRoundLabel(room, ballotKey.round)} ballot submitted</h2>
-    <p>Ranks, {showRating ? 'ratings' : 'section marks'}, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
+    <p>Ranks, scores, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
     <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{showRating ? `${ratingOf(ballots[code])} · ` : ""}{clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
       <div className="field-label"><span>How is this tournament running?</span><small>Optional · goes to the director</small></div>
@@ -250,9 +265,9 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
     {tab === 'score' ? <>
       <div className="jb-strip" role="tablist" aria-label="Speakers in this round">{speakers.map((item, index) => {
         const data = ballots[item.code];
-        const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.marks.some(Boolean) ? 'draft' : 'empty';
+        const state = absent(item.code) ? 'absent' : isScored(data) ? 'done' : data.general || data.comment || data.score || data.marks.some(Boolean) ? 'draft' : 'empty';
         return <button key={item.code} role="tab" aria-selected={current === item.code} className={`${current === item.code ? 'active' : ''} ${state}`} onClick={() => goTo(item.code)}>
-          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.name}</strong><span>{state === 'done' ? (showRating ? `Rated ${ratingOf(data)}` : 'Marked') : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
+          <small>{index + 1}{loadOf(item.name) ? ` · ${entryLoadByName(entries, item.name)}×` : ''}</small><strong>{item.name}</strong><span>{state === 'done' ? `${pointsOf(data)} of 50` : state === 'absent' ? 'No-show' : state === 'draft' ? 'Draft' : 'Waiting'}</span>
         </button>;
       })}</div>
 
@@ -264,18 +279,19 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
 
       {absent(current) ? <div className="jb-absent"><Icon name="info"/><span><strong>{speaker.name} is marked as a no-show.</strong><small>They are left out of your ranking. Tap “No-show” again to undo.</small></span></div> : <div className="jb-grid">
         <section className="criteria-card jb-criteria">
-          <div className="card-label"><span>Criteria for evaluation</span><small>{ballot.marks.filter(Boolean).length} of {event.criteria.length} sections marked · required</small></div>
+          <div className="card-label"><span>Criteria for evaluation</span><small>{marking ? `${ballot.marks.filter(Boolean).length} of ${event.criteria.length} sections marked${marksRequired ? ' · required' : ' · optional'}` : 'What to listen for'}</small></div>
+          {!marksRequired && <label className="jb-mark-toggle"><input type="checkbox" checked={marking} onChange={change => setMarking(change.target.checked)}/><span><strong>Mark each section 1–10</strong><small>Optional. When all five are marked, they add up to the score.</small></span></label>}
           {event.criteria.map((item, index) => <div className={`criterion ${open === index ? 'open' : ''}`} key={item.name}>
             <button className="criterion-trigger" onClick={() => setOpen(open === index ? -1 : index)}>
-              <span className="criterion-name"><span className={`status-dot ${ballot.marks[index] ? 'complete' : ''}`}/><span><strong>{item.name}</strong><small>{ballot.marks[index] ? `Marked ${ballot.marks[index]} of ${MARK_MAX}` : `${item.questions.length} question${item.questions.length > 1 ? 's' : ''} to consider`}</small></span></span>
+              <span className="criterion-name"><span className={`status-dot ${marking && ballot.marks[index] ? 'complete' : ''}`}/><span><strong>{item.name}</strong><small>{marking && ballot.marks[index] ? `Marked ${ballot.marks[index]} of ${MARK_MAX}` : `${item.questions.length} question${item.questions.length > 1 ? 's' : ''} to consider`}</small></span></span>
               <Icon name="chevron"/>
             </button>
             {open === index && <div className="criterion-body"><ul className="jb-questions">{item.questions.map(question => <li key={question}>{question}</li>)}</ul>
-              <div className="jb-mark"><span>Section mark</span><div className="rating rating-10" aria-label={`${item.name} mark from 1 to ${MARK_MAX}`}>{Array.from({ length: MARK_MAX }, (_, i) => i + 1).map(value =>
-                <button key={value} className={value === ballot.marks[index] ? 'selected' : ''} aria-label={`Mark ${value}`} onClick={() => { update({ marks: ballot.marks.map((old, i) => i === index ? value : old) }); const next = ballot.marks.findIndex((old, i) => i > index && !old); if (next >= 0) setOpen(next); }}>{value}</button>)}</div></div>
+              {marking && <div className="jb-mark"><span>Section mark</span><div className="rating rating-10" aria-label={`${item.name} mark from 1 to ${MARK_MAX}`}>{Array.from({ length: MARK_MAX }, (_, i) => i + 1).map(value =>
+                <button key={value} className={value === ballot.marks[index] ? 'selected' : ''} aria-label={`Mark ${value}`} onClick={() => { update({ marks: ballot.marks.map((old, i) => i === index ? value : old) }); const next = ballot.marks.findIndex((old, i) => i > index && !old); if (next >= 0) setOpen(next); }}>{value}</button>)}</div></div>}
             </div>}
           </div>)}
-          <p className="jb-extra"><Icon name="info" size={14}/> Every section needs a mark from 1 to {MARK_MAX}. {showRating ? 'The five marks add up to the speaker’s rating out of 50.' : 'Orator totals the marks for tiebreaks; you don’t need to give a rating.'}</p>
+          <p className="jb-extra"><Icon name="info" size={14}/> {marking ? (marksRequired ? `This tournament asks for a mark from 1 to ${MARK_MAX} in every section. The five marks add up to the score.` : `Mark all five sections and they add up to the score below, or leave them blank and type the score yourself.`) : 'Use these as a guide, then give a score out of 50 below.'}</p>
         </section>
 
         <div className="jb-side">
@@ -285,7 +301,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
           </section>
 
           <section className="jb-card">
-            <div className="field-label"><span>Reason for decision</span><small>{showRating ? 'Why this rank and rating' : 'Why this rank'}</small></div>
+            <div className="field-label"><span>Reason for decision</span><small>Why this rank and score</small></div>
             <textarea value={ballot.comment} onChange={change => update({ comment: change.target.value })} placeholder="Explain this speaker’s rank compared with the others in the round."/>
             <div className={`jb-meter ${commentProgress >= 100 ? 'ready' : ''}`}><Progress value={commentProgress} label="Feedback written"/><span>{commentProgress >= 100 ? 'Feedback minimum reached' : `Write at least ${MIN_COMMENT} characters across comments and reason for decision (${feedbackLength(ballot)} so far)`}</span></div>
           </section>
@@ -298,12 +314,17 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         </div>
 
         <div className="jb-foot">
-          {showRating && <section className="jb-card jb-rating-card" aria-label="Rating">
-            <div className="field-label"><span>Rating</span><small>Calculated from the section marks</small></div>
-            <div className="jb-rating-value"><strong>{rating || '—'}</strong><span>{rating ? bandOf(rating) : `${ballot.marks.filter(Boolean).length} of ${event.criteria.length} sections marked`}</span></div>
-            <div className="jb-rating-scale" aria-hidden="true">{RATING_BANDS.map(band => <div key={band.label}><div>{band.values.map(value => <i key={value} className={rating === value ? 'on' : ''}>{value}</i>)}</div><small>{band.label}</small></div>)}</div>
-            <p className="jb-rule">{rating ? `Section marks total ${markTotal(ballot)} of 50.${markTotal(ballot) < RATING_MIN ? ` The NSAA scale starts at ${RATING_MIN}, so the rating is recorded as ${RATING_MIN}.` : ''}` : 'The rating appears once all five sections are marked.'} Change a section mark to change the rating.</p>
-          </section>}
+          <section className="jb-card jb-rating-card jb-score-card" aria-label="Score">
+            <div className="field-label"><label htmlFor={`score-${current}`}>Score out of 50</label><small>Required</small></div>
+            <div className="jb-score-row">
+              <input id={`score-${current}`} className="jb-score-input" inputMode="numeric" value={fullyMarked(ballot) ? String(markTotal(ballot)) : ballot.score ?? ''} disabled={fullyMarked(ballot)} placeholder="—" maxLength={2}
+                aria-describedby={`score-help-${current}`} onChange={change => update({ score: change.target.value.replace(/\D/g, '').slice(0, 2) })}/>
+              <span className="jb-score-of">/ 50</span>
+              {showRating && rating > 0 && <span className="jb-score-band">{bandOf(rating)}</span>}
+            </div>
+            {showRating && <div className="jb-rating-scale" aria-hidden="true">{RATING_BANDS.map(band => <div key={band.label}><div>{band.values.map(value => <i key={value} className={rating === value ? 'on' : ''}>{value}</i>)}</div><small>{band.label}</small></div>)}</div>}
+            <p className="jb-rule" id={`score-help-${current}`}>{fullyMarked(ballot) ? `Totalled from your five section marks${marksRequired ? '' : '. Clear a section mark to type a score instead'}.` : ballot.score && !pointsOf(ballot) ? 'Enter a whole number from 1 to 50.' : pointsOf(ballot) && pointsOf(ballot) < RATING_MIN ? `The NSAA scale starts at ${RATING_MIN}, so this is recorded as ${RATING_MIN}.` : 'Most scores fall between 35 and 50.'}</p>
+          </section>
 
           <section className="jb-card jb-time-card">
             <div className={`jb-time ${time.kind}`}>
@@ -334,9 +355,9 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         {speakerIndex < speakers.length - 1 ? <Button icon="arrow" onClick={() => goTo(speakers[speakerIndex + 1].code)}>Next speaker</Button> : <Button icon="arrow" onClick={() => setTab('rank')}>Rank the round</Button>}
       </div>
     </> : <>
-      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>{showRating ? 'Sort by rating' : 'Sort by section marks'}</Button></div>
+      <div className="jb-rank-head"><div><h2>Rank the round</h2><p>Drag speakers into order, or use the arrows. There may be no ties in rank. Time penalties are applied for you.</p></div><Button variant="secondary" icon="growth" onClick={sortByRating}>Sort by score</Button></div>
       <div className="jb-rank-list">
-        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>{showRating ? 'Rating' : 'Points'}</span><span/></div>
+        <div className="jb-rank-row jb-rank-labels"><span/><span>Rank</span><span>Speaker</span><span>Time</span><span>Score</span><span/></div>
         {finalRanked.map((code, index) => {
           const item = speakers.find(entry => entry.code === code)!; const data = ballots[code]; const seconds = secondsOf(data); const flags = flagsFor(code);
           return <div key={code} className={`jb-rank-row ${outOfOrder.has(code) ? 'conflict' : ''} ${dragged === code ? 'dragging' : ''}`} draggable onDragStart={() => setDragged(code)} onDragEnd={() => setDragged(null)} onDragOver={drag => drag.preventDefault()} onDrop={() => dropOn(code)}>
@@ -344,7 +365,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
             <span className="jb-rank-number">{index + 1}</span>
             <span className="jb-rank-name"><strong>{item.name}{flags.penalty && <Badge tone="danger" icon="clock">{lowered(code) ? 'Lowered one rank for time' : 'Time penalty · already last'}</Badge>}{flags.dq && <Badge tone="danger" icon="warning">DQ reported</Badge>}</strong><small>{code} · {item.school}{data.note ? ` · ${data.note}` : ''}</small>{titleOf(code) && <em className="jb-rank-title">“{titleOf(code).replace(/^[“"]|[”"]$/g, '')}”</em>}</span>
             <span className={flags.penalty ? 'jb-over' : ''}>{seconds === null ? '—' : clock(seconds)}</span>
-            {showRating ? <span><strong>{ratingOf(data) || '—'}</strong>{ratingOf(data) > 0 && <small> {bandOf(ratingOf(data))}</small>}</span> : <span>{data.marks.every(Boolean) ? <><strong>{markTotal(data)}</strong><small> pts</small></> : <small>{data.marks.filter(Boolean).length} of {data.marks.length} marked</small>}</span>}
+            <span>{pointsOf(data) ? <><strong>{pointsOf(data)}</strong><small> / 50{showRating ? ` · ${bandOf(ratingOf(data))}` : ''}</small></> : <small>No score yet</small>}</span>
             <span className="jb-arrows"><button aria-label={`Move ${item.name} up`} disabled={ranked.indexOf(code) === 0} onClick={() => move(code, -1)}>↑</button><button aria-label={`Move ${item.name} down`} disabled={ranked.indexOf(code) === ranked.length - 1} onClick={() => move(code, 1)}>↓</button></span>
           </div>;
         })}
@@ -352,8 +373,8 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
       </div>
 
       <div className="jb-checks">
-        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? `Ranks don’t match ${scoreWord}` : `Ranks follow ${scoreWord}`}</strong><small>{outOfOrder.size ? `A speaker with ${lower} is ranked above one with ${higher}. Reorder the highlighted rows or adjust their section marks.` : finalRanked.some(lowered) ? `Time penalties are applied for you; no speaker is otherwise ranked above someone with ${higher}.` : `No speaker is ranked above someone with ${higher}.`}</small></span></div>
-        <div className={unfinished.length ? 'bad' : 'ok'}><Icon name={unfinished.length ? 'warning' : 'check'}/><span><strong>{unfinished.length ? `${unfinished.length} speaker${unfinished.length > 1 ? 's still need' : ' still needs'} scoring` : 'Every speaker is scored'}</strong><small>{unfinished.length ? `${firstNames(unfinished)} ${unfinished.length > 1 ? 'need' : 'needs'} all five section marks, a time, and written feedback.` : 'Section marks, times, and written feedback are complete.'}</small></span>{unfinished.length > 0 && <button onClick={() => { goTo(unfinished[0]); setTab('score'); }}>Finish {firstName(unfinished[0])}</button>}</div>
+        <div className={outOfOrder.size ? 'bad' : 'ok'}><Icon name={outOfOrder.size ? 'warning' : 'check'}/><span><strong>{outOfOrder.size ? `Ranks don’t match ${scoreWord}` : `Ranks follow ${scoreWord}`}</strong><small>{outOfOrder.size ? `A speaker with ${lower} is ranked above one with ${higher}. Reorder the highlighted rows or change their scores.` : finalRanked.some(lowered) ? `Time penalties are applied for you; no speaker is otherwise ranked above someone with ${higher}.` : `No speaker is ranked above someone with ${higher}.`}</small></span></div>
+        <div className={unfinished.length ? 'bad' : 'ok'}><Icon name={unfinished.length ? 'warning' : 'check'}/><span><strong>{unfinished.length ? `${unfinished.length} speaker${unfinished.length > 1 ? 's still need' : ' still needs'} scoring` : 'Every speaker is scored'}</strong><small>{unfinished.length ? `${firstNames(unfinished)} ${unfinished.length > 1 ? 'need' : 'needs'} a score out of 50 (and all five section marks if any are marked), a time, and written feedback.` : 'Scores, times, and written feedback are complete.'}</small></span>{unfinished.length > 0 && <button onClick={() => { goTo(unfinished[0]); setTab('score'); }}>Finish {firstName(unfinished[0])}</button>}</div>
         <div className={notCheckedIn.length ? 'bad' : 'ok'}><Icon name={notCheckedIn.length ? 'warning' : 'check'}/><span><strong>{notCheckedIn.length ? `${notCheckedIn.length} speaker${notCheckedIn.length > 1 ? 's' : ''} not checked in` : 'Attendance recorded'}</strong><small>{notCheckedIn.length ? `Mark ${firstNames(notCheckedIn)} as present or no-show.` : 'Everyone is marked present or no-show.'}</small></span>{notCheckedIn.length > 0 && <button onClick={() => { goTo(notCheckedIn[0]); setTab('score'); }}>Check in {firstName(notCheckedIn[0])}</button>}</div>
       </div>
       <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Anyone more than 30 seconds outside the time limit is placed one rank lower automatically, so they can finish below a speaker with {lower}.</p>

@@ -102,7 +102,8 @@ begin
 end;
 $$;
 
--- From ballots.sql, unchanged except for the pass: enter_paper_ballot() checks paper ballots itself.
+-- From ballots.sql, with two changes: the pass (enter_paper_ballot() checks paper ballots itself), and section marks
+-- are optional: a judge may give just a score out of 50.
 create or replace function public.check_ballot_submission() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -115,9 +116,13 @@ begin
       when bool_or(e.present is null) then 'Every speaker must be marked present or no-show.'
       when bool_or(e.present and e.time_seconds is null) then 'Every speaker needs a time.'
       when bool_or(e.present and char_length(btrim(e.comments)) + char_length(btrim(e.reason)) < 40) then 'Every speaker needs at least 40 characters of comments and reason for decision.'
-      when bool_or(e.present and (cardinality(e.section_marks) <> 5 or exists (select 1 from unnest(e.section_marks) m where m is null or m < 1 or m > 10))) then 'Every speaker needs five section marks from 1 to 10.'
-      -- The rating is the total of the section marks, and the NSAA scale starts at 35.
-      when bool_or(e.present and e.rating is distinct from greatest(35, (select sum(m) from unnest(e.section_marks) m)::int)) then 'Each rating must equal the total of its section marks.'
+      -- Every speaker who performed needs a score out of 50 (the NSAA scale starts at 35; lower scores are recorded as 35).
+      when bool_or(e.present and (e.rating is null or e.rating < 35 or e.rating > 50)) then 'Every speaker needs a score from 35 to 50.'
+      -- Section marks are optional. If a judge marks sections, they mark all five (1 to 10) and the score is their total.
+      when bool_or(e.present and coalesce((select bool_or(m is not null and m <> 0) from unnest(e.section_marks) m), false)
+        and (cardinality(e.section_marks) <> 5 or exists (select 1 from unnest(e.section_marks) m where m is null or m < 1 or m > 10))) then 'Mark all five sections from 1 to 10, or none.'
+      when bool_or(e.present and coalesce((select bool_or(m is not null and m <> 0) from unnest(e.section_marks) m), false)
+        and e.rating is distinct from greatest(35, (select sum(m) from unnest(e.section_marks) m)::int)) then 'When sections are marked, the score must equal their total.'
       when bool_or(e.present and e.rank is null) then 'Every speaker who performed needs a rank.'
       when count(*) filter (where e.present) <> count(distinct e.rank) filter (where e.present) then 'There may be no ties in rank.'
       when coalesce(max(e.rank) filter (where e.present), 0) <> count(*) filter (where e.present) then 'Ranks must run from 1 with no gaps.'

@@ -27,6 +27,8 @@ export type Tournament = {
   entriesOpen?: boolean;
   /** The rooms the director has for this tournament, in the order to fill them. */
   rooms?: string[];
+  /** 'optional' (default): judges give a score out of 50 and may also mark each section 1–10. 'required': every section must be marked. */
+  sectionMarks?: 'optional' | 'required';
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
   /**
