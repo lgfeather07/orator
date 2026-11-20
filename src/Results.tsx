@@ -8,6 +8,7 @@ import { CutOverview, CutPreview, NextIn } from './CutPreview';
 import { SemifinalsPanel } from './Semifinals';
 import { semiPlanFor, semiProgress } from './semis';
 import { PublishResults } from './PublishResults';
+import { AwardsScript, printNow } from './PrintCenter';
 
 /** "Informative" for varsity, "Novice Informative" for the novice division. */
 const eventName = (key: string) => { const { eventId, division } = parseContest(key); const name = ballotEvents.find(event => event.id === eventId)?.name ?? eventId; return division === 'novice' ? `Novice ${name}` : name; };
@@ -106,7 +107,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
       : roomsLeft > 0 ? <p><strong>Next:</strong> waiting on {roomsLeft} preliminary {roomsLeft === 1 ? 'room' : 'rooms'}. {placedCount > 0 ? `${placedCount} ${placedCount === 1 ? 'event is' : 'events are'} already placed.` : ''} Check the Issues tab if a judge is missing.</p>
       : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every event is placed from the preliminary rounds. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
       : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
-      {placedCount > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}
+      {placedCount > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
     </div>
   </section> : <section className="panel results-flow" aria-label="Results progress">
     <ol className={`results-steps ${semiContests.length ? 'five' : ''}`}>
@@ -124,13 +125,14 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
       : count('final') > 0 ? <p><strong>Next:</strong> waiting on {finalBallotsLeft} final {finalBallotsLeft === 1 ? 'ballot' : 'ballots'}. Placings fill in as each final’s judges submit.</p>
       : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every final is placed. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
       : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
-      {count('done') > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}
+      {count('done') > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
     </div>
   </section>;
 
   if (sections.length === 0) return <div className="issue-board"><section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>Build the schedule first</h3><p>Breaks and finals are worked out from the preliminary rounds. Build the schedule on the Setup tab, then come back here.</p></div></section></div>;
 
   return <div className="results-layout">
+    <AwardsScript tournamentName={tournament.name} events={events.map(id => ({ name: eventName(id), placings: placingsFor(id) }))} teams={teams}/>
     <div className="results-main">
       {flow}
       <PublishResults contests={events.map(id => ({ contest: id, placings: placingsFor(id) }))} teams={teams}/>

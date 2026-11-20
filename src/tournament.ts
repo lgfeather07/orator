@@ -232,6 +232,8 @@ export const loadLabel = (count: number) => count === 2 ? 'Double entered' : cou
 export function buildSchedule(tournament: Tournament, entries: Entry[], judges: Judge[]): Section[] {
   const sections: Section[] = [];
   const rooms = roomsFor(tournament);
+  /** Which speakers each judge has already heard, so later rounds can give speakers different judges. */
+  const heard = new Map<string, Set<string>>();
   for (let round = 1; round <= tournament.rounds; round++) {
     const busyJudges = new Set<string>();
     let roomIndex = 0;
@@ -248,7 +250,10 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
         const ordered = [...group.slice(shift), ...group.slice(0, shift)];
         const start = (round * 3 + eventIndex * 5 + groupIndex) % Math.max(judges.length, 1);
         const candidates = [...judges.slice(start), ...judges.slice(0, start)];
-        const judge = candidates.find(candidate => !busyJudges.has(candidate.id) && !ordered.some(entry => judgeConflict(candidate, entry.school)));
+        // Prefer a judge who hasn't already heard any of these speakers in an earlier round, so every speaker gets fresh ears.
+        const free = (candidate: Judge) => !busyJudges.has(candidate.id) && !ordered.some(entry => judgeConflict(candidate, entry.school));
+        const judge = candidates.find(candidate => free(candidate) && !ordered.some(entry => heard.get(candidate.id)?.has(entry.id))) ?? candidates.find(free);
+        if (judge) ordered.forEach(entry => heard.set(judge.id, (heard.get(judge.id) ?? new Set<string>()).add(entry.id)));
         if (judge) busyJudges.add(judge.id);
         sections.push({
           id: `r${round}-${eventId}${division === 'novice' ? '-novice' : ''}-${groupIndex + 1}`, round, eventId, division,
