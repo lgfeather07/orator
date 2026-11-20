@@ -1,0 +1,45 @@
+/* Semifinals (Semifinals.tsx). Colours come from the theme tokens, so dark mode follows. */
+.semi-format { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.semi-settings { padding: 4px 17px 0; display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.semi-settings label { display: flex; flex-direction: column; gap: 4px; color: var(--ink); font-size: 12.5px; font-weight: 700; min-width: 0; }
+.semi-settings select { min-height: 36px; max-width: 100%; padding: 0 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.semi-settings .results-rule { flex-basis: 100%; margin: 4px 0 0; padding: 0; }
+.semi-settings .results-rule strong { color: var(--ink); }
+.semi-format > .results-rule { margin: 6px 17px 0; padding: 0; }
+
+.semis-panel .panel-head-actions { flex-wrap: wrap; }
+.semi-rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.semi-room { min-width: 0; border-right: 1px solid var(--border); }
+.semi-room:last-child { border-right: 0; }
+.semi-room-head { padding: 12px 17px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.semi-room-head small { color: var(--muted); font-size: 12px; }
+.semi-seat { grid-template-columns: 62px minmax(0, 1fr); }
+.semi-seat .final-seat-status { grid-column: 1 / -1; justify-content: flex-start; }
+.semi-list { margin: 0; padding: 8px 17px 12px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.semi-list li { padding: 6px 0; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+.semi-list li:last-child { border-bottom: 0; }
+.semi-seed { width: 28px; height: 28px; flex: none; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 650; }
+.semi-list li.in .semi-seed { color: var(--surface); background: var(--brand); border-color: var(--brand); }
+.semi-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.semi-name strong { font-size: 13.5px; }
+.semi-name small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.semis-panel .results-rule span { min-width: 0; }
+.semis-panel .semi-next strong { color: var(--ink); }
+
+.results-steps.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.results-row .badge.semi-badge { white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .results-steps.five { grid-template-columns: 1fr 1fr; }
+  .semi-rooms { grid-template-columns: minmax(0, 1fr); }
+  .semi-room { border-right: 0; border-bottom: 1px solid var(--border); }
+  .semi-room:last-child { border-bottom: 0; }
+}
+@media (max-width: 640px) {
+  .semi-settings label, .semi-settings select { width: 100%; }
+  .semis-panel .panel-head-actions .button { width: 100%; justify-content: center; }
+}
+.results-row.final.semifinalist .results-place { color: var(--muted); background: var(--surface); border-color: var(--border); }
+.results-row.final.semifinalist .results-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+/* Dark mode: white on the light violet is only 2.4:1, so placed numbers use the dark surface colour instead. */
+.app.dark .results-row.in .results-place, .app.dark .results-row.final:not(.champion):not(.semifinalist) .results-place { color: var(--surface); }

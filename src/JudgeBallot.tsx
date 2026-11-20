@@ -5,6 +5,7 @@ import { entryLoadByName, loadLabel } from './tournament';
 import { ballotEvents, MARK_MAX, RATING_BANDS, RATING_MIN, TIME_GRACE_SECONDS, type BallotEvent } from './ballots';
 import { useAuth } from './auth';
 import { loadBallot, saveBallot, type BallotKey, type EntryInput } from './ballotApi';
+import { ballotRoundLabel } from './semis';
 
 /** `marks` are Orator's required 1–10 section marks; everything else is a field on the NSAA ballot. */
 type SpeakerBallot = { marks: number[]; minutes: string; seconds: string; general: string; comment: string; note: string; dq: string[]; title?: string };
@@ -34,7 +35,7 @@ type Speaker = { code: string; name: string; school: string; title?: string };
 const emptyRound = (list: Speaker[]) => Object.fromEntries(list.map(item => [item.code, blank()])) as Record<string, SpeakerBallot>;
 
 /** A real room from the director's schedule. Without one, the ballot shows the sample round. */
-export type BallotRoom = { key: BallotKey; tournamentId: string; sectionId: string; eventId: string; time: string; speakers: Speaker[]; final?: boolean };
+export type BallotRoom = { key: BallotKey; tournamentId: string; sectionId: string; eventId: string; time: string; speakers: Speaker[]; final?: boolean; stage?: 'prelim' | 'semi' | 'final' };
 const bandOf = (rating: number) => RATING_BANDS.find(band => band.values.includes(rating))?.label ?? '';
 const maxFor = (event: BallotEvent, classA: boolean) => classA && event.time.classAMax ? event.time.classAMax : event.time.max;
 const limitText = (event: BallotEvent, classA: boolean) => event.time.min ? `${clock(event.time.min)}–${clock(event.time.max)}` : `${clock(maxFor(event, classA))} maximum`;
@@ -225,7 +226,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
 
   if (submitted) return <div className="jb jb-done">
     <span className="success-icon"><Icon name="check" size={26}/></span>
-    <h2>{room?.final ? 'Final round' : `Round ${ballotKey.round}`} ballot submitted</h2>
+    <h2>{ballotRoundLabel(room, ballotKey.round)} ballot submitted</h2>
     <p>Ranks, {showRating ? 'ratings' : 'section marks'}, times, comments, and your reasons for decision are filed with the tab room{remote ? ' and saved to your account. The ballot is now locked' : ''}. Your private notes stay with you.</p>
     <ol className="jb-final">{finalRanked.map((code, index) => { const flags = flagsFor(code); return <li key={code}><strong>{index + 1}</strong><span>{speakers.find(item => item.code === code)!.name}{flags.penalty && <em> · lowered one rank for time</em>}{flags.dq && <em> · disqualification reported</em>}</span><small>{showRating ? `${ratingOf(ballots[code])} · ` : ""}{clock(secondsOf(ballots[code]) || 0)}</small></li>; })}</ol>
     <section className="jb-card jb-experience">
@@ -240,7 +241,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
 
   return <div className="jb">
     <div className="jb-top">
-      <div><span className="jb-badges"><Badge tone="info">{room?.final ? 'Final round' : `Round ${ballotKey.round}`}</Badge><Badge tone="success" icon="check">NSAA ballot format</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
+      <div><span className="jb-badges"><Badge tone="info">{ballotRoundLabel(room, ballotKey.round)}</Badge><Badge tone="success" icon="check">NSAA ballot format</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
       <div className="jb-selects">{event.time.classAMax && <label><span>School class</span><select aria-label="School class" value={classA ? 'a' : 'other'} onChange={change => { dirty.current = true; setClassA(change.target.value === 'a'); }}><option value="other">Classes B–D · {clock(event.time.max)}</option><option value="a">Class A · {clock(event.time.classAMax)}</option></select></label>}
       {!room && <label><span>Event</span><select aria-label="Event" value={eventId} onChange={change => { dirty.current = true; setEventId(change.target.value); setOpen(0); }}>{ballotEvents.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}</div>
     </div>

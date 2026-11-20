@@ -9,6 +9,9 @@ import { cutFor, prelimStandings, sampleFinals, samplePrelims, type FinalResult,
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
 import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type PracticeGoal, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
 import { ballotEvents } from './ballots';
+import { buildSemis, finalRoundFor, semiPlanFor, semiProgress } from './semis';
+import { sampleSemis } from './results';
+import { stageOf, type SemiPlan } from './tournament';
 
 export type Presence = 'present' | 'absent';
 
@@ -79,6 +82,12 @@ type Store = {
    * Only before any final ballot for that contest is in.
    */
   addNextIn: (contest: string, entryId: string, replacing: string | null) => void;
+  /** Hold semifinals before a contest's final (a plan), or go straight to the final (null). Only before the semifinals are created. */
+  setSemis: (contest: string, plan: SemiPlan | null) => void;
+  /** Seed and create a contest's semifinal rooms, with judges chosen like finals judges. */
+  createSemis: (contest: string) => void;
+  /** Demo: a sample ballot for every semifinal judge who hasn't submitted. */
+  fillSampleSemis: (contest: string) => void;
   /** Simulated fee payments, keyed by school name in lower case. No real money moves. */
   payments: Record<string, Payment>;
   paymentFor: (school: string) => Payment;
@@ -371,6 +380,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     roomResults,
     recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
     createFinal: () => undefined, createAllFinals: () => undefined, setCut: () => undefined, addNextIn: () => undefined,
+    setSemis: () => undefined, createSemis: () => undefined, fillSampleSemis: () => undefined,
     payments,
     paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
     setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
@@ -406,7 +416,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Sample results are worked out from whichever tournament is showing, so they sit after the live overrides.
   // ── Results: ballots judges submitted for a room override sample results for that room. ──
   const sectionOf = new Map(store.sections.map(section => [section.id, section]));
-  const finalSections = store.sections.filter(section => isFinal(section, store.tournament));
+  // Finals only: semifinals are elimination rounds too (after prelims) but are not finals.
+  const finalSections = store.sections.filter(section => stageOf(section, store.tournament) === 'final');
   const prelimSections = store.sections.filter(section => !isFinal(section, store.tournament));
   const prelimFromRooms: PrelimResult[] = store.roomResults.filter(result => { const section = sectionOf.get(result.sectionId); return section && !isFinal(section, store.tournament); })
     .map(result => ({ entryId: result.entryId, round: sectionOf.get(result.sectionId)!.round, sectionId: result.sectionId, rank: result.rank, rating: result.rating }));
@@ -415,7 +426,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const mergedPrelims = [...samplePrelimRows, ...prelimFromRooms];
   // A final-round judge is identified by their seat: the order of that event's final ballots.
   const finalFromRooms: FinalResult[] = store.roomResults.flatMap(result => {
-    const section = sectionOf.get(result.sectionId); if (!section || !isFinal(section, store.tournament)) return [];
+    const section = sectionOf.get(result.sectionId); if (!section || stageOf(section, store.tournament) !== 'final') return [];
     const seat = finalSections.filter(item => contestOf(item) === contestOf(section)).findIndex(item => item.id === section.id) + 1;
     return [{ entryId: result.entryId, judge: seat, rank: result.rank, rating: result.rating }];
   });
@@ -427,17 +438,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   store.fillSamplePrelims = () => { setPrelimResults(samplePrelims(store.entries, prelimSections)); setFinalResults([]); };
   const standingsOf = (contest: string) => prelimStandings(store.entries.filter(entry => contestOf(entry) === contest), prelimSections.filter(section => contestOf(section) === contest), mergedPrelims, cutFor(store.tournament, contest));
   // Once a final exists, its finalists are whoever is in its room (a next-in speaker may have moved up).
+  // With semifinals, the finalists are whoever advanced from the semifinal rooms, once every semifinal ballot is in.
+  const semisOf = (contest: string) => semiProgress(store.sections, contest, store.tournament, standingsOf(contest), store.roomResults);
   const finalistsOf = (contest: string) => {
     const room = finalSections.find(section => contestOf(section) === contest);
-    return standingsOf(contest).filter(standing => room ? room.entryIds.includes(standing.entryId) : standing.advances);
+    const semis = !room && semiPlanFor(store.tournament, contest) ? semisOf(contest) : null;
+    return standingsOf(contest).filter(standing => room ? room.entryIds.includes(standing.entryId) : semis ? semis.advancers.includes(standing.entryId) : standing.advances);
   };
   store.fillSampleFinals = contest => {
     const ids = new Set(store.entries.filter(entry => contestOf(entry) === contest).map(entry => entry.id));
     setFinalResults(current => [...current.filter(result => !ids.has(result.entryId)), ...sampleFinals(finalistsOf(contest), store.tournament.finalJudges ?? 2)]);
   };
   const contestsWithEntries = [...new Set(store.entries.filter(entry => store.tournament.eventIds.includes(entry.eventId)).map(contestOf))];
-  const awaitingFinal = (sectionsSoFar: Section[]) => contestsWithEntries.filter(key => !sectionsSoFar.some(section => isFinal(section, store.tournament) && contestOf(section) === key));
-  const planFinal = (contest: string, sectionsSoFar: Section[]) => buildFinal(store.tournament, contest, finalistsOf(contest).map(standing => standing.entryId), store.entries, store.judges, sectionsSoFar, store.judgePreferences, awaitingFinal(sectionsSoFar));
+  const awaitingFinal = (sectionsSoFar: Section[]) => contestsWithEntries.filter(key => !sectionsSoFar.some(section => stageOf(section, store.tournament) === 'final' && contestOf(section) === key));
+  const planFinal = (contest: string, sectionsSoFar: Section[]) => buildFinal(store.tournament, contest, finalistsOf(contest).map(standing => standing.entryId), store.entries, store.judges, sectionsSoFar, store.judgePreferences, awaitingFinal(sectionsSoFar), finalRoundFor(store.tournament, contest));
+  const hasSemis = (contest: string, sectionsSoFar: Section[]) => sectionsSoFar.some(section => stageOf(section, store.tournament) === 'semi' && contestOf(section) === contest);
+  const planSemis = (contest: string, sectionsSoFar: Section[]) => { const plan = semiPlanFor(store.tournament, contest); return plan ? buildSemis(store.tournament, contest, standingsOf(contest), store.entries, store.judges, sectionsSoFar, store.judgePreferences, plan) : []; };
   const addFinals = (built: Section[]) => {
     if (built.length === 0) return;
     if (live && tournamentId) api.addSections(tournamentId, built, store.sections.length).then(added => setLiveSections(all => [...all, ...added])).catch(report);
@@ -448,10 +464,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const built = planFinal(contest, store.sections);
     if (built.length && built[0].entryIds.length) addFinals(built);
   };
+  // A contest is ready for its next round only once every one of its preliminary rooms has results.
+  const prelimsDone = (contest: string) => { const own = prelimSections.filter(section => contestOf(section) === contest); return own.length > 0 && own.every(section => mergedPrelims.some(result => result.sectionId === section.id)); };
   store.createAllFinals = () => {
     let soFar = store.sections; const all: Section[] = [];
-    awaitingFinal(store.sections).forEach(contest => { const built = planFinal(contest, soFar); if (built.length && built[0].entryIds.length) { all.push(...built); soFar = [...soFar, ...built]; } });
+    const ready = (sectionsSoFar: Section[]) => awaitingFinal(sectionsSoFar).filter(prelimsDone);
+    // Semifinals first: they run in the same round as finals of contests without semifinals, and need fewer judges.
+    ready(store.sections).filter(contest => semiPlanFor(store.tournament, contest) && !hasSemis(contest, soFar)).forEach(contest => { const built = planSemis(contest, soFar); if (built.length) { all.push(...built); soFar = [...soFar, ...built]; } });
+    ready(store.sections).forEach(contest => { if (semiPlanFor(store.tournament, contest) && !hasSemis(contest, store.sections)) return; const built = planFinal(contest, soFar); if (built.length && built[0].entryIds.length) { all.push(...built); soFar = [...soFar, ...built]; } });
     addFinals(all);
+  };
+  store.createSemis = contest => {
+    if (hasSemis(contest, store.sections) || finalSections.some(section => contestOf(section) === contest) || !prelimsDone(contest)) return;
+    addFinals(planSemis(contest, store.sections));
+  };
+  store.setSemis = (contest, plan) => {
+    if (hasSemis(contest, store.sections)) return;
+    const apply = (current: Pick<Tournament, 'semisByContest'>): Pick<Tournament, 'semisByContest'> => {
+      const byContest = { ...current.semisByContest };
+      if (plan === null) delete byContest[contest]; else byContest[contest] = plan;
+      return { semisByContest: byContest };
+    };
+    // Saved with the tournament's other settings, like the cut.
+    if (live) { if (tournamentId) store.updateTournament(apply(store.tournament)); }
+    else setTournament(current => ({ ...current, ...apply(current) }));
+  };
+  store.fillSampleSemis = contest => {
+    const progress = semisOf(contest); const prelim = standingsOf(contest);
+    const done = new Set(store.roomResults.map(result => result.sectionId));
+    const rows: RoomResult[] = progress.rooms.flatMap(room => sampleSemis(prelim, room.entryIds, room.seats.length, room.room).flatMap(result => {
+      const seat = room.seats[result.judge - 1];
+      return seat && !done.has(seat.id) ? [{ entryId: result.entryId, sectionId: seat.id, rank: result.rank, rating: result.rating }] : [];
+    }));
+    // Demo only: in a live tournament semifinal results come from judges' ballots.
+    if (!live) setRoomResults(all => [...all, ...rows]);
   };
   store.setCut = (contest, finalists) => {
     const apply = (current: Cuts): Cuts => {

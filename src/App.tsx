@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { Avatar, Badge, Button, Icon, Logo, OratorMark, Progress, downloadText, type IconName } from './ui';
 import { StoreProvider, useStore } from './store';
 import { JudgeBallot, SpeakerCheckIn, type BallotRoom } from './JudgeBallot';
+import { ballotRoundLabel } from './semis';
 import { MyRooms } from './JudgeRooms';
 import { ballotEvents } from './ballots';
 import { DirectorSetup, CheckInBoard, SetupSummary } from './DirectorSetup';
@@ -562,7 +563,7 @@ function JudgePage() {
         <JudgeConflicts ownSchool={judgeAccess.state === 'approved' ? judgeAccess.membership?.school || undefined : undefined}/>
         <EventPreferences columns events={judgeEvents} onChange={next => { setJudgeEvents(next); setPreferencesSaved(false); }}/>
         <div className="preference-save"><span><Icon name={preferencesSaved ? 'check' : 'clock'}/> {preferencesSaved ? 'All preferences saved' : 'Unsaved changes'}</span><Button icon="check" disabled={preferencesSaved} onClick={() => { store.savePreferences(judgeEvents.map(item => ({ id: item.id, level: item.level }))); setPreferencesSaved(true); }}>{preferencesSaved ? 'Saved' : 'Save preferences'}</Button></div>
-      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `${openRoom.final ? 'Final round' : `Round ${openRoom.key.round}`} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
+      </section> : <section className="embedded-ballot"><div className="embedded-ballot-head"><div><span className="eyebrow">JUDGE WORKSPACE</span><h2>{openRoom ? `${ballotRoundLabel(openRoom, openRoom.key.round)} · ${openRoom.key.room}` : 'Edit Round 2 ballot'}</h2><p>Changes autosave to your ballot desk.</p></div><Button variant="secondary" icon="arrow" onClick={() => { setAction(openRoom ? 'assignments' : 'ballots'); setOpenRoom(undefined); }}>{openRoom ? 'Back to your rooms' : 'Back to ballot desk'}</Button></div><BallotPage room={openRoom}/></section>}
     </div>
   </DesktopShell>;
 }

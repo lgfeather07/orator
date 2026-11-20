@@ -242,3 +242,129 @@ export function sampleFinals(finalists: Standing[], judges: number): FinalResult
     return order.map((item, index) => ({ entryId: item.id, judge: judgeIndex + 1, rank: index + 1, rating: Math.max(35, 50 - index * 2) }));
   }).flat();
 }
+
+// ── Semifinals ──
+// A big field can hold a semifinal round between prelims and the final: the top 10 to 16 after prelims
+// split into two rooms, and the top few in each room make the final.
+
+/** Semifinal rooms per contest. */
+export const SEMI_ROOMS = 2;
+/** How many speakers can make the semifinals. */
+export const SEMI_SIZES = [10, 11, 12, 13, 14, 15, 16];
+/** Judges in each semifinal room, and finalists from each room, the director can choose between. */
+export const SEMI_JUDGE_CHOICES = [1, 2, 3];
+export const SEMI_ADVANCE_CHOICES = [2, 3, 4];
+/** Twelve semifinalists, one judge a room, the top three of each room to the final. */
+export const SEMI_DEFAULT = { size: 12, judges: 1, advance: 3 };
+/** A field bigger than this is worth a semifinal round. Only a suggestion: the director decides. */
+export const LARGE_FIELD = 30;
+/** Semifinals need at least this many entries to be worth holding. */
+export const semisPossible = (fieldSize: number) => fieldSize >= SEMI_SIZES[0];
+/** The semifinal sizes worth showing for a field this size. */
+export const semiSizeChoices = (fieldSize: number) => SEMI_SIZES.filter(size => size <= fieldSize);
+
+/**
+ * Split the top `size` speakers into semifinal rooms by snake seeding (1 and 4 in room A, 2 and 3 in
+ * room B, and so on), so the rooms are equally strong. An unbroken tie at the line takes everyone tied.
+ * Teammates are then spread where possible by swapping speakers of the same seed tier between rooms,
+ * starting from the lowest tier so the top seeds stay where the snake put them.
+ * Returns each room's entry ids, best seed first.
+ */
+export function seedSemis(standings: Standing[], size: number, rooms = SEMI_ROOMS): string[][] {
+  const seeds = standings.filter(standing => standing.place <= size);
+  const school = new Map(seeds.map(seed => [seed.entryId, seed.school.trim().toLowerCase()]));
+  const roomOf = seeds.map((_, index) => { const tier = Math.floor(index / rooms), position = index % rooms; return tier % 2 === 0 ? position : rooms - 1 - position; });
+  const clashes = () => {
+    let total = 0;
+    for (let a = 0; a < seeds.length; a++) for (let b = a + 1; b < seeds.length; b++) if (roomOf[a] === roomOf[b] && school.get(seeds[a].entryId) === school.get(seeds[b].entryId)) total++;
+    return total;
+  };
+  const tiers = Math.ceil(seeds.length / rooms);
+  for (let pass = 0; pass < 4; pass++) {
+    let improved = false;
+    for (let tier = tiers - 1; tier >= 0; tier--) {
+      const members = Array.from({ length: rooms }, (_, position) => tier * rooms + position).filter(index => index < seeds.length);
+      for (let i = 0; i < members.length; i++) for (let j = i + 1; j < members.length; j++) {
+        const [a, b] = [members[i], members[j]]; const before = clashes();
+        [roomOf[a], roomOf[b]] = [roomOf[b], roomOf[a]];
+        if (clashes() < before) improved = true; else [roomOf[a], roomOf[b]] = [roomOf[b], roomOf[a]];
+      }
+    }
+    if (!improved) break;
+  }
+  return Array.from({ length: rooms }, (_, room) => seeds.filter((_, index) => roomOf[index] === room).map(seed => seed.entryId));
+}
+
+/** One semifinal judge's rank and rating for one speaker. `judge` is the judge's seat in that room (1, 2, 3). */
+export type SemiResult = { entryId: string; judge: number; rank: number; rating: number };
+export type SemiStanding = {
+  entryId: string; student: string; school: string;
+  /** Place after prelims. */
+  seed: number;
+  judgeRanks: number[]; cumulativeRank: number; reciprocals: number; ratingPoints: number;
+  /** Place within the semifinal room. */
+  place: number; advances: boolean; decidedBy: string;
+};
+
+/**
+ * Standings in one semifinal room and who makes the final: the top `advance`. Ordered by cumulative
+ * rank across the room's judges, then reciprocals, then rating points, then the preliminary place.
+ * An unbroken tie at the line advances together, as at the prelim cut.
+ */
+export function semifinalStandings(prelim: Standing[], roomIds: string[], results: SemiResult[], advance: number): SemiStanding[] {
+  const rows = new Map(roomIds.map(id => [id, results.filter(result => result.entryId === id).sort((a, b) => a.judge - b.judge)]));
+  const seedOf = new Map(prelim.map(standing => [standing.entryId, standing]));
+  const cumulative = (id: string) => sum((rows.get(id) ?? []).map(result => result.rank));
+  const decidedBy = new Map<string, string>();
+  const groups = orderBy(roomIds.filter(id => (rows.get(id) ?? []).length > 0 && seedOf.has(id)), [
+    { label: 'Cumulative rank', score: cumulative, better: 'low' },
+    { label: 'Reciprocals', score: id => sum((rows.get(id) ?? []).map(result => reciprocal(result.rank))), better: 'high' },
+    { label: 'Rating points', score: id => sum((rows.get(id) ?? []).map(result => result.rating)), better: 'high' },
+    { label: 'Preliminary place', score: id => seedOf.get(id)!.place, better: 'low' },
+  ], () => null, decidedBy);
+  const standings: SemiStanding[] = [];
+  let place = 1;
+  groups.forEach(group => {
+    group.forEach(id => {
+      const seed = seedOf.get(id)!; const mine = rows.get(id) ?? [];
+      standings.push({
+        entryId: id, student: seed.student, school: seed.school, seed: seed.place, judgeRanks: mine.map(result => result.rank), cumulativeRank: cumulative(id),
+        reciprocals: sum(mine.map(result => reciprocal(result.rank))), ratingPoints: sum(mine.map(result => result.rating)),
+        place, advances: place <= advance, decidedBy: group.length > 1 ? 'Still tied' : decidedBy.get(id) ?? '',
+      });
+    });
+    place += group.length;
+  });
+  return standings;
+}
+
+/** Everyone who made the final from the semifinal rooms, room by room. */
+export const semifinalAdvancers = (rooms: SemiStanding[][]) => rooms.flatMap(room => room.filter(standing => standing.advances).map(standing => standing.entryId));
+
+/**
+ * Places for semifinalists who did not make the final. They place after every finalist (7th to 12th with six
+ * finalists), ordered by their place in their room, then cumulative rank, reciprocals, rating points, and the
+ * preliminary place. Team points only where the scale reaches that far (the NSAA scale stops at 6th).
+ */
+export function semifinalistPlacings(rooms: SemiStanding[][], teamPoints: number[] = NSAA_TEAM_POINTS): Placing[] {
+  const finalists = semifinalAdvancers(rooms).length;
+  const key = (standing: SemiStanding) => [standing.place, standing.cumulativeRank, -standing.reciprocals, -standing.ratingPoints, standing.seed].map(value => Math.round(value * 10000) / 10000);
+  const out = rooms.flat().filter(standing => !standing.advances).sort((a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i]; return 0; });
+  const placings: Placing[] = [];
+  out.forEach((standing, index) => {
+    const tiedWithPrevious = index > 0 && key(out[index - 1]).join() === key(standing).join();
+    const place = tiedWithPrevious ? placings[index - 1].place : finalists + index + 1;
+    placings.push({ entryId: standing.entryId, student: standing.student, school: standing.school, judgeRanks: standing.judgeRanks, cumulativeRank: standing.cumulativeRank, reciprocals: standing.reciprocals, ratingPoints: standing.ratingPoints, place, decidedBy: 'Semifinalist', teamPoints: teamPoints[place - 1] ?? 0 });
+  });
+  return placings;
+}
+
+/** Sample semifinal ballots for the demo: one room's judges rank its speakers, stronger seeds usually higher. */
+export function sampleSemis(prelim: Standing[], roomIds: string[], judges: number, room: string): SemiResult[] {
+  const seedOf = new Map(prelim.map(standing => [standing.entryId, standing.place]));
+  const size = Math.max(SEMI_DEFAULT.size, ...roomIds.map(id => seedOf.get(id) ?? 0));
+  return Array.from({ length: judges }, (_, judgeIndex) => {
+    const order = roomIds.map(id => ({ id, score: (size + 1 - (seedOf.get(id) ?? size)) / size * 0.55 + seeded(`${id}|semi|${room}|${judgeIndex}`) * 0.45 })).sort((a, b) => b.score - a.score);
+    return order.map((item, index) => ({ entryId: item.id, judge: judgeIndex + 1, rank: index + 1, rating: Math.max(35, 50 - index * 2) }));
+  }).flat();
+}
