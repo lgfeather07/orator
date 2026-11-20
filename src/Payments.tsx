@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Badge, Button, Icon, downloadText, useDialog } from './ui';
 import { useStore } from './store';
+import { useAuth } from './auth';
 import { ORATOR_PRICING, defaultFees, invoiceFor, money as dollars, oratorFeeFor, pricingTierLabel, type Fees, type Invoice } from './tournament';
 
 const money = (amount: number) => `${amount < 0 ? '−' : ''}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -108,10 +109,24 @@ function AmountInput({ value, onChange, disabled, label, whole = false }: { valu
     onBlur={() => setText(whole || Number.isInteger(value) ? String(value) : value.toFixed(2))}/>;
 }
 
+/**
+ * A director's first tournament on Orator is free. Signed in, that's the earliest tournament they direct
+ * (the list comes newest first); the demo director has only the one.
+ */
+function useFirstTournament() {
+  const { live, tournaments, tournamentId } = useStore();
+  const { profile } = useAuth();
+  if (!live) return true;
+  const mine = tournaments.filter(item => item.directorId === profile?.id);
+  return mine.length > 0 && mine[mine.length - 1].id === tournamentId;
+}
+
 /** The director's fee settings. */
 export function FeeSettings({ editable }: { editable: boolean }) {
   const { tournament, updateTournament, entries } = useStore();
   const fees = tournament.fees ?? defaultFees;
+  const admitted = entries.filter(entry => !entry.waitlisted).length;
+  const first = useFirstTournament();
   const set = (key: keyof Fees, value: number) => updateTournament({ fees: { ...fees, [key]: Math.max(key === 'entriesPerJudge' ? 1 : 0, value) } });
   return <div className="fee-settings">
     <div className="field-label"><span>Fees</span><small>Each school is invoiced after the tournament</small></div>
@@ -121,7 +136,7 @@ export function FeeSettings({ editable }: { editable: boolean }) {
       <label><span>One judge owed per</span><span className="money-input"><AmountInput whole label="Entries per judge owed" value={fees.entriesPerJudge} disabled={!editable} onChange={value => set('entriesPerJudge', value)}/><i>entries</i></span></label>
       <label><span>Per school <small>optional</small></span><span className="money-input"><i>$</i><AmountInput label="Flat fee per school" value={fees.school} disabled={!editable} onChange={value => set('school', value)}/></span></label>
     </div>
-    <p className="fee-orator"><Icon name="info" size={14}/> <span>Orator bills you once, after the tournament, by size: {ORATOR_PRICING.map(tier => `${dollars(tier.fee)} up to ${tier.upTo === Infinity ? 'any size' : `${tier.upTo} entries`}`).join(' · ')}. With {entries.length} entries so far that’s <strong>{dollars(oratorFeeFor(entries.length))}</strong>. <em>Placeholder pricing.</em></span></p>
+    <p className="fee-orator"><Icon name="info" size={14}/> <span>Orator bills you once, after the tournament, by size, and card processing is included, so schools pay only your fees: {ORATOR_PRICING.map(tier => `${dollars(tier.fee)} up to ${tier.upTo === Infinity ? 'any size' : `${tier.upTo} entries`}`).join(' · ')}. With {admitted} entries so far that’s <strong>{dollars(oratorFeeFor(admitted))}</strong>{first ? <>, but <strong>your first tournament on Orator is free</strong></> : ''}.</span></p>
   </div>;
 }
 
@@ -136,11 +151,14 @@ export function PaymentsPanel() {
   const collected = rows.reduce((sum, row) => sum + Math.min(row.invoice.paid, row.invoice.total), 0);
   const unpaid = rows.filter(row => row.invoice.balance > 0);
   const sent = tournament.status === 'finished';
-  const oratorFee = oratorFeeFor(entries.length);
+  const admitted = entries.filter(entry => !entry.waitlisted).length;
+  const first = useFirstTournament();
+  const listFee = oratorFeeFor(admitted);
+  const oratorFee = first ? 0 : listFee;
   return <div className="payments-panel">
     <div className="payments-head"><div><span className="eyebrow">Fees and payments</span><h3>{sent ? `${money(collected)} of ${money(billed)} collected` : `${money(billed)} estimated across ${rows.length} schools`}</h3></div>
       {sent ? <Badge tone={unpaid.length ? 'warning' : 'success'} icon={unpaid.length ? 'clock' : 'check'}>{unpaid.length ? `${money(billed - collected)} outstanding from ${unpaid.length} ${unpaid.length === 1 ? 'school' : 'schools'}` : 'Every school has paid'}</Badge> : <Badge tone="neutral" icon="clock">Invoices go out when you end the tournament</Badge>}</div>
-    {sent && <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>{entries.length} entries · {pricingTierLabel(entries.length)} tier · placeholder pricing</small></dt><dd>{money(-oratorFee)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - oratorFee))}</dd></div></dl>}
+    {sent && <dl className="payout"><div><dt>Paid in by schools</dt><dd>{money(collected)}</dd></div><div><dt>Orator fee for this tournament <small>{admitted} entries · {pricingTierLabel(admitted)} tier{first ? ` · first tournament free (normally ${dollars(listFee)})` : ''} · card processing included</small></dt><dd>{money(-oratorFee)}</dd></div><div className="net"><dt>Transferred to {tournament.host || 'the host school'}</dt><dd>{money(Math.max(0, collected - oratorFee))}</dd></div></dl>}
     <div className="payments-table" tabIndex={0} aria-label="Payments by school" role="region">
       <div className="payments-row payments-labels"><span>School</span><span>Entries</span><span>Judges</span><span>{sent ? 'Total' : 'Estimate'}</span><span>Status</span><span/></div>
       {rows.map(({ school, payment, invoice }) => <div className="payments-row" key={school}>
