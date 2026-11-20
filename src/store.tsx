@@ -9,6 +9,7 @@ import { cutFor, prelimStandings, sampleFinals, samplePrelims, type FinalResult,
 export type RoomResult = { entryId: string; sectionId: string; rank: number; rating: number };
 import { buildFinal, buildSchedule, contestOf, defaultTournament, divisionLabel, divisionOf, invoiceFor, isFinal, judgePool, noPayment, roundLabel, samplePreferences, seedEntries, type Division, type Entry, type Issue, type IssueKind, type Judge, type JudgePrefs, type Payment, type PracticeGoal, type ScheduleChange, type Section, type UpdateKind, type Tournament } from './tournament';
 import { ballotEvents } from './ballots';
+import { enteredJudgeCount, listCoachJudges, seatAsJudge, type CoachJudge } from './judgeLinks';
 
 export type Presence = 'present' | 'absent';
 
@@ -91,6 +92,11 @@ type Store = {
   tournamentId: string | null; isDirector: boolean;
   tournaments: TournamentRow[]; myMemberships: Member[]; members: Member[];
   judges: Judge[];
+  /**
+   * Judges coaches entered for their school (judgeLinks.ts): a coach sees their own school's, the director every school's.
+   * Approved ones are in `judges`, and a school's count is what its invoice says it brings.
+   */
+  coachJudges: CoachJudge[]; setCoachJudges: (update: (list: CoachJudge[]) => CoachJudge[]) => void;
   createLiveTournament: (tournament: Tournament) => Promise<void>;
   requestJoin: (tournamentId: string, role: MemberRole, school: string) => Promise<void>;
   decideMember: (member: Member, status: MemberStatus) => Promise<void>;
@@ -124,7 +130,7 @@ const seedGoals: PracticeGoal[] = [
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+type Saved = { coachJudges?: CoachJudge[]; practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -135,6 +141,10 @@ function seedJudges(): Record<string, Payment> {
   const bringing: [string, number][] = [['Kestrel Prep', 2], ['Halden West', 3], ['Brightwater High', 1], ['Larkspur High', 2], ['Ashgrove', 2], ['Fallow Creek', 1]];
   return Object.fromEntries(bringing.map(([school, judgesBringing]) => [school.toLowerCase(), { ...noPayment, judgesBringing }]));
 }
+
+/** The demo coach's school has entered one judge, who has already opened their link. Erin Johnson is also in the sample pool. */
+const seedCoachJudges: CoachJudge[] = [{ id: 'ej', tournamentId: 'demo', school: 'Wrenfield High', name: 'Erin Johnson', email: 'erin.johnson@example.com', phone: '402-555-0142', clean: false, knows: [], status: 'approved', hasLink: true, revoked: false, claimed: true, createdAt: '2026-10-01', demoToken: 'demo-ej-1' }];
+const seedCoachJudgeIds = seedCoachJudges.map(seat => seat.id);
 
 /** What other schools do once their invoice arrives, so the director's list shows a realistic mix in the demo. */
 function seedSettlements(current: Record<string, Payment>, tournament: Tournament, entries: Entry[]): Record<string, Payment> {
@@ -174,10 +184,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [practiceGoals, setPracticeGoals] = useState<PracticeGoal[]>(saved?.practiceGoals ?? seedGoals);
   const [scheduleChanges, setScheduleChanges] = useState<ScheduleChange[]>(saved?.scheduleChanges ?? []);
   const [myJudgeProfile, setMyJudgeProfile] = useState(saved?.myJudgeProfile ?? { clean: false, knows: ['Ashgrove'] });
+  const [demoCoachJudges, setDemoCoachJudges] = useState<CoachJudge[]>(saved?.coachJudges ?? seedCoachJudges);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, coachJudges: demoCoachJudges })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, demoCoachJudges]);
+  // A judge link opened in another tab changes the saved demo; pick that up.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => { if (event.key === STORAGE_KEY) { const next = loadSaved(); if (next?.coachJudges) setDemoCoachJudges(next.coachJudges); } };
+    window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage);
+  }, []);
   const [speakerPresence, setPresence] = useState<Record<string, Presence | undefined>>({ C1: 'present', C2: 'present', C3: 'present' });
   const [judgeCheckedIn, setJudgeCheckedIn] = useState<Record<string, boolean>>({ jl: true, mc: true, dr: true, af: false, ej: true, tb: true, rn: false, kp: true });
   const [focusNotes, setFocusNotes] = useState<FocusNote[]>([
@@ -205,6 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveUpdates, setLiveUpdates] = useState<ScheduleChange[]>([]);
   const [liveIssues, setLiveIssues] = useState<Issue[]>([]);
   const [liveGoals, setLiveGoals] = useState<PracticeGoal[]>([]);
+  const [liveCoachJudges, setLiveCoachJudges] = useState<CoachJudge[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -225,7 +242,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLiveResults(active.directorId === userId ? await listTournamentResults(active.id).catch(() => []) : []);
         setLiveUpdates(await api.listUpdates(active.id).catch(() => []));
         setLiveIssues(await api.listIssues(active.id).catch(() => []));
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); }
+        setLiveCoachJudges(await listCoachJudges(active.id).catch(() => []));
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); setLiveCoachJudges([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -241,7 +259,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const liveTournament = tournaments.find(item => item.id === tournamentId) ?? null;
   const isDirector = live && liveTournament !== null && liveTournament.directorId === userId;
-  const liveJudges: Judge[] = members.filter(member => member.role === 'judge' && member.status === 'approved').map(member => ({ id: member.userId, name: member.name || 'Judge', school: member.school, clean: member.clean, knows: member.knows }));
+  // Coach-entered judges nobody has signed in as yet are placed by seat; once claimed they are ordinary approved judge rows.
+  const liveJudges: Judge[] = [...members.filter(member => member.role === 'judge' && member.status === 'approved').map(member => ({ id: member.userId, name: member.name || 'Judge', school: member.school, clean: member.clean, knows: member.knows })),
+    ...liveCoachJudges.filter(seat => seat.status === 'approved' && !seat.claimed).map(seat => seatAsJudge(seat, true))];
   const myJudgeRow = myMemberships.find(member => member.tournamentId === tournamentId && member.role === 'judge');
   // A note for coaches and judges whenever the director moves something after the schedule is out.
   // Schedule notes only once the schedule is out; entries notes whenever the director opens or closes entries.
@@ -256,7 +276,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const patchLiveTournament = (patch: Partial<Tournament>) => setTournaments(list => list.map(item => item.id === tournamentId ? { ...item, ...patch } : item));
 
   // In the demo, Judge Leather's conflicts are whatever she has set on her own page.
-  const demoJudges = judgePool.map(judge => judge.id === 'jl' ? { ...judge, ...myJudgeProfile, knows: myJudgeProfile.clean ? [] : myJudgeProfile.knows } : judge);
+  const demoJudges = [...judgePool.filter(judge => !seedCoachJudgeIds.includes(judge.id)).map(judge => judge.id === 'jl' ? { ...judge, ...myJudgeProfile, knows: myJudgeProfile.clean ? [] : myJudgeProfile.knows } : judge),
+    ...demoCoachJudges.filter(seat => seat.status === 'approved').map(seat => seatAsJudge(seat, false))];
+  const coachJudges = live ? liveCoachJudges : demoCoachJudges;
+  // The judges a school brings are the ones its coach entered; schools that entered none keep the number they gave.
+  const withEnteredJudges = (school: string, payment: Payment): Payment => { const count = enteredJudgeCount(coachJudges, school); return count === null ? (live ? { ...payment, judgesBringing: 0 } : payment) : { ...payment, judgesBringing: count }; };
 
   const liveStore: Partial<Store> = !live ? {} : {
     tournament: { ...(liveTournament ?? { ...defaultTournament, name: 'No tournament yet', date: '', host: '' }) },
@@ -303,7 +327,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const judge = liveJudges.find(item => item.id === judgeId) ?? null;
       if (liveTournament) logChange(describeMove(liveSections.find(item => item.id === sectionId), judge, liveTournament), liveTournament.status);
       setLiveSections(list => list.map(section => section.id === sectionId ? { ...section, judgeId: judge?.id ?? null, judgeName: judge?.name ?? '' } : section));
-      api.saveSectionJudge(sectionId, judge).catch(caught => { report(caught); refresh(); });
+      api.saveSectionJudge(sectionId, judge, liveSections.find(item => item.id === sectionId)?.judgeId?.startsWith('cj:') ?? false).catch(caught => { report(caught); refresh(); });
     },
     resetDemo: () => undefined,
     roomResults: liveResults,
@@ -351,14 +375,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); setDemoCoachJudges(seedCoachJudges); },
     judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
     myPreferences, savePreferences: setMyPreferences,
     roomResults,
     recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
     createFinal: () => undefined, createAllFinals: () => undefined, setCut: () => undefined, addNextIn: () => undefined,
     payments,
-    paymentFor: school => payments[school.trim().toLowerCase()] ?? noPayment,
+    paymentFor: school => withEnteredJudges(school, payments[school.trim().toLowerCase()] ?? noPayment),
     setJudgesBringing: (school, count) => setPayments(all => ({ ...all, [school.trim().toLowerCase()]: { ...(all[school.trim().toLowerCase()] ?? noPayment), judgesBringing: Math.max(0, count) } })),
     recordPayment: (school, amount, method) => {
       const reference = `ORA-${Date.now().toString(36).toUpperCase().slice(-6)}`;
@@ -383,6 +407,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     live, liveState, syncError, clearSyncError: () => setSyncError(''),
     tournamentId: live ? tournamentId : null, isDirector, tournaments, myMemberships, members,
     judges: live ? liveJudges : demoJudges,
+    coachJudges, setCoachJudges: update => (live ? setLiveCoachJudges : setDemoCoachJudges)(update),
     createLiveTournament: async tournament => { try { const created = await api.createTournament(tournament); setTournaments(list => [created, ...list]); await refresh(); } catch (caught) { report(caught); } },
     requestJoin: async (id, role, school) => { try { await api.requestToJoin(id, role, school); await refresh(); } catch (caught) { report(caught); } },
     decideMember: async (member, status) => { try { await api.decideMember(member, status); await refresh(); } catch (caught) { report(caught); } },

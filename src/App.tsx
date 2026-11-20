@@ -28,6 +28,7 @@ import { StudentRecordExtras, ReminderSettings, TeamBallots, ReleaseResults, MyT
 import { AuthPage, AuthProvider, authConfigured, useAuth, type Role } from './auth';
 import { CalendarLink, CalendarView, RegistrationNotice, useCalendarRoute, useRegistrationLanding, type CalendarExit } from './Calendar';
 import { PublicResultsView, schoolHref, studentHref, usePublicRoute } from './PublicResults';
+import { CoachJudgesPanel, DirectorCoachJudges, JudgeLinkView, useJudgeLinkRoute } from './CoachJudges';
 
 type Page = 'auth' | 'signin' | 'student' | 'judge' | 'coach' | 'director' | 'components' | 'styles' | 'states';
 
@@ -237,7 +238,7 @@ function CoachEntries({ onBack, importing = false }: { onBack?: () => void; impo
   const { state, membership } = useAccess('coach');
   const school = state === 'demo' ? 'Wrenfield High' : state === 'approved' && membership ? membership.school : null;
   if (school && importing) return <EntryImport school={school} onDone={onBack ?? (() => undefined)}/>;
-  if (school) return <><TeamEntries school={school} onBack={onBack}/><TeamInvoice school={school}/></>;
+  if (school) return <><TeamEntries school={school} onBack={onBack}/><CoachJudgesPanel school={school}/><TeamInvoice school={school}/></>;
   return <section className="panel access-wait"><Icon name="lock"/><div><strong>Entries open once the director approves you</strong><small>{state === 'none' ? 'Ask to join a tournament using the form at the top of this page.' : state === 'pending' ? 'Your request is with the director.' : state === 'declined' ? 'Your request was declined.' : 'Checking your access…'}</small></div>{onBack && <Button variant="secondary" icon="arrow" onClick={onBack}>Back to overview</Button>}</section>;
 }
 
@@ -373,7 +374,7 @@ function JudgeAssignments() {
   const judgePool = store.judges;
   const events = toPreferenceList(store.myPreferences);
   const codes = (judgeId: string, level: 'top' | 'avoid') => nsaaEvents.filter(event => preferenceFor(store.judgePreferences[judgeId], event.id) === level).map(event => eventCodes[event.id]).join(' · ') || '—';
-  return <div className="preferences-layout">
+  return <><div className="preferences-layout">
       <section className="preference-builder">
         <div className="builder-head"><div><h2>Judge Leather</h2><p>Community judge · finals preferences</p></div><Badge tone="success" icon="check">Preferences complete</Badge></div>
         <div className="preference-note"><Icon name="drag"/><span>Preferences decide which <strong>final</strong> a judge is given. Preliminary rooms are assigned without them.</span></div>
@@ -384,7 +385,7 @@ function JudgeAssignments() {
         <ul className="assign-rules"><li><strong>Preliminary rounds</strong><span>Any available judge, never with a speaker from their own school or a school they say they know. Preferences aren’t used.</span></li><li><strong>Finals</strong><span>By preference: top choices first, “prefer to avoid” last. Clean judges first among equals. Never the final of an event they judged in prelims, and never a finalist from a school they know.</span></li></ul>
         <div className="assignment-list pref-summary">{judgePool.map(judge => <div className="assignment-row" key={judge.id}><Avatar initials={judge.name.split(' ').map(part => part[0]).join('').slice(0, 2)} size="sm"/><span><strong>{judge.name}{judge.clean && <Badge tone="success" icon="check">Clean</Badge>}</strong><small>{judge.school || 'No school affiliation'}{judge.knows?.length ? ` · knows ${judge.knows.join(', ')}` : ''}</small></span><span className="pref-codes"><small>Top</small><b>{codes(judge.id, 'top')}</b><small>Avoid</small><b>{codes(judge.id, 'avoid')}</b></span></div>)}</div>
       </section>
-    </div>;
+    </div><DirectorCoachJudges/></>;
 }
 
 function CoachPage() {
@@ -665,6 +666,7 @@ function Workspace() {
   const [calendar, openCalendar] = useCalendarRoute();
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [publicRoute, openPublic] = usePublicRoute();
+  const [judgeLink, openJudgeLink] = useJudgeLinkRoute();
   const skip = <a className="skip-link" href="#main" onClick={event => { event.preventDefault(); const main = document.getElementById('main'); main?.setAttribute('tabindex', '-1'); main?.focus(); }}>Skip to main content</a>;
   const footer = <LegalFooter onOpen={openLegal}/>;
   const signedIn = authConfigured && profile !== null && !recovering;
@@ -691,6 +693,8 @@ function Workspace() {
   if (authConfigured && loading) return <div className="app auth-loading"><span className="spinner"/><p>Loading Orator…</p></div>;
   if (legal) return <div className={dark ? 'app dark' : 'app'}>{skip}<LegalView page={legal} onClose={() => openLegal(null)} onOpen={openLegal}/></div>;
   if (calendar) return <div className={dark ? 'app dark' : 'app'}>{skip}<CalendarView route={calendar} go={openCalendar} onExit={leaveCalendar} dark={dark} setDark={setDark}/>{footer}</div>;
+  // A judge's private sign-in link (CoachJudges.tsx), and their rooms page afterwards.
+  if (judgeLink) return <div className={dark ? 'app dark' : 'app'}>{skip}<JudgeLinkView key={judgeLink.token ?? 'rooms'} route={judgeLink} go={openJudgeLink} dark={dark} setDark={setDark} onExit={() => setPage(home)}/>{footer}</div>;
   if (publicRoute) return <div className={dark ? 'app dark' : 'app'}>{skip}<PublicResultsView route={publicRoute} onClose={() => openPublic(null)} dark={dark} setDark={setDark}/></div>;
   if (authConfigured && !signedIn && !demo) return <div className={dark ? 'app dark' : 'app'}>{skip}<AuthPage key={authMode} initialMode={authMode} notice={<RegistrationNotice/>} onDemo={() => { setDemo(true); setPage('signin'); }}/>{footer}</div>;
   return <NavigationContext.Provider value={navigate}><div className={dark ? 'app dark' : 'app'}>{skip}{signedIn ? <AccountNav page={current} setPage={navigate} dark={dark} setDark={setDark}/> : <PrototypeNav page={current} setPage={navigate} dark={dark} setDark={setDark}/>}{content}{footer}</div></NavigationContext.Provider>;
