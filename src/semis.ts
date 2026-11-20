@@ -3,7 +3,7 @@
  * The rules for ranking a semifinal room live with the other NSAA rules in results.ts.
  */
 import { SEMI_DEFAULT, SEMI_ROOMS, seedSemis, semifinalStandings, type SemiResult, type SemiStanding, type Standing } from './results';
-import { finalConflict, isFinal, parseContest, preferenceFor, roomsFor, stageOf, type Entry, type Judge, type JudgePrefs, type Section, type SemiPlan, type Tournament } from './tournament';
+import { finalConflict, finalRoom, isFinal, needsAccessibleRoom, parseContest, preferenceFor, roomsFor, stageOf, type Entry, type Judge, type JudgePrefs, type Section, type SemiPlan, type Tournament } from './tournament';
 
 /** The director's semifinal plan for a contest, or null when the contest goes straight to a final. */
 export const semiPlanFor = (tournament: Pick<Tournament, 'semisByContest'>, contest: string): SemiPlan | null => {
@@ -100,9 +100,13 @@ export function buildSemis(tournament: Tournament, contest: string, prelim: Stan
     chosen[roomIndex].push(judge);
   });
   const prefix = division === 'novice' ? 'Novice semifinal' : 'Semifinal';
+  const chosenRooms: string[] = [];
   return seeded.flatMap((ids, roomIndex) => {
     const letter = String.fromCharCode(65 + roomIndex);
-    const room = freeRooms[roomIndex % Math.max(freeRooms.length, 1)] ?? rooms[roomIndex];
+    const usual = freeRooms[roomIndex % Math.max(freeRooms.length, 1)] ?? rooms[roomIndex];
+    // A room with a student who needs an accessible room gets one; the other room keeps clear of them (see finalRoom).
+    const room = finalRoom(tournament, freeRooms.length ? freeRooms : rooms, usual, chosenRooms, needsAccessibleRoom(ids, entries));
+    chosenRooms.push(room);
     // Lowest seed speaks first, as in a final.
     return chosen[roomIndex].map((judge, seat) => ({
       id: `semi-${eventId}${division === 'novice' ? '-novice' : ''}-${letter.toLowerCase()}-${seat + 1}`, round, stage: 'semi' as const, eventId, division,

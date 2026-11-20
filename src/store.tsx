@@ -15,6 +15,8 @@ import { stageOf, type SemiPlan } from './tournament';
 import { enteredJudgeCount, listCoachJudges, seatAsJudge, type CoachJudge } from './judgeLinks';
 import { dropFor, type EntryDrop } from './tournament';
 import * as dropsApi from './dropsApi';
+import { applyAccess, withRequest, type AccessRequest } from './accessibility';
+import { listAccessRequests, saveAccessRequest } from './accessApi';
 
 export type Presence = 'present' | 'absent';
 
@@ -47,6 +49,11 @@ type Store = {
   entries: Entry[]; addEntry: (student: string, school: string, eventId: string, division?: Division) => void; removeEntry: (id: string) => void;
   /** The director admits a waitlisted entry, or moves one back to the waitlist. */
   setWaitlisted: (id: string, waitlisted: boolean) => void;
+  /**
+   * A student needs an accessible room (or no longer does), with an optional private note. It applies to all their entries.
+   * Coaches set their own students' while entries are open; the director anytime (accessibility.ts).
+   */
+  setAccessNeed: (school: string, student: string, needed: boolean, note: string) => void;
   /** Coaches can add or drop entries only while the director has entries open (and the schedule isn't out yet). */
   entriesOpen: boolean;
   /** Changes the director made to the published schedule, newest first. */
@@ -151,7 +158,9 @@ const seedGoals: PracticeGoal[] = [
 const seedIssues: Issue[] = [
   { id: 'i1', kind: 'schedule', where: 'Room 110', detail: 'The door sign says Poetry but the schedule lists Serious Prose here.', reporter: 'Tom Becker', role: 'judge', time: '8:42 AM', status: 'open' },
 ];
-type Saved = { drops?: EntryDrop[]; coachJudges?: CoachJudge[]; practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
+/** In the demo, one student with several entries needs an accessible room. */
+const seedAccessRequests: AccessRequest[] = [{ school: 'Wrenfield High', student: 'Maya Rodriguez', note: 'Uses a wheelchair; needs a step-free room and a seat near the door' }];
+type Saved = { accessRequests?: AccessRequest[]; drops?: EntryDrop[]; coachJudges?: CoachJudge[]; practiceGoals?: PracticeGoal[]; scheduleChanges?: ScheduleChange[]; myJudgeProfile?: { clean: boolean; knows: string[] }; myPreferences?: JudgePrefs; roomResults?: RoomResult[]; payments?: Record<string, Payment>; tournament: Tournament; entries: Entry[]; submittedSchools: string[]; sections: Section[]; issues: Issue[]; resultsReleased: boolean; prelimResults?: PrelimResult[]; finalResults?: FinalResult[] };
 function loadSaved(): Saved | null {
   try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as Saved : null; } catch { return null; }
 }
@@ -208,10 +217,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [demoCoachJudges, setDemoCoachJudges] = useState<CoachJudge[]>(saved?.coachJudges ?? seedCoachJudges);
   // The demo has no drop deadline until the director sets one, so no drops to start with.
   const [demoDrops, setDemoDrops] = useState<EntryDrop[]>(saved?.drops ?? []);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>(saved?.accessRequests ?? seedAccessRequests);
   // Keep the setup demo across page reloads.
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, coachJudges: demoCoachJudges, drops: demoDrops })); } catch { /* private window or storage disabled */ }
-  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, demoCoachJudges, demoDrops]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, coachJudges: demoCoachJudges, drops: demoDrops, accessRequests })); } catch { /* private window or storage disabled */ }
+  }, [tournament, entries, submittedSchools, sections, issues, resultsReleased, prelimResults, finalResults, payments, roomResults, myPreferences, scheduleChanges, myJudgeProfile, practiceGoals, demoCoachJudges, demoDrops, accessRequests]);
   // A judge link opened in another tab changes the saved demo; pick that up.
   useEffect(() => {
     const onStorage = (event: StorageEvent) => { if (event.key === STORAGE_KEY) { const next = loadSaved(); if (next?.coachJudges) setDemoCoachJudges(next.coachJudges); } };
@@ -246,6 +256,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [liveGoals, setLiveGoals] = useState<PracticeGoal[]>([]);
   const [liveCoachJudges, setLiveCoachJudges] = useState<CoachJudge[]>([]);
   const [liveDrops, setLiveDrops] = useState<EntryDrop[]>([]);
+  const [liveAccess, setLiveAccess] = useState<AccessRequest[]>([]);
   const report = (caught: unknown) => setSyncError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.');
 
   const refresh = useCallback(async () => {
@@ -268,7 +279,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLiveIssues(await api.listIssues(active.id).catch(() => []));
         setLiveCoachJudges(await listCoachJudges(active.id).catch(() => []));
         setLiveDrops(await dropsApi.listDrops(active.id).catch(() => []));
-      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); setLiveCoachJudges([]); setLiveDrops([]); }
+        setLiveAccess(await listAccessRequests(active.id).catch(() => []));
+      } else { setLiveEntries([]); setLiveSections([]); setMembers([]); setLiveResults([]); setLiveUpdates([]); setLiveIssues([]); setLiveCoachJudges([]); setLiveDrops([]); setLiveAccess([]); }
       setLiveState('ready');
     } catch (caught) { report(caught); setLiveState(state => state === 'ready' ? 'ready' : 'failed'); }
   }, [userId]);
@@ -318,7 +330,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
       api.saveTournament(tournamentId, patch, liveTournament ? { ...liveTournament, ...patch } : patch).catch(caught => { report(caught); refresh(); });
     },
-    entries: liveEntries,
+    entries: applyAccess(liveEntries, liveAccess),
+    setAccessNeed: (school, student, needed, note) => {
+      if (!tournamentId) return;
+      setLiveAccess(list => withRequest(list, school, student, needed, note));
+      saveAccessRequest(tournamentId, school, student, needed, note).catch(caught => { report(caught); refresh(); });
+    },
     setWaitlisted: (id, waitlisted) => { setLiveEntries(list => list.map(entry => entry.id === id ? { ...entry, waitlisted } : entry)); api.setEntryWaitlisted(id, waitlisted).catch(caught => { report(caught); refresh(); }); },
     scheduleChanges: liveUpdates,
     issues: liveIssues,
@@ -353,7 +370,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     generateSchedule: () => {
       if (!tournamentId || !liveTournament) return;
       setPrelimResults([]); setFinalResults([]);
-      api.replaceSections(tournamentId, buildSchedule(liveTournament, liveEntries, liveJudges), liveJudges).then(setLiveSections).catch(caught => { report(caught); refresh(); });
+      api.replaceSections(tournamentId, buildSchedule(liveTournament, applyAccess(liveEntries, liveAccess), liveJudges), liveJudges).then(setLiveSections).catch(caught => { report(caught); refresh(); });
     },
     assignJudge: (sectionId, judgeId) => {
       const judge = liveJudges.find(item => item.id === judgeId) ?? null;
@@ -396,9 +413,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Leaving "finished" withdraws the release: students must never see results mid-tournament.
       if (patch.status && patch.status !== 'finished') setResultsReleased(false);
     },
-    entries,
+    entries: applyAccess(entries, accessRequests),
+    setAccessNeed: (school, student, needed, note) => setAccessRequests(list => withRequest(list, school, student, needed, note)),
     entriesOpen: (tournament.entriesOpen ?? true) && tournament.status === 'registration',
-    addEntry: (student, school, eventId, division = 'varsity') => setEntries(current => [...current, { id: `e${Date.now()}`, student, school, eventId, division, waitlisted: overCap(tournament, current, school, eventId, division) }]),
+    addEntry: (student, school, eventId, division = 'varsity') => setEntries(current => [...current, { id: `e${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, student, school, eventId, division, waitlisted: overCap(tournament, current, school, eventId, division) }]),
     setWaitlisted: (id, waitlisted) => setEntries(current => current.map(entry => entry.id === id ? { ...entry, waitlisted } : entry)),
     scheduleChanges,
     myJudgeProfile, saveJudgeProfile: setMyJudgeProfile,
@@ -414,7 +432,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     noteJudgeDrop: seat => { if (seat.status !== 'approved') return; const drop = dropFor(tournament, { kind: 'judge', school: seat.school, name: seat.name }, `${seat.school} coach`); if (drop) setDemoDrops(list => [...list, drop]); },
     submittedSchools, submitSchool: school => setSubmittedSchools(current => current.includes(school) ? current : [...current, school]),
     sections,
-    generateSchedule: () => { setSections(buildSchedule(tournament, entries, demoJudges)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setScheduleChanges(list => list.filter(change => change.kind === 'entries')); },
+    generateSchedule: () => { setSections(buildSchedule(tournament, applyAccess(entries, accessRequests), demoJudges)); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setScheduleChanges(list => list.filter(change => change.kind === 'entries')); },
     assignJudge: (sectionId, judgeId) => {
       logChange(describeMove(sections.find(item => item.id === sectionId), demoJudges.find(item => item.id === judgeId) ?? null, tournament), tournament.status);
       setSections(current => current.map(section => section.id === sectionId ? { ...section, judgeId } : section));
@@ -428,7 +446,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reportIssue: issue => setIssues(current => [{ ...issue, id: `i${Date.now()}`, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), status: 'open' }, ...current]),
     resolveIssue: id => setIssues(current => current.map(issue => issue.id === id ? { ...issue, status: 'resolved' } : issue)),
     resultsReleased, releaseResults: () => { if (tournament.status === 'finished') setResultsReleased(true); },
-    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); setDemoCoachJudges(seedCoachJudges); setDemoDrops([]); },
+    resetDemo: () => { setTournament(defaultTournament); setEntries(seedEntries); setSubmittedSchools(seedSubmitted); setSections([]); setIssues(seedIssues); setResultsReleased(false); setPrelimResults([]); setFinalResults([]); setRoomResults([]); setPayments(seedJudges()); setScheduleChanges([]); setPracticeGoals(seedGoals); setMyJudgeProfile({ clean: false, knows: ['Ashgrove'] }); setDemoCoachJudges(seedCoachJudges); setDemoDrops([]); setAccessRequests(seedAccessRequests); },
     judgePreferences: { ...samplePoolPreferences, jl: myPreferences },
     myPreferences, savePreferences: setMyPreferences,
     roomResults,

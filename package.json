@@ -13,7 +13,8 @@
     "test:semis": "tsc src/results.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/semis.test.mjs",
     "test:prelims": "tsc src/results.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/prelims.test.mjs",
     "sql:bundle": "node scripts/bundle-sql.mjs",
-    "test:drops": "tsc src/tournament.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/drops.test.mjs"
+    "test:drops": "tsc src/tournament.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/drops.test.mjs",
+    "test:access": "tsc src/tournament.ts src/results.ts src/semis.ts --outDir .test-out/access --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './results'#from './results.js'#; s#from './tournament'#from './tournament.js'#\" .test-out/access/*.js && node tests/access.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

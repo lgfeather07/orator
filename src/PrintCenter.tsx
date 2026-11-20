@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { divisionOf, entryLoad, loadLabel, roundLabel, roundTimes, sameSchool, type Section } from './tournament';
+import { isAccessibleRoom, divisionOf, entryLoad, loadLabel, roundLabel, roundTimes, sameSchool, type Section } from './tournament';
 import type { Placing } from './results';
 import { useEntryFormPages } from './EntryForm';
+import { AccessRequestsPrint } from './Accessibility';
 import './print.css';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -14,13 +15,14 @@ const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n
 /** Opens the browser's print dialog for whatever `.print-doc` is on the page. */
 export const printNow = () => window.print();
 
-type Doc = 'postings' | 'ballots' | 'judges' | 'signs' | 'entryforms';
+type Doc = 'postings' | 'ballots' | 'judges' | 'signs' | 'entryforms' | 'access';
 const docs: { id: Doc; label: string; note: string }[] = [
   { id: 'postings', label: 'Postings', note: 'Who speaks where, in order, for one round. Tape them up or hand them out.' },
   { id: 'ballots', label: 'Paper ballots', note: 'One sheet per room with its speakers, times, scores and ranks, for judges without a phone.' },
   { id: 'judges', label: 'Judge assignments', note: 'Each school’s judges and their rooms, round by round. One page per school.' },
   { id: 'signs', label: 'Room signs', note: 'A big sign for each room door: event, section and time.' },
   { id: 'entryforms', label: 'Entry forms', note: 'Each school’s students, events, waitlist, judges and fees, with a coach signature line. One page per school; no schedule needed.' },
+  { id: 'access', label: 'Accessibility requests', note: 'Each student who needs an accessible room, their school and coach’s note, and their rooms each round. Confidential: for the tab room only.' },
 ];
 
 /**
@@ -69,11 +71,13 @@ export function PrintCenter() {
       </section>; })}
       <p className="print-meta">Judges without a school (community and hired judges) get their rooms from the tab room.</p>
     </div>; })
+    : doc === 'access' ? <AccessRequestsPrint/>
     : shown.map(section => <div key={section.id} className="print-page print-sign-page">
       <p className="print-sign-room">{section.room}</p>
       <p className="print-sign-event">{contestName(section)}</p>
       <p className="print-sign-when">{section.label.replace('Novice · ', '')} · {when(section)}</p>
       <p className="print-sign-judge">Judge: {judgeName(section)}</p>
+      {isAccessibleRoom(tournament, section.room) && <p className="print-sign-access">Accessible room</p>}
       <p className="print-sign-foot">{tournament.name} · Please wait outside until the judge invites you in.</p>
     </div>);
 
@@ -82,9 +86,9 @@ export function PrintCenter() {
       <div className="panel-head"><div><h2>Print</h2><p>{doc === 'entryforms' ? 'Made from the entries.' : 'Made from the current schedule.'} What you see below is exactly what prints.</p></div><Button icon="file" disabled={!!nothing} onClick={printNow}>Print</Button></div>
       <div className="print-options">
         <div className="segmented" role="tablist" aria-label="What to print">{docs.map(item => <button key={item.id} role="tab" aria-selected={doc === item.id} className={doc === item.id ? 'active' : ''} onClick={() => setDoc(item.id)}>{item.label}</button>)}</div>
-        {doc === 'entryforms' && forms.controls}{doc !== 'judges' && doc !== 'entryforms' && rounds.length > 0 && <label className="inline-select"><span>Round</span><select value={String(round)} onChange={event => setChosen(event.target.value === 'all' ? 'all' : Number(event.target.value))}>{rounds.map(number => { const sample = sections.find(section => section.round === number)!; return <option key={number} value={number}>{roundLabel(sample, tournament)}{roundTimes[number - 1] ? ` · ${roundTimes[number - 1]}` : ''}</option>; })}<option value="all">All rounds</option></select></label>}
+        {doc === 'entryforms' && forms.controls}{doc !== 'judges' && doc !== 'entryforms' && doc !== 'access' && rounds.length > 0 && <label className="inline-select"><span>Round</span><select value={String(round)} onChange={event => setChosen(event.target.value === 'all' ? 'all' : Number(event.target.value))}>{rounds.map(number => { const sample = sections.find(section => section.round === number)!; return <option key={number} value={number}>{roundLabel(sample, tournament)}{roundTimes[number - 1] ? ` · ${roundTimes[number - 1]}` : ''}</option>; })}<option value="all">All rounds</option></select></label>}
       </div>
-      <p className="print-note"><Icon name="info" size={14}/> {docs.find(item => item.id === doc)!.note} {doc === 'entryforms' ? <Badge tone="neutral">{forms.count} {forms.count === 1 ? 'page' : 'pages'}</Badge> : doc !== 'postings' && doc !== 'judges' && !nothing ? <Badge tone="neutral">{shown.length} {shown.length === 1 ? 'page' : 'pages'}</Badge> : null}</p>
+      <p className="print-note"><Icon name="info" size={14}/> {docs.find(item => item.id === doc)!.note} {doc === 'entryforms' ? <Badge tone="neutral">{forms.count} {forms.count === 1 ? 'page' : 'pages'}</Badge> : doc !== 'postings' && doc !== 'judges' && doc !== 'access' && !nothing ? <Badge tone="neutral">{shown.length} {shown.length === 1 ? 'page' : 'pages'}</Badge> : null}</p>
     </section>
     {nothing ?? <div className="print-doc" aria-label="Print preview">{pages}</div>}
   </div>;

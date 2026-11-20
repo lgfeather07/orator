@@ -27,6 +27,8 @@ export type Tournament = {
   entriesOpen?: boolean;
   /** The rooms the director has for this tournament, in the order to fill them. */
   rooms?: string[];
+  /** Rooms with step-free access (ground floor, elevator, ramp). Rooms with a student who asked for one get these first. */
+  accessibleRooms?: string[];
   /** 'optional' (default): judges give a score out of 50 and may also mark each section 1–10. 'required': every section must be marked. */
   sectionMarks?: 'optional' | 'required';
   /** Most entries one school may have before more go on the waitlist. Empty means no cap. */
@@ -169,8 +171,13 @@ export const divisionLabel: Record<Division, string> = { varsity: 'Varsity', nov
 /** Entries and sections saved before divisions existed are varsity. */
 export const divisionOf = (item: { division?: Division }): Division => item.division ?? 'varsity';
 
-/** `waitlisted`: over the tournament's entry caps, so not scheduled or charged until the director admits it. */
-export type Entry = { id: string; student: string; school: string; eventId: string; division?: Division; waitlisted?: boolean };
+/**
+ * `waitlisted`: over the tournament's entry caps, so not scheduled or charged until the director admits it.
+ * `access`: the student needs an accessible room (step-free, ground floor or elevator). It belongs to the student, so every
+ * one of their entries carries it, with the coach's optional `accessNote`. Only the coach, the director and the student see these
+ * (see accessibility.ts and supabase/accessibility.sql).
+ */
+export type Entry = { id: string; student: string; school: string; eventId: string; division?: Division; waitlisted?: boolean; access?: boolean; accessNote?: string };
 
 /**
  * A judge. `clean` means they don't know any of the competitors, so they can judge anyone.
@@ -224,6 +231,25 @@ export const issueKinds: Record<IssueKind, { label: string; hint: string; urgent
 export const roomsFor = (tournament: Tournament): string[] => tournament.rooms?.length ? tournament.rooms : Array.from({ length: 30 }, (_, index) => `Room ${index + 1}`);
 /** Rooms beyond the director's list are named so they stand out on the schedule. */
 export const roomNeeded = (room: string) => room.startsWith('Room needed');
+/** True if the director marked this room accessible. */
+export const isAccessibleRoom = (tournament: Pick<Tournament, 'accessibleRooms'>, room: string) => (tournament.accessibleRooms ?? []).includes(room);
+/** True if any speaker in these entries needs an accessible room. */
+export const needsAccessibleRoom = (entryIds: string[], entries: Entry[]) => entryIds.some(id => entries.some(entry => entry.id === id && entry.access));
+/**
+ * Give one round's rooms out: rooms with a student who needs an accessible room take the accessible rooms first (in the
+ * director's order), then every other room takes what is left in order. Rooms beyond the list are "Room needed 1", "Room needed 2"…
+ * With nobody needing an accessible room this is the plain fill-in-order. A room that needs one but can't get one keeps an ordinary room.
+ */
+export function placeRooms(list: Section[], rooms: string[], accessible: string[], needs: (section: Section) => boolean): void {
+  const free = [...rooms];
+  const take = (fits: (room: string) => boolean) => { const index = free.findIndex(fits); return index < 0 ? null : free.splice(index, 1)[0]; };
+  const placed = new Set<Section>();
+  list.filter(needs).forEach(section => { const room = take(room => accessible.includes(room)); if (room) { section.room = room; placed.add(section); } });
+  let overflow = 0;
+  list.forEach(section => { if (!placed.has(section)) section.room = take(() => true) ?? `Room needed ${++overflow}`; });
+}
+/** Sample rooms marked accessible in the demo. */
+export const sampleAccessibleRooms = ['Room 118', 'Library', 'Auditorium', 'Cafeteria'];
 /** Sample rooms for the demo tournament. */
 export const rooms = ['Room 101', 'Room 104', 'Room 108', 'Room 110', 'Room 122', 'Room 207', 'Room 214', 'Room 215', 'Room 301', 'Room 303', 'Library', 'Band room', 'Auditorium', 'Room 118', 'Room 120', 'Room 305', 'Room 307', 'Room 309', 'Cafeteria'];
 
@@ -262,7 +288,7 @@ export const judgePool: Judge[] = [
 ];
 
 export const defaultTournament: Tournament = {
-  rooms,
+  rooms, accessibleRooms: sampleAccessibleRooms,
   name: 'Larkspur Invitational', date: 'October 19, 2026', host: 'Larkspur High School', rounds: 3, sectionSize: 6, maxEntries: 4,
   eventIds: ['info', 'persuasive', 'extemp', 'entertainment', 'poetry', 'serious', 'humorous'], status: 'registration',
 };
@@ -300,11 +326,13 @@ export const loadLabel = (count: number) => count === 2 ? 'Double entered' : cou
 export function buildSchedule(tournament: Tournament, entries: Entry[], judges: Judge[]): Section[] {
   const sections: Section[] = [];
   const rooms = roomsFor(tournament);
+  const accessible = rooms.filter(room => isAccessibleRoom(tournament, room));
+  const needy = new Set(entries.filter(entry => entry.access).map(entry => entry.id));
   /** Which speakers each judge has already heard, so later rounds can give speakers different judges. */
   const heard = new Map<string, Set<string>>();
   for (let round = 1; round <= tournament.rounds; round++) {
     const busyJudges = new Set<string>();
-    let roomIndex = 0;
+    const roundSections: Section[] = [];
     tournament.eventIds.flatMap(eventId => divisions.map(division => ({ eventId, division }))).forEach(({ eventId, division }, contestIndex) => {
       const eventIndex = Math.floor(contestIndex / 2) + contestIndex % 2;
       const field = entries.filter(entry => !entry.waitlisted && entry.eventId === eventId && divisionOf(entry) === division).sort((a, b) => a.school.localeCompare(b.school) || a.student.localeCompare(b.student));
@@ -323,14 +351,16 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
         const judge = candidates.find(candidate => free(candidate) && !ordered.some(entry => heard.get(candidate.id)?.has(entry.id))) ?? candidates.find(free);
         if (judge) ordered.forEach(entry => heard.set(judge.id, (heard.get(judge.id) ?? new Set<string>()).add(entry.id)));
         if (judge) busyJudges.add(judge.id);
-        sections.push({
+        roundSections.push({
           id: `r${round}-${eventId}${division === 'novice' ? '-novice' : ''}-${groupIndex + 1}`, round, eventId, division,
           label: `${division === 'novice' ? 'Novice · ' : ''}Section ${String.fromCharCode(65 + groupIndex)}`,
-          room: roomIndex < rooms.length ? rooms[roomIndex] : `Room needed ${roomIndex - rooms.length + 1}`, judgeId: judge?.id ?? null, entryIds: ordered.map(entry => entry.id),
+          room: '', judgeId: judge?.id ?? null, entryIds: ordered.map(entry => entry.id),
         });
-        roomIndex++;
       });
     });
+    // Rooms with a student who needs an accessible room get the accessible rooms first; the rest fill in order.
+    placeRooms(roundSections, rooms, accessible, section => section.entryIds.some(id => needy.has(id)));
+    sections.push(...roundSections);
   }
   return sections;
 }
@@ -393,11 +423,23 @@ export function buildFinal(tournament: Tournament, contest: string, finalistIds:
   const free = judges.filter(judge => !busy.has(judge.id) && finalConflict(judge, contest, schools, existing, tournament) === '')
     .map((judge, index) => ({ judge, score: order(judge) + (judge.clean ? 0 : 100) + (onAFinal.has(judge.id) ? 10000 : 0), index })).sort((a, b) => a.score - b.score || a.index - b.index).map(item => item.judge);
   const rooms = roomsFor(tournament);
-  const room = rooms[(new Set(finalsAlready.map(section => section.room)).size) % rooms.length];
+  const room = finalRoom(tournament, rooms, rooms[(new Set(finalsAlready.map(section => section.room)).size) % rooms.length], existing.filter(section => section.round === round && isFinal(section, tournament)).map(section => section.room), needsAccessibleRoom(finalistIds, entries));
   return Array.from({ length: seats }, (_, seat) => ({
     id: `final-${eventId}${division === 'novice' ? '-novice' : ''}-${seat + 1}`, round, eventId, division, label: `${division === 'novice' ? 'Novice final' : 'Final'} · Judge ${seat + 1}`, room,
     judgeId: free[seat]?.id ?? null, judgeName: free[seat]?.name ?? '', entryIds: [...finalistIds].reverse(),
   }));
+}
+
+/**
+ * The room for a final or semifinal. With no accessible rooms marked, the usual room. A room with a student who needs an
+ * accessible room takes the first accessible room nobody else has that round (from `usual` on); any other room keeps clear of
+ * accessible rooms when it can, so they stay free. If none fits, the usual room.
+ */
+export function finalRoom(tournament: Pick<Tournament, 'accessibleRooms'>, rooms: string[], usual: string, taken: string[], needsAccess: boolean): string {
+  if (!rooms.some(room => isAccessibleRoom(tournament, room))) return usual;
+  const start = Math.max(0, rooms.indexOf(usual));
+  const order = [...rooms.slice(start), ...rooms.slice(0, start)].filter(room => !taken.includes(room));
+  return order.find(room => isAccessibleRoom(tournament, room) === needsAccess) ?? (needsAccess ? order[0] : undefined) ?? usual;
 }
 
 /** Sample finals preferences for the demo's judges, repeatable from the judge's id. */
