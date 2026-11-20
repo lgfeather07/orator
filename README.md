@@ -80,6 +80,10 @@ Judges don’t need accounts. On the Team entries page a coach adds the judges t
 - Anonymous users can’t create tournaments, ask to join, enter students, set goals, enter judges, or start a ballot without a seat; their profile is always a judge with no school.
 - In the demo, links look like `#/judge-link/demo-<judge>-<n>` and work in the same browser.
 
+## Printable entry forms
+
+One page per school for registration (`src/EntryForm.tsx`): tournament, date, host, school and coach; each student's events and division with double/triple entry noted; waitlisted entries in their own labelled table; the school's coach-entered judges (clean / known-school notes) or how many judges it is bringing; the fee estimate (the invoice once the tournament has ended) from `invoiceFor`; and a coach signature and date line under "I confirm these entries are eligible under NSAA rules". Coaches use **Print entry form** (only the form prints; choose "Save as PDF" for a file) and **Download entries (CSV)** on their Team entries page. Directors get an **Entry forms** document in the Print tab, with a school filter and **Download all entries (CSV)**; it works before a schedule exists. The CSV columns (`school,student,event,division,status`) can be read back by the coach's "Upload a file" import. Nothing new is stored: the forms use only data the viewer can already see.
+
 ## Tournaments without a final round
 
 Early-season meets often run three preliminary rounds and stop. In Setup → Details, set **Final round** to “No finals: place from the preliminary rounds” and choose how many places to announce (top 3 to top 10, default 6). Placings then come straight from the preliminary standings (lowest cumulative rank, with the NSAA tiebreaks), each event is placed as soon as all its rooms are in, and the top places earn team points on the tournament's scale. Speakers still tied after every tiebreak share the place and split the points for the places they cover. Finals, semifinals, the cut preview and finals judge preferences are hidden for these tournaments. `npm run test:prelims` covers the rules.

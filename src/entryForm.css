@@ -1,0 +1,49 @@
+/* Entry forms (EntryForm.tsx). The page itself uses the print center's .print-page: black on white, on screen and on paper. */
+.entry-form-panel .entry-form-actions { flex-wrap: wrap; justify-content: flex-end; }
+/* `.panel-head button` would repaint the primary button as a plain one; keep it primary. */
+.entry-form-panel .panel-head .button { min-height: 40px; padding: 0 14px; }
+.entry-form-panel .panel-head .button-primary { color: #fff; background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, white), var(--brand)); border-color: transparent; }
+.dark .entry-form-panel .panel-head .button-primary { color: var(--night); }
+.entry-form-panel .panel-head .button-primary:disabled { opacity: .55; }
+.entry-form-note { margin: 0 18px 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.entry-form-preview { padding: 0 18px 18px; }
+.entry-form-preview .entry-form-note { margin: 0 0 12px; }
+/* Five document types: let the switcher wrap on a phone instead of pushing the page sideways. */
+.print-options .segmented { flex-wrap: wrap; max-width: 100%; }
+
+.entry-form { overflow-wrap: break-word; }
+.ef-facts dd { overflow-wrap: anywhere; }
+.ef-facts { margin: 0 0 10px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ef-facts div { padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; border: 1px solid #999; border-radius: 4px; }
+.ef-facts dt { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.ef-facts dd { margin: 0; font-weight: 700; }
+.ef-counts { margin: 0 0 12px; color: #333; }
+.ef-title { margin: 16px 0 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; }
+.ef-tag { padding: 1px 7px; border: 1.5px solid #1a1a1a; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.ef-table { margin-bottom: 6px; }
+.ef-table .ef-num { width: 28px; }
+.ef-waitlist td:last-child { font-weight: 700; }
+.ef-fees td:last-child { width: 120px; text-align: right; white-space: nowrap; }
+.ef-fees .ef-total th, .ef-fees .ef-total td { background: #f1f1f1; font-size: 12.5px; font-weight: 800; }
+.ef-blank { display: inline-block; min-width: 140px; height: 1em; border-bottom: 1px solid #1a1a1a; vertical-align: bottom; }
+.ef-blank.wide { min-width: min(320px, 60%); }
+.ef-sign { margin-top: 22px; padding-top: 10px; border-top: 1px solid #999; break-inside: avoid; }
+.ef-sign p { margin: 0 0 22px; }
+.ef-sign-lines { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: flex-end; }
+.ef-sign-lines span { flex: 1 1 260px; display: flex; gap: 8px; align-items: flex-end; }
+.ef-sign-lines span:last-child { flex: 0 1 200px; }
+.ef-line { flex: 1; min-width: 80px; border-bottom: 1px solid #1a1a1a; }
+.ef-foot { margin: 18px 0 0; color: #555; font-size: 10.5px; }
+@media (max-width: 720px) { .ef-facts { grid-template-columns: 1fr 1fr; } .entry-form-preview { padding: 0 12px 14px; } }
+/* On a phone the row number goes, so every word fits without breaking. Paper keeps it. */
+@media screen and (max-width: 520px) { .entry-form .ef-num, .entry-form .ef-main td:first-child { display: none; } .entry-form .ef-table th, .entry-form .ef-table td { padding: 5px 4px; font-size: 10.5px; } .ef-fees td:last-child { width: auto; } }
+
+@media print {
+  .entry-form { color: #000; }
+  .entry-form .ef-table th, .entry-form .ef-table td { padding: 4px 6px; }
+  .entry-form .ef-title { margin-top: 12px; }
+  .ef-table, .ef-sign { break-inside: avoid; }
+  /* A coach's form: print only the copy at the top of <body>, and lay nothing else out (no trailing blank pages). */
+  body:has(> .ef-print-root) > :not(.ef-print-root) { display: none !important; }
+  .ef-print-root { position: static !important; }
+}
