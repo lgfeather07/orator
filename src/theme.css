@@ -248,7 +248,12 @@ textarea { font-size: 14px; line-height: 1.55; }
 
 /* ── Wordmark spacing ─────────────────────────────────────────── */
 .signin-header > .logo, .docs-header .logo { gap: 1px; }
-.prototype-nav { grid-template-columns: auto 1fr auto; }
+/* Logo left, workspace tabs truly centered on the page, account and tools right. The two outer
+   columns share the leftover space equally, so the middle stays centered whatever is on either side. */
+.prototype-nav, .account-nav { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.prototype-nav > :first-child { justify-self: start; }
+.prototype-nav > :last-child { justify-self: end; }
+@media (max-width: 900px) { .prototype-nav, .account-nav { grid-template-columns: minmax(0, 1fr) auto; } }
 .preview-brand small { white-space: nowrap; }
 
 /* ── Avatars: initials sit dead centre whatever the parent layout does to spans ── */
