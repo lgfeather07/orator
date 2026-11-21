@@ -1028,3 +1028,12 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 
 /* A setting that can no longer change (DirectorSetup.tsx) */
 .setting-locked { margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; font-weight: 500; }
+
+/* District contest: NSAA State qualifying (StateQualifying.tsx) */
+.state-qualifying { margin: 0; padding: 4px 18px 16px; border: 0; display: flex; flex-direction: column; gap: 10px; }
+.state-qualifying legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.state-qualifying legend small { margin-left: 6px; color: var(--muted); font-weight: 500; }
+.state-qualifying-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.state-qualifying-grid label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.state-qualifying-grid select { min-height: 40px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font: inherit; font-size: 14px; }
+.qualifier-tag { display: inline-flex; }

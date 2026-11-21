@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Icon, downloadText } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor, stageOf as sectionStage, prelimsOnly } from './tournament';
+import { qualifierFor, qualifierLabel, contestKey, contestOf, divisions, entryLoad, finalConflict, isFinal, loadLabel, parseContest, preferenceFor, stageOf as sectionStage, prelimsOnly } from './tournament';
 import { NSAA_TEAM_POINTS, cutFor, finalPlacings, prelimStandings, sampleFinals, semifinalistPlacings, teamStandings, type Placing, type Standing, FINALISTS, prelimPlacings } from './results';
 import { CutOverview, CutPreview, NextIn } from './CutPreview';
 import { SemifinalsPanel } from './Semifinals';
@@ -89,6 +89,16 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
   const semiBallotsLeft = semiContests.reduce((total, id) => { const semis = semisFor(id); return total + semis.ballots - semis.ballotsIn; }, 0);
   const semisDone = semiContests.filter(id => semisFor(id).complete).length;
   const createLabel = readySemis === 0 ? (count('ready') === 1 ? 'the final' : `all ${count('ready')} finals`) : readyFinals === 0 ? (readySemis === 1 ? 'the semifinals' : `semifinals for ${readySemis} contests`) : `${readyFinals} ${readyFinals === 1 ? 'final' : 'finals'} and ${readySemis} ${readySemis === 1 ? 'semifinal round' : 'semifinal rounds'}`;
+  const district = tournament.stateQualifying;
+  /** "State qualifier" or "Alternate" at a district contest, once the place is final. */
+  const qualifierBadge = (contest: string, place: number, final: boolean) => { const status = final ? qualifierFor(district, contest, place) : null; return status ? <Badge tone={status === 'state' ? 'success' : 'info'} icon={status === 'state' ? 'check' : undefined}>{qualifierLabel[status]}</Badge> : null; };
+  /** Every State qualifier and alternate, event by event, for the district report. */
+  const exportQualifiers = () => {
+    const quote = (text: string | number) => `"${String(text).replace(/"/g, '""')}"`;
+    const lines = [['Event', 'Place', 'Status', 'Speaker', 'School'].map(quote).join(',')];
+    events.forEach(id => placingsFor(id).forEach(placing => { const status = qualifierFor(district, id, placing.place); if (status) lines.push([eventName(id), placing.place, qualifierLabel[status], placing.student, placing.school].map(quote).join(',')); }));
+    downloadText(`${tournament.name.replace(/\W+/g, '-').toLowerCase() || 'district'}-state-qualifiers.csv`, lines.join('\n'));
+  };
   const exportResults = () => {
     const quote = (text: string | number) => `"${String(text).replace(/"/g, '""')}"`;
     const lines = [['Event', 'Place', 'Speaker', 'School', 'Judges’ ranks', 'Team points'].map(quote).join(',')];
@@ -107,7 +117,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
       : roomsLeft > 0 ? <p><strong>Next:</strong> waiting on {roomsLeft} preliminary {roomsLeft === 1 ? 'room' : 'rooms'}. {placedCount > 0 ? `${placedCount} ${placedCount === 1 ? 'event is' : 'events are'} already placed.` : ''} Check the Issues tab if a judge is missing.</p>
       : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every event is placed from the preliminary rounds. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
       : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
-      {placedCount > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
+      {placedCount > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}{placedCount > 0 && district && <Button variant="secondary" icon="download" onClick={exportQualifiers}>Download State qualifiers</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
     </div>
   </section> : <section className="panel results-flow" aria-label="Results progress">
     <ol className={`results-steps ${semiContests.length ? 'five' : ''}`}>
@@ -125,14 +135,14 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
       : count('final') > 0 ? <p><strong>Next:</strong> waiting on {finalBallotsLeft} final {finalBallotsLeft === 1 ? 'ballot' : 'ballots'}. Placings fill in as each final’s judges submit.</p>
       : tournament.status !== 'finished' ? <><p><strong>Next:</strong> every final is placed. Announce awards, then end the tournament to lock ballots and send invoices.</p>{onOpenSetup && <Button variant="secondary" icon="arrow" onClick={onOpenSetup}>Go to End tournament</Button>}</>
       : <p><strong>Done.</strong> Results are final. Coaches can now release ballots to their students.</p>}
-      {count('done') > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
+      {count('done') > 0 && <Button variant="secondary" icon="download" onClick={exportResults}>Download results</Button>}{count('done') > 0 && district && <Button variant="secondary" icon="download" onClick={exportQualifiers}>Download State qualifiers</Button>}<Button variant="secondary" icon="file" onClick={printNow} disabled={teams.length === 0 && !events.some(id => placingsFor(id).length)}>Print awards script</Button>
     </div>
   </section>;
 
   if (sections.length === 0) return <div className="issue-board"><section className="panel"><div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>Build the schedule first</h3><p>Breaks and finals are worked out from the preliminary rounds. Build the schedule on the Setup tab, then come back here.</p></div></section></div>;
 
   return <div className="results-layout">
-    <AwardsScript tournamentName={tournament.name} events={events.map(id => ({ name: eventName(id), placings: placingsFor(id) }))} teams={teams}/>
+    <AwardsScript tournamentName={tournament.name} events={events.map(id => ({ name: eventName(id), contest: id, placings: placingsFor(id) }))} teams={teams} district={district}/>
     <div className="results-main">
       {flow}
       <PublishResults contests={events.map(id => ({ contest: id, placings: placingsFor(id) }))} teams={teams}/>
@@ -152,7 +162,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
               <span className="results-num">{standing.opponentsAverageRank.toFixed(2)}</span>
               <span className="results-num">{standing.reciprocals.toFixed(2)}</span>
               <span className="results-num">{standing.ratingPoints}</span>
-              <span className="results-status">{noFinals ? (standing.place <= awarded ? <Badge tone="success" icon={prelimComplete(eventId) ? 'check' : 'clock'}>{prelimComplete(eventId) ? `${ordinal(standing.place)} place${placings.find(placing => placing.entryId === standing.entryId)?.teamPoints ? ` · ${placings.find(placing => placing.entryId === standing.entryId)!.teamPoints} pts` : ''}` : `${ordinal(standing.place)} so far`}</Badge> : null) : standing.advances ? <Badge tone="success" icon="check">{usesSemis ? 'Semifinalist' : 'Finalist'}</Badge> : null}{standing.decidedBy && <small>{standing.decidedBy === 'Still tied' ? 'Still tied' : `Tie broken by ${standing.decidedBy.toLowerCase()}`}</small>}</span>
+              <span className="results-status">{noFinals && qualifierBadge(eventId, standing.place, prelimComplete(eventId))}{noFinals ? (standing.place <= awarded ? <Badge tone="success" icon={prelimComplete(eventId) ? 'check' : 'clock'}>{prelimComplete(eventId) ? `${ordinal(standing.place)} place${placings.find(placing => placing.entryId === standing.entryId)?.teamPoints ? ` · ${placings.find(placing => placing.entryId === standing.entryId)!.teamPoints} pts` : ''}` : `${ordinal(standing.place)} so far`}</Badge> : null) : standing.advances ? <Badge tone="success" icon="check">{usesSemis ? 'Semifinalist' : 'Finalist'}</Badge> : null}{standing.decidedBy && <small>{standing.decidedBy === 'Still tied' ? 'Still tied' : `Tie broken by ${standing.decidedBy.toLowerCase()}`}</small>}</span>
             </div>)}
           </div>
           <p className="results-rule"><Icon name="info" size={14}/> {standings.length <= cut ? `With ${standings.length} entries, everyone advances to the ${usesSemis ? 'semifinals' : 'final'}.` : cutTie ? `${standings.filter(standing => standing.advances).length} speakers advance because a tie at the cut line could not be broken.` : 'Ties are broken in order: opponents’ average rank, head-to-head, reciprocals, then rating points.'}</p>
@@ -178,7 +188,7 @@ export function ResultsBoard({ onOpenSetup }: { onOpenSetup?: () => void }) {
             <span className="results-num">{placing.reciprocals.toFixed(2)}</span>
             <span className="results-num">{placing.ratingPoints}</span>
             <span className="results-num strong">{placing.teamPoints}</span>
-            <span className="results-status">{placing.decidedBy && <small>{placing.decidedBy.startsWith('Tied') ? placing.decidedBy : `Tie broken by ${placing.decidedBy.toLowerCase()}`}</small>}</span>
+            <span className="results-status">{qualifierBadge(eventId, placing.place, true)}{placing.decidedBy && <small>{placing.decidedBy.startsWith('Tied') ? placing.decidedBy : `Tie broken by ${placing.decidedBy.toLowerCase()}`}</small>}</span>
           </div>)}
           {semifinalists.map(placing => <div key={placing.entryId} role="listitem" className="results-row final semifinalist">
             <span className="results-place">{placing.place}</span>

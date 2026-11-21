@@ -37,7 +37,7 @@ export function PublishResults({ contests, teams }: { contests: { contest: strin
 
   const placed = contests.filter(item => item.placings.length > 0);
   // The scale goes with the snapshot so per-event team points can be worked out from the placings (Compare teams).
-  const snapshot = buildSnapshot(placed, teams, { scale: tournament.teamPoints ?? NSAA_TEAM_POINTS, noviceCounts: tournament.noviceTeamPoints ?? false });
+  const snapshot = buildSnapshot(placed, teams, { scale: tournament.teamPoints ?? NSAA_TEAM_POINTS, noviceCounts: tournament.noviceTeamPoints ?? false }, tournament.stateQualifying);
   const run = async (action: () => Promise<void>) => {
     setBusy(true); setError('');
     try { await action(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Something went wrong. Try again.'); } finally { setBusy(false); }

@@ -10,13 +10,14 @@
 import { supabase } from './auth';
 import { growthMeets } from './Growth';
 import { NSAA_TEAM_POINTS, type Placing, type TeamScore } from './results';
-import { contestKey, defaultTournament, divisions, parseContest, sameSchool, seedEntries, type Division } from './tournament';
+import { contestKey, defaultTournament, divisions, parseContest, qualifierFor, sameSchool, seedEntries, type Division, type QualifierStatus, type StateQualifying } from './tournament';
 
 export type PublishedTournament = { id: string; name: string; date: string; host: string; publishedAt: string };
 /** withheld: the student's coach or the student asked for the name to be kept off public results; student reads WITHHELD. */
-export type PublishedPlacing = { tournamentId: string; contest: string; eventId: string; division: Division; place: number; student: string; school: string; withheld?: boolean };
+export type PublishedPlacing = { tournamentId: string; contest: string; eventId: string; division: Division; place: number; student: string; school: string; withheld?: boolean; qualifier?: QualifierStatus };
 /** What a withheld placing shows instead of the student's name. */
 export const WITHHELD = 'Name withheld';
+const withQualifier = (qualifier: QualifierStatus | null | undefined) => qualifier ? { qualifier } : {};
 export type PublishedTeam = { tournamentId: string; school: string; points: number; place: number };
 export type PublishedResults = { tournaments: PublishedTournament[]; placings: PublishedPlacing[]; teams: PublishedTeam[] };
 
@@ -41,10 +42,10 @@ export const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.t
  * Build the public snapshot from the director's placings. Only place, student and school are kept.
  * Team places share a place when points are tied.
  */
-export function buildSnapshot(contests: { contest: string; placings: Placing[] }[], teams: TeamScore[], scoring?: TeamScoring): Snapshot {
+export function buildSnapshot(contests: { contest: string; placings: Placing[] }[], teams: TeamScore[], scoring?: TeamScoring, district?: StateQualifying): Snapshot {
   const placings = contests.flatMap(({ contest, placings }) => placings.map(placing => {
     const { eventId, division } = parseContest(contest);
-    return { contest: contestKey(eventId, division), eventId, division, place: placing.place, student: placing.student.trim(), school: placing.school.trim() };
+    return { contest: contestKey(eventId, division), eventId, division, place: placing.place, student: placing.student.trim(), school: placing.school.trim(), ...withQualifier(qualifierFor(district, contest, placing.place)) };
   }));
   const ranked = [...teams].filter(team => team.points > 0).sort((a, b) => b.points - a.points);
   const teamRows = ranked.map(team => ({ school: team.school.trim(), points: team.points, place: ranked.findIndex(other => other.points === team.points) + 1 }));
@@ -166,9 +167,9 @@ export function demoScoring(includeDemoTournament: boolean): PublishedScoring[] 
 // ── Reading (anyone) ──
 
 type TournamentRecord = { id: string; name: string; date: string; host: string; published_at: string };
-type PlacingRecord = { tournament_id: string; contest: string; event_id: string; division: Division; place: number; student: string; school: string; withheld?: boolean };
+type PlacingRecord = { tournament_id: string; contest: string; event_id: string; division: Division; place: number; student: string; school: string; withheld?: boolean; qualifier?: QualifierStatus | null };
 type TeamRecord = { tournament_id: string; school: string; points: number; place: number };
-const toPlacing = (row: PlacingRecord): PublishedPlacing => ({ tournamentId: row.tournament_id, contest: row.contest, eventId: row.event_id, division: row.division === 'novice' ? 'novice' : 'varsity', place: row.place, student: row.withheld ? WITHHELD : row.student, school: row.school, ...(row.withheld ? { withheld: true } : {}) });
+const toPlacing = (row: PlacingRecord): PublishedPlacing => ({ tournamentId: row.tournament_id, contest: row.contest, eventId: row.event_id, division: row.division === 'novice' ? 'novice' : 'varsity', place: row.place, student: row.withheld ? WITHHELD : row.student, school: row.school, ...(row.withheld ? { withheld: true } : {}), ...withQualifier(row.qualifier) });
 const toTeam = (row: TeamRecord): PublishedTeam => ({ tournamentId: row.tournament_id, school: row.school, points: row.points, place: row.place });
 /** Match a name exactly but without caring about case: escape the wildcards ilike would otherwise read. */
 const exactly = (text: string) => text.trim().replace(/[\\%_]/g, match => `\\${match}`);
@@ -197,7 +198,7 @@ export async function loadPublished(filter: { tournamentId?: string; school?: st
     return { tournaments, placings: [], teams: ((data ?? []) as TeamRecord[]).map(toTeam) };
   }
   const placingQuery = (privacy: boolean) => {
-    let query = db().from('published_results').select(`tournament_id, contest, event_id, division, place, student, school${privacy ? ', withheld' : ''}`);
+    let query = db().from('published_results').select(`tournament_id, contest, event_id, division, place, student, school${privacy ? ', withheld, qualifier' : ''}`);
     if (filter.tournamentId) query = query.eq('tournament_id', filter.tournamentId);
     if (filter.school) query = query.ilike('school', exactly(filter.school));
     if (filter.student) query = query.ilike('student', exactly(filter.student));
@@ -205,7 +206,7 @@ export async function loadPublished(filter: { tournamentId?: string; school?: st
     return query.order('place');
   };
   // Databases from before name privacy have no withheld column; read them without it.
-  const readPlacings = async () => { const first = await placingQuery(true); return first.error && /withheld/.test(first.error.message) ? placingQuery(false) : first; };
+  const readPlacings = async () => { const first = await placingQuery(true); return first.error && /withheld|qualifier/.test(first.error.message) ? placingQuery(false) : first; };
   let teamQuery = db().from('published_team_points').select('tournament_id, school, points, place');
   if (filter.tournamentId) teamQuery = teamQuery.eq('tournament_id', filter.tournamentId);
   if (filter.school) teamQuery = teamQuery.ilike('school', exactly(filter.school));
@@ -228,7 +229,7 @@ export async function publishedAt(tournamentId: string): Promise<string | null> 
 export async function publishResults(tournamentId: string, snapshot: Snapshot): Promise<string> {
   const { data, error } = await db().rpc('publish_results', {
     target: tournamentId,
-    placings: snapshot.placings.map(row => ({ contest: row.contest, event_id: row.eventId, division: row.division, place: row.place, student: row.student, school: row.school })),
+    placings: snapshot.placings.map(row => ({ contest: row.contest, event_id: row.eventId, division: row.division, place: row.place, student: row.student, school: row.school, qualifier: row.qualifier ?? null })),
     teams: snapshot.teams,
   });
   if (error) fail(error.message);

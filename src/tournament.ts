@@ -46,6 +46,11 @@ export type Tournament = {
   format?: TournamentFormat;
   /** With no final round, how many places are announced in each event. Defaults to 6. */
   placesAwarded?: number;
+  /**
+   * An NSAA district contest: the top `qualifiers` in each varsity event qualify for State, and the next
+   * `alternates` places are alternates. Off (undefined) for invitationals.
+   */
+  stateQualifying?: StateQualifying;
   /** Whether novice finals earn team points. Usually not, so off by default. */
   noviceTeamPoints?: boolean;
   /** Public calendar listing (see Calendar.tsx). Listed by default for new tournaments. */
@@ -203,6 +208,20 @@ export type Section = { id: string; round: number; eventId: string; division?: D
  */
 export const contestKey = (eventId: string, division: Division) => division === 'novice' ? `${eventId}:novice` : eventId;
 export const contestOf = (item: { eventId: string; division?: Division }) => contestKey(item.eventId, divisionOf(item));
+export type StateQualifying = { qualifiers: number; alternates: number; nsaaClass?: NsaaClass };
+export const NSAA_CLASSES = ['A', 'B', 'C1', 'C2', 'D1', 'D2'] as const;
+export type NsaaClass = typeof NSAA_CLASSES[number];
+/** The usual district rule: the top three in each event go to State, with one alternate. Directors can change both. */
+export const STATE_QUALIFYING_DEFAULT: StateQualifying = { qualifiers: 3, alternates: 1 };
+export type QualifierStatus = 'state' | 'alternate';
+/** Whether a final place qualifies for State at a district contest. Novice divisions never qualify. */
+export function qualifierFor(rule: StateQualifying | undefined, contest: string, place: number): QualifierStatus | null {
+  if (!rule || contest.endsWith(':novice') || place < 1) return null;
+  if (place <= rule.qualifiers) return 'state';
+  if (place <= rule.qualifiers + rule.alternates) return 'alternate';
+  return null;
+}
+export const qualifierLabel: Record<QualifierStatus, string> = { state: 'State qualifier', alternate: 'Alternate' };
 export const parseContest = (key: string): { eventId: string; division: Division } => { const [eventId, division] = key.split(':'); return { eventId, division: division === 'novice' ? 'novice' : 'varsity' }; };
 
 /**

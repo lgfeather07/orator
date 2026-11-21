@@ -6,6 +6,7 @@ import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
 import { RoomsEditor } from './Rooms';
 import { RoundTimes } from './RoundTimes';
+import { StateQualifying } from './StateQualifying';
 import { EntryLimits, WaitlistPanel } from './Waitlist';
 import { ListingSettings } from './Calendar';
 import { RoundAlertsCard } from './Alerts';
@@ -85,6 +86,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
       <RoundTimes/>
+      <StateQualifying/>
       <FeeSettings editable={editable}/>
       <EntryLimits editable={editable}/>
       <ListingSettings editable={editable}/>

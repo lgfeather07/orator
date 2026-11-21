@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { isAccessibleRoom, divisionOf, entryLoad, loadLabel, roundLabel, sameSchool, type Section, timeFor } from './tournament';
+import { isAccessibleRoom, divisionOf, entryLoad, loadLabel, roundLabel, sameSchool, type Section, timeFor, qualifierFor, type StateQualifying } from './tournament';
 import type { Placing } from './results';
 import { useEntryFormPages } from './EntryForm';
 import { AccessRequestsPrint } from './Accessibility';
@@ -95,14 +95,15 @@ export function PrintCenter() {
 }
 
 /** The awards assembly script: each event's places read from last to first, then team sweepstakes. */
-export function AwardsScript({ tournamentName, events, teams }: { tournamentName: string; events: { name: string; placings: Placing[] }[]; teams: { school: string; points: number }[] }) {
+export function AwardsScript({ tournamentName, events, teams, district }: { tournamentName: string; events: { name: string; contest?: string; placings: Placing[] }[]; teams: { school: string; points: number }[]; district?: StateQualifying }) {
+  const note = (contest: string | undefined, place: number) => { const status = contest ? qualifierFor(district, contest, place) : null; return status === 'state' ? ' (qualifies for State)' : status === 'alternate' ? ' (State alternate)' : ''; };
   const placed = events.filter(event => event.placings.length > 0);
   return <div className="print-doc print-only" aria-hidden="true">
     <div className="print-page">
       <header className="print-head"><strong>{tournamentName}</strong><span>Awards assembly script</span></header>
       {placed.map(event => <section key={event.name} className="print-award">
         <h3>{event.name}</h3>
-        <ol reversed>{[...event.placings].sort((a, b) => b.place - a.place).map(placing => <li key={placing.entryId} value={placing.place}><b>{ordinal(placing.place)} place</b> — {placing.student}, {placing.school}</li>)}</ol>
+        <ol reversed>{[...event.placings].sort((a, b) => b.place - a.place).map(placing => <li key={placing.entryId} value={placing.place}><b>{ordinal(placing.place)} place</b> — {placing.student}, {placing.school}{note(event.contest, placing.place)}</li>)}</ol>
       </section>)}
       {teams.length > 0 && <section className="print-award"><h3>Team sweepstakes</h3><ol>{teams.slice(0, 5).reverse().map(team => <li key={team.school} value={teams.indexOf(team) + 1}><b>{ordinal(teams.indexOf(team) + 1)} place</b> — {team.school}, {team.points} points</li>)}</ol></section>}
     </div>

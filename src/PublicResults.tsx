@@ -4,7 +4,7 @@ import { LegalFooter } from './legal';
 import { authConfigured, useAuth } from './auth';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
-import { parseContest, sameSchool } from './tournament';
+import { parseContest, qualifierLabel, sameSchool } from './tournament';
 import { loadPublished, newestFirst, sameName, seasonOf, whenOf, WITHHELD, type PublishedPlacing, type PublishedResults, type PublishedTeam, type PublishedTournament } from './publicResultsApi';
 import { TeamCompare } from './TeamCompare';
 import { compareHref } from './teamCompare';
@@ -185,7 +185,7 @@ function TournamentResults({ id }: { id: string }) {
               <ol className="pr-placings">{rows.map(row => <li key={`${row.school}|${row.student}|${row.place}`} className={row.place === 1 ? 'first' : ''}>
                 <Place place={row.place}/>
                 <span className="pr-who"><Who row={row}/><a className="pr-school" href={schoolHref(row.school)}>{row.school}</a></span>
-                {row.place === 1 && <Badge tone="warning">Champion</Badge>}
+                {row.place === 1 && <Badge tone="warning">Champion</Badge>}{row.qualifier && <Badge tone={row.qualifier === 'state' ? 'success' : 'info'}>{qualifierLabel[row.qualifier]}</Badge>}
               </li>)}</ol>
             </section>;
           })}
@@ -243,7 +243,7 @@ function SchoolResults({ school }: { school: string }) {
             {placings.length === 0 ? <p className="pr-none pr-pad">No finalists published.</p> : <ol className="pr-placings">{placings.map(row => <li key={`${row.contest}|${row.student}|${row.place}`} className={row.place === 1 ? 'first' : ''}>
               <Place place={row.place}/>
               <span className="pr-who"><Who row={row}/><span className="pr-school">{contestName(row.contest)}</span></span>
-              {row.place === 1 && <Badge tone="warning">Champion</Badge>}
+              {row.place === 1 && <Badge tone="warning">Champion</Badge>}{row.qualifier && <Badge tone={row.qualifier === 'state' ? 'success' : 'info'}>{qualifierLabel[row.qualifier]}</Badge>}
             </li>)}</ol>}
           </section>)}
         </div>
@@ -286,7 +286,7 @@ function StudentResults({ school, student }: { school: string; student: string }
         <ol className="pr-placings">{rows.map(row => { const tournament = byId.get(row.tournamentId)!; return <li key={`${row.tournamentId}|${row.contest}`} className={row.place === 1 ? 'first' : ''}>
           <Place place={row.place}/>
           <span className="pr-who"><a href={tournamentHref(tournament.id)}>{tournament.name}</a><span className="pr-school">{contestName(row.contest)} · {tournament.date}</span></span>
-          {row.place === 1 && <Badge tone="warning">Champion</Badge>}
+          {row.place === 1 && <Badge tone="warning">Champion</Badge>}{row.qualifier && <Badge tone={row.qualifier === 'state' ? 'success' : 'info'}>{qualifierLabel[row.qualifier]}</Badge>}
         </li>; })}</ol>
       </section>
       <PrivacyNote/>
