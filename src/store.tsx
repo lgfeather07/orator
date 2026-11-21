@@ -126,6 +126,10 @@ type Store = {
   /** Call after a coach removes one of their judges: the demo records the drop; signed in, the database already has, so drops reload. */
   noteJudgeDrop: (seat: CoachJudge) => void;
   createLiveTournament: (tournament: Tournament) => Promise<void>;
+  /** Every tournament the signed-in user directs or belongs to, with their roles there. */
+  myTournaments: { id: string; name: string; date: string; status: Tournament['status']; roles: ('director' | MemberRole)[]; pending: boolean }[];
+  /** Switch to another of the user's tournaments, or NEW_TOURNAMENT to start one (directors). */
+  selectTournament: (id: string) => void;
   requestJoin: (tournamentId: string, role: MemberRole, school: string) => Promise<void>;
   decideMember: (member: Member, status: MemberStatus) => Promise<void>;
   refresh: () => Promise<void>;
@@ -140,6 +144,11 @@ type Store = {
 };
 
 const STORAGE_KEY = 'orator-demo-v7';
+/** Which tournament a signed-in user is looking at, remembered on this device. */
+const CHOSEN_KEY = 'orator-active-tournament';
+export const NEW_TOURNAMENT = 'new';
+const readChosenTournament = () => { try { return localStorage.getItem(CHOSEN_KEY); } catch { return null; } };
+const writeChosenTournament = (id: string) => { try { localStorage.setItem(CHOSEN_KEY, id); } catch { /* storage off */ } };
 type Cuts = Pick<Tournament, 'finalists' | 'finalistsByContest'>;
 const allEventIds = ballotEvents.map(event => event.id);
 /** Judge Leather starts out preferring public-address events and avoiding group interpretation. */
@@ -263,8 +272,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     try {
       const [all, mine] = await Promise.all([api.listTournaments(), api.listMyMemberships(userId)]);
-      // Prefer the tournament this user directs, then one they are approved for, then one they have asked to join.
-      const active = all.find(item => item.directorId === userId)
+      // The tournament the user last chose, if they still belong to it; else the one they direct, then one they
+      // are approved for, then one they have asked to join. 'new' means the director is starting another one.
+      const chosen = readChosenTournament();
+      const belongs = (id: string) => all.some(item => item.id === id && (item.directorId === userId || mine.some(member => member.tournamentId === id)));
+      const active = chosen === NEW_TOURNAMENT ? undefined : (chosen && belongs(chosen) ? all.find(item => item.id === chosen) : undefined) ?? all.find(item => item.directorId === userId)
         ?? all.find(item => mine.some(member => member.tournamentId === item.id && member.status === 'approved'))
         ?? all.find(item => mine.some(member => member.tournamentId === item.id));
       setTournaments(all); setMyMemberships(mine); setTournamentId(active?.id ?? null);
@@ -480,7 +492,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     tournamentId: live ? tournamentId : null, isDirector, tournaments, myMemberships, members,
     judges: live ? liveJudges : demoJudges,
     coachJudges, setCoachJudges: update => (live ? setLiveCoachJudges : setDemoCoachJudges)(update),
-    createLiveTournament: async tournament => { try { const created = await api.createTournament(tournament); setTournaments(list => [created, ...list]); await refresh(); } catch (caught) { report(caught); } },
+    createLiveTournament: async tournament => { try { const created = await api.createTournament(tournament); setTournaments(list => [created, ...list]); writeChosenTournament(created.id); await refresh(); } catch (caught) { report(caught); } },
+    myTournaments: tournaments.flatMap(item => { const roles = [...(item.directorId === userId ? ['director' as const] : []), ...myMemberships.filter(member => member.tournamentId === item.id).map(member => member.role)]; return roles.length ? [{ id: item.id, name: item.name, date: item.date, status: item.status, roles, pending: myMemberships.some(member => member.tournamentId === item.id && member.status === 'pending') }] : []; }),
+    selectTournament: id => { writeChosenTournament(id); setLiveState('loading'); refresh(); },
     requestJoin: async (id, role, school) => { try { await api.requestToJoin(id, role, school); await refresh(); } catch (caught) { report(caught); } },
     decideMember: async (member, status) => { try { await api.decideMember(member, status); await refresh(); } catch (caught) { report(caught); } },
     refresh,

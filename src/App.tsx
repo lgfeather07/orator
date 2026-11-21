@@ -27,6 +27,7 @@ import { eventCodes } from './ballots';
 import { HelpModal, type HelpKind } from './HelpModal';
 import { CoachPractice, StudentPractice } from './Practice';
 import { PrintCenter } from './PrintCenter';
+import { TournamentSwitcher } from './TournamentSwitcher';
 import { CoachEntryForm } from './EntryForm';
 import { TabSheetBoard } from './TabSheet';
 import { MyAccessRequest } from './Accessibility';
@@ -282,7 +283,7 @@ function DesktopShell({ active, children, title, subtitle, persona = 'coach' }: 
     Practice: persona === 'student' ? 'What your coach wants you to work on. Tick goals off as you get them.' : 'Set practice goals for each student. They see them on their own Practice tab.',
   };
   return <div className="desktop-shell">
-    <aside className="sidebar" aria-label="Workspace menu"><Logo/><div className="tournament-chip"><span className="tiny-logo">{tournament.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase()}</span><span><strong>{tournament.name}</strong><small>{tournament.date}</small></span><Icon name="chevron" size={15}/></div>
+    <aside className="sidebar" aria-label="Workspace menu"><Logo/><TournamentSwitcher/>
       {(persona === 'coach' || persona === 'judge') && <div className="role-switcher"><span>Working as</span><div><button className={persona === 'coach' ? 'active' : ''} onClick={() => navigate('coach')}><Icon name="users" size={15}/> Coach</button><button className={persona === 'judge' ? 'active' : ''} onClick={() => navigate('judge')}><Icon name="ballot" size={15}/> Judge</button></div><small>Switch roles without signing out</small></div>}
       <span className="sidebar-section-label">{persona} workspace</span>
       <nav>
