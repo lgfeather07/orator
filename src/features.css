@@ -1025,3 +1025,6 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 .results-privacy-row span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .results-privacy-row small, .results-privacy-note { color: var(--muted); font-size: 12px; }
 .results-privacy-note { margin: 0; padding: 0 18px 16px; }
+
+/* A setting that can no longer change (DirectorSetup.tsx) */
+.setting-locked { margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; font-weight: 500; }

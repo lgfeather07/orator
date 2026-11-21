@@ -53,6 +53,8 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
   const loadCount = (count: number) => loads.filter(load => count === 4 ? load >= 4 : load === count).length;
   const built = sections.length > 0;
   const editable = tournament.status === 'registration';
+  // The final-round format is fixed once the tournament starts or any room after the prelims exists (supabase/locks.sql).
+  const formatLocked = tournament.status === 'running' || tournament.status === 'finished' || sections.some(section => section.round > tournament.rounds);
   const toggleEvent = (id: string) => updateTournament({ eventIds: offered.includes(id) ? offered.filter(item => item !== id) : ballotEvents.map(event => event.id).filter(item => item === id || offered.includes(item)) });
 
   const entriesOpen = store.entriesOpen;
@@ -78,7 +80,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <label><span>Most events per student</span><select value={tournament.maxEntries} disabled={!editable} onChange={event => updateTournament({ maxEntries: Number(event.target.value) })}>{[1, 2, 3, 4].map(count => <option key={count} value={count}>{count === 1 ? '1 event' : `${count} events`}</option>)}</select></label>
         <label className="check-setting"><input type="checkbox" checked={tournament.showRating ?? false} onChange={event => updateTournament({ showRating: event.target.checked })}/><span><strong>Show judges a rating</strong><small>Off: judges give section marks and ranks only. Orator still totals the marks for tiebreaks.</small></span></label>
         <label><span>Section marks (1–10) on e-ballots</span><select value={tournament.sectionMarks ?? 'optional'} onChange={event => updateTournament({ sectionMarks: event.target.value as 'optional' | 'required' })}><option value="optional">Optional: judges give a score out of 50</option><option value="required">Required: judges mark every section</option></select></label>
-        <label><span>Final round</span><select value={tournament.format ?? 'finals'} onChange={event => updateTournament({ format: event.target.value as 'finals' | 'prelims' })}><option value="finals">Finals: top speakers advance to a final</option><option value="prelims">No finals: place from the preliminary rounds</option></select></label>
+        <label><span>Final round{formatLocked && <small className="setting-locked"><Icon name="lock" size={12}/> Locked once the tournament starts</small>}</span><select value={tournament.format ?? 'finals'} disabled={formatLocked} onChange={event => updateTournament({ format: event.target.value as 'finals' | 'prelims' })}><option value="finals">Finals: top speakers advance to a final</option><option value="prelims">No finals: place from the preliminary rounds</option></select></label>
         {tournament.format === 'prelims' && <label><span>Places announced in each event</span><select value={tournament.placesAwarded ?? 6} onChange={event => updateTournament({ placesAwarded: Number(event.target.value) })}>{[3, 4, 5, 6, 8, 10].map(count => <option key={count} value={count}>Top {count}</option>)}</select></label>}
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
