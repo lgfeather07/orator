@@ -31,7 +31,7 @@ const toRating = (mark: number) => Math.round(mark * 50) / 10;
 const toRank = (mark: number) => Math.round(Math.min(6, Math.max(1, 1 + (9.4 - mark) * 1.5)) * 10) / 10;
 const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 
-type Scale = { low: number; high: number; ticks: number[]; inverted?: boolean; tickLabel?: (tick: number) => string; height?: number };
+export type Scale = { low: number; high: number; ticks: number[]; inverted?: boolean; tickLabel?: (tick: number) => string; height?: number };
 const ratingScale: Scale = { low: 33, high: 50, ticks: [35, 40, 45, 50] };
 const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n > 3 ? 0 : n]}`;
 const rankScale: Scale = { low: 1, high: 6, ticks: [1, 2, 3, 4, 5, 6], inverted: true, tickLabel: ordinal, height: 215 };

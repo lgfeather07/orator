@@ -36,9 +36,9 @@ export function GoalList({ student, school, canEdit, events }: { student: string
   </div>;
 }
 
-type MarkRow = { eventId: string; marks: number[] };
+export type MarkRow = { eventId: string; marks: number[] };
 /** The section a student scores lowest in, across their ballots: a starting point for a practice goal. */
-function weakestSection(rows: MarkRow[]) {
+export function weakestSection(rows: MarkRow[]) {
   const totals = new Map<string, { eventId: string; name: string; sum: number; count: number }>();
   rows.forEach(row => { const criteria = ballotEvents.find(event => event.id === row.eventId)?.criteria ?? []; row.marks.forEach((mark, index) => { if (!mark || !criteria[index]) return; const key = `${row.eventId}|${index}`; const item = totals.get(key) ?? { eventId: row.eventId, name: criteria[index].name, sum: 0, count: 0 }; item.sum += mark; item.count++; totals.set(key, item); }); });
   const list = [...totals.values()].filter(item => item.count > 0).map(item => ({ ...item, average: item.sum / item.count }));
@@ -48,9 +48,9 @@ function weakestSection(rows: MarkRow[]) {
 }
 
 /** Coach: pick a student, see where judges mark them lowest, and set practice goals. */
-export function CoachPractice({ school, students }: { school: string; students: { name: string; events: string[] }[] }) {
+export function CoachPractice({ school, students, initial = '' }: { school: string; students: { name: string; events: string[] }[]; initial?: string }) {
   const store = useStore();
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState(initial);
   const student = students.find(item => item.name === chosen) ?? students[0];
   // Real ballots for a signed-in coach; sample ballots in the demo.
   const [teamRows, setTeamRows] = useState<{ speaker: string; eventId: string; marks: number[] }[] | null>(store.live ? null : pastBallots.map(ballot => ({ speaker: ballot.student, eventId: ballot.eventId, marks: ballot.marks })));

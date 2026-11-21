@@ -371,3 +371,7 @@ textarea { font-size: 14px; line-height: 1.55; }
 .form-note.warn svg { flex: none; margin-top: 2px; color: var(--amber); }
 .reminder-card strong .badge { margin-left: 6px; vertical-align: 1px; }
 @media (max-width: 900px) { .desktop-shell + .legal-footer { margin-left: 0; } .legal-footer { padding: 20px 16px 26px; } .legal-main h1 { font-size: 36px; } }
+/* Growth with one tournament so far (LiveGrowth.tsx) */
+.growth-single { margin: 10px 17px 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.growth-single strong { color: var(--ink); font-family: var(--font-mono); font-size: 26px; }
+.growth-empty .growth-note { margin-top: 4px; }
