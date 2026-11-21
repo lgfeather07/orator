@@ -19,7 +19,7 @@ type TournamentRecord = { id: string; director_id: string; name: string; date: s
  * Director settings that don't need their own column: fees, judges per final, the team-point scale, and so on.
  * They are saved together in the tournament's `settings` (see supabase/fixes.sql). Fees are also kept in their own column for the public calendar..
  */
-const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest', 'rooms', 'semisByContest', 'format', 'placesAwarded', 'sectionMarks', 'schoolEntryCap', 'eventEntryCap', 'dropDeadline', 'dropEntryFee', 'dropJudgeFee', 'freezeEntryFees', 'accessibleRooms'] as const;
+const SETTING_KEYS = ['fees', 'finalJudges', 'teamPoints', 'noviceTeamPoints', 'finalists', 'finalistsByContest', 'rooms', 'semisByContest', 'format', 'placesAwarded', 'sectionMarks', 'schoolEntryCap', 'eventEntryCap', 'dropDeadline', 'dropEntryFee', 'dropJudgeFee', 'freezeEntryFees', 'accessibleRooms', 'roundTimes'] as const;
 type Settings = Pick<Tournament, (typeof SETTING_KEYS)[number]>;
 const settingsOf = (tournament: Partial<Tournament>): Settings => Object.fromEntries(SETTING_KEYS.filter(key => tournament[key] !== undefined).map(key => [key, tournament[key]])) as Settings;
 export const touchesSettings = (patch: Partial<Tournament>) => SETTING_KEYS.some(key => key in patch);

@@ -55,10 +55,10 @@ export function roomLabel(section: Pick<Section, 'round' | 'eventId' | 'division
   const event = `${section.division === 'novice' ? 'Novice ' : ''}${eventShort[section.eventId] ?? section.eventId}`;
   return section.round > prelimRounds ? `${event} final` : `Round ${section.round} ${event}`;
 }
-export const studentRoomMessage = (section: Pick<Section, 'round' | 'eventId' | 'division' | 'room'>, prelimRounds: number, position: number) =>
-  `Orator: ${roomLabel(section, prelimRounds)} - ${section.room} at ${alertTime(section.round)}. You speak ${ordinal(position)}.`;
-export const judgeRoomMessage = (section: Pick<Section, 'round' | 'eventId' | 'division' | 'room'>, prelimRounds: number, site = SITE_URL) =>
-  `Orator: You're judging ${roomLabel(section, prelimRounds)} in ${section.room} at ${alertTime(section.round)}. Open your ballot: ${site}`;
+export const studentRoomMessage = (section: Pick<Section, 'round' | 'eventId' | 'division' | 'room'>, prelimRounds: number, position: number, time = alertTime(section.round)) =>
+  `Orator: ${roomLabel(section, prelimRounds)} - ${section.room} at ${time}. You speak ${ordinal(position)}.`;
+export const judgeRoomMessage = (section: Pick<Section, 'round' | 'eventId' | 'division' | 'room'>, prelimRounds: number, site = SITE_URL, time = alertTime(section.round)) =>
+  `Orator: You're judging ${roomLabel(section, prelimRounds)} in ${section.room} at ${time}. Open your ballot: ${site}`;
 const shortName = (name: string) => name.trim().length > 60 ? `${name.trim().slice(0, 57)}...` : name.trim();
 export const scheduleMessage = (tournament: Pick<Tournament, 'name'>, site = SITE_URL) => `Orator: The ${shortName(tournament.name)} schedule is out. See your rooms and times: ${site}`;
 export const entriesMessage = (tournament: Pick<Tournament, 'name'>, open: boolean) => open
@@ -95,18 +95,20 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
  * Every alert "Send room alerts for Round N" would queue: each student's room and speaking position for each
  * event (matched by roster name or name, and school), and each judge's room. Mirrors queue_round_alerts.
  */
-export function roundAlerts(tournament: Pick<Tournament, 'rounds'>, sections: Section[], entries: Entry[], people: AlertPerson[], round: number, site = SITE_URL) {
+export function roundAlerts(tournament: Pick<Tournament, 'rounds' | 'roundTimes'>, sections: Section[], entries: Entry[], people: AlertPerson[], round: number, site = SITE_URL) {
   const planned: PlannedAlert[] = []; let unmatched = 0; let students = 0;
+  // The director's start time for the round, else the default (kept in step with timeFor in tournament.ts).
+  const startOf = (number: number) => tournament.roundTimes?.[number - 1]?.trim() || alertTime(number);
   for (const section of sections.filter(item => item.round === round)) {
     section.entryIds.forEach((entryId, index) => {
       const entry = entries.find(item => item.id === entryId); if (!entry) return;
       const person = people.find(item => item.role === 'student' && same(item.school, entry.school) && same(item.rosterName || item.name, entry.student));
       if (!person) { unmatched++; return; }
       students++;
-      planned.push(...deliveries(person, 'rooms', studentRoomMessage(section, tournament.rounds, index + 1)));
+      planned.push(...deliveries(person, 'rooms', studentRoomMessage(section, tournament.rounds, index + 1, startOf(section.round))));
     });
     const judge = people.find(item => item.role === 'judge' && item.id === section.judgeId);
-    if (judge) planned.push(...deliveries(judge, 'ballots', judgeRoomMessage(section, tournament.rounds, site)));
+    if (judge) planned.push(...deliveries(judge, 'ballots', judgeRoomMessage(section, tournament.rounds, site, startOf(section.round))));
   }
   return { planned, unmatched, students };
 }

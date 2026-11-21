@@ -3,7 +3,7 @@ import { Badge, Icon } from './ui';
 import { useStore } from './store';
 import { useAuth } from './auth';
 import { ballotEvents, eventCodes } from './ballots';
-import { roundLabel, roundTimes, stageOf } from './tournament';
+import { roundLabel, stageOf, timeFor } from './tournament';
 import { listMyBallotStatus } from './ballotApi';
 import type { BallotRoom } from './JudgeBallot';
 
@@ -23,7 +23,7 @@ export function MyRooms({ onOpen }: { onOpen: (room: BallotRoom) => void }) {
     const section = mine.find(item => item.id === sectionId); if (!section || (live && !tournamentId)) return;
     const speakers = section.entryIds.map(id => entries.find(entry => entry.id === id)).filter(entry => entry !== undefined).map(entry => ({ code: entry.id, name: entry.student, school: entry.school }));
     if (speakers.length === 0) return;
-    onOpen({ key: { tournament: tournament.name, round: section.round, room: section.room }, tournamentId: tournamentId ?? 'demo', sectionId: section.id, eventId: section.eventId, time: roundTimes[section.round - 1] ?? '', speakers, final: stageOf(section, tournament) === 'final', stage: stageOf(section, tournament) });
+    onOpen({ key: { tournament: tournament.name, round: section.round, room: section.room }, tournamentId: tournamentId ?? 'demo', sectionId: section.id, eventId: section.eventId, time: timeFor(tournament, section.round) ?? '', speakers, final: stageOf(section, tournament) === 'final', stage: stageOf(section, tournament) });
   };
   return <section className="panel role-panel">
     <div className="panel-head"><div><h2>Your rooms</h2><p>{tournament.name} · assigned by the tournament director{live ? '' : ' · from the demo schedule'}</p></div><span className="panel-head-actions"><Badge tone={mine.length ? 'success' : 'neutral'} icon={mine.length ? 'check' : 'clock'}>{mine.length} {mine.length === 1 ? 'room' : 'rooms'}</Badge><button onClick={() => refresh()}>Refresh</button></span></div>
@@ -31,7 +31,7 @@ export function MyRooms({ onOpen }: { onOpen: (room: BallotRoom) => void }) {
       const state = stateOf(section);
       return <button key={section.id} className={state === 'submitted' ? '' : 'featured'} onClick={() => open(section.id)}>
         <span className="event-code">{eventCodes[section.eventId] ?? section.eventId.slice(0, 3).toUpperCase()}</span>
-        <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{roundTimes[section.round - 1]} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
+        <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{timeFor(tournament, section.round)} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
         <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge><Icon name="arrow"/>
       </button>;
     })}</div>}

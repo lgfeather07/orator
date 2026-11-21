@@ -5,10 +5,11 @@ import { roundSpeakers, tournamentJudges, useStore } from './store';
 import { ballotEvents } from './ballots';
 import { FeeSettings, PaymentsPanel } from './Payments';
 import { RoomsEditor } from './Rooms';
+import { RoundTimes } from './RoundTimes';
 import { EntryLimits, WaitlistPanel } from './Waitlist';
 import { ListingSettings } from './Calendar';
 import { RoundAlertsCard } from './Alerts';
-import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, roundTimes, sameSchool, type Section } from './tournament';
+import { divisionOf, entryLoad, isFinal, judgeConflict, loadLabel, roomNeeded, roomsFor, sameSchool, type Section, timeFor } from './tournament';
 import { elimRoundLabel } from './semis';
 import { AccessRequestsPanel, AccessScheduleSummary, AccessSectionFlag, accessibleSuffix } from './Accessibility';
 
@@ -81,6 +82,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         {tournament.format === 'prelims' && <label><span>Places announced in each event</span><select value={tournament.placesAwarded ?? 6} onChange={event => updateTournament({ placesAwarded: Number(event.target.value) })}>{[3, 4, 5, 6, 8, 10].map(count => <option key={count} value={count}>Top {count}</option>)}</select></label>}
         <label><span>Preliminary rounds</span><select value={tournament.rounds} disabled={!editable} onChange={event => updateTournament({ rounds: Number(event.target.value) })}>{[2, 3, 4, 5].map(count => <option key={count} value={count}>{count} rounds</option>)}</select></label>
       </div>
+      <RoundTimes/>
       <FeeSettings editable={editable}/>
       <EntryLimits editable={editable}/>
       <ListingSettings editable={editable}/>
@@ -121,7 +123,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         <Button icon={built ? 'sparkle' : 'plus'} variant={built ? 'secondary' : 'primary'} disabled={entries.length === 0} onClick={() => { store.generateSchedule(); setRound(1); }}>{built ? 'Rebuild' : 'Build schedule'}</Button></span></div>
       <RoomsEditor editable/>
       {!built ? <div className="schedule-empty"><span className="upload-illustration"><Icon name="clock" size={30}/></span><h3>No schedule yet</h3><p>Orator splits each event into rooms of up to {tournament.sectionSize}, spreads teammates across rooms, mixes the rooms each round, and assigns judges with no school conflicts.</p><Button icon="plus" onClick={() => store.generateSchedule()}>Build schedule</Button></div> : <>
-        <div className="schedule-tools"><div className="segmented">{Array.from({ length: tournament.rounds }, (_, index) => index + 1).map(number => <button key={number} className={round === number ? 'active' : ''} onClick={() => setRound(number)}>Round {number} · {roundTimes[number - 1]}</button>)}</div>
+        <div className="schedule-tools"><div className="segmented">{Array.from({ length: tournament.rounds }, (_, index) => index + 1).map(number => <button key={number} className={round === number ? 'active' : ''} onClick={() => setRound(number)}>Round {number} · {timeFor(tournament, number)}</button>)}</div>
           <Badge tone={problems.length ? 'warning' : 'success'} icon={problems.length ? 'warning' : 'check'}>{problems.length ? `${problems.length} room${problems.length > 1 ? 's need' : ' needs'} attention` : 'Every room has a judge'}</Badge></div>
         {tournament.status !== 'registration' && <div className="schedule-live"><Icon name="bell" size={16}/><div><strong>The schedule is published. Changes go out right away.</strong><small>Swap a judge below and coaches and judges see “Schedule updated” with what moved.{problems.length ? ' Rooms that need a judge are flagged.' : ''}</small>
           {store.scheduleChanges.some(change => change.kind !== 'entries') && <ul>{store.scheduleChanges.filter(change => change.kind !== 'entries').slice(0, 5).map(change => <li key={change.id}><time>{change.time}</time> {change.text}</li>)}</ul>}</div></div>}

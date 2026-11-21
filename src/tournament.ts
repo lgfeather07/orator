@@ -35,6 +35,8 @@ export type Tournament = {
   schoolEntryCap?: number | null;
   /** Most entries in one event (each division counted separately) before more go on the waitlist. Empty means no cap. */
   eventEntryCap?: number | null;
+  /** Start time of each round, e.g. "8:00 AM", by round number (prelims, then semifinals/finals). Empty uses the default. */
+  roundTimes?: string[];
   /** Show judges the rating their section marks add up to. Off by default: many judges would rather not see it. */
   showRating?: boolean;
   /**
@@ -365,7 +367,10 @@ export function buildSchedule(tournament: Tournament, entries: Entry[], judges: 
   return sections;
 }
 
-export const roundTimes = ['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM', '4:30 PM'];
+/** Default start times by round. Directors set their own (tournament.roundTimes); finals follow the last prelim round. */
+export const roundTimes = ['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM', '4:30 PM', '6:00 PM', '7:30 PM'];
+/** When a round starts at this tournament: the director's time if set, otherwise the default. */
+export const timeFor = (tournament: Pick<Tournament, 'roundTimes'>, round: number) => tournament.roundTimes?.[round - 1]?.trim() || roundTimes[round - 1] || '';
 
 /**
  * True for any room after the preliminary rounds: a final, or a semifinal (an elimination round).

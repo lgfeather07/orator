@@ -3,7 +3,7 @@ import { Avatar, Badge, Button, Icon, Logo } from './ui';
 import { useStore } from './store';
 import { supabase, useAuth } from './auth';
 import { ballotEvents, eventCodes } from './ballots';
-import { invoiceFor, isFinal, roundLabel, roundTimes, sameSchool, type Section } from './tournament';
+import { invoiceFor, isFinal, roundLabel, sameSchool, type Section, timeFor } from './tournament';
 import { listMyBallotStatus } from './ballotApi';
 import { JudgeBallot, type BallotRoom } from './JudgeBallot';
 import type { Member } from './tournamentApi';
@@ -229,7 +229,7 @@ function GuestRooms({ judgeId, seat }: { judgeId: string; seat: { name: string; 
   const openRoom = (section: Section) => {
     const speakers = section.entryIds.map(id => entries.find(entry => entry.id === id)).filter(entry => entry !== undefined).map(entry => ({ code: entry.id, name: entry.student, school: entry.school }));
     if (speakers.length === 0) return;
-    setOpen({ key: { tournament: tournament.name, round: section.round, room: section.room }, tournamentId: tournamentId ?? 'demo', sectionId: section.id, eventId: section.eventId, time: roundTimes[section.round - 1] ?? '', speakers, final: isFinal(section, tournament) });
+    setOpen({ key: { tournament: tournament.name, round: section.round, room: section.room }, tournamentId: tournamentId ?? 'demo', sectionId: section.id, eventId: section.eventId, time: timeFor(tournament, section.round) ?? '', speakers, final: isFinal(section, tournament) });
     window.setTimeout(() => top.current?.focus(), 0);
   };
   const published = tournament.status !== 'registration' && sections.length > 0;
@@ -243,7 +243,7 @@ function GuestRooms({ judgeId, seat }: { judgeId: string; seat: { name: string; 
     {mine.length === 0 ? <p className="cj-empty">{published ? 'You haven’t been given a room yet. The director may still add you; check back before each round.' : 'The schedule isn’t out yet. Your rooms appear here as soon as the director publishes it. Keep this page bookmarked.'}</p>
       : <div className="assignment-desktop guest-room-list">{mine.map(section => { const state = stateOf(section); return <button key={section.id} className={state === 'submitted' ? '' : 'featured'} onClick={() => openRoom(section)}>
         <span className="event-code">{eventCodes[section.eventId] ?? section.eventId.slice(0, 3).toUpperCase()}</span>
-        <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{roundTimes[section.round - 1]} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
+        <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{timeFor(tournament, section.round)} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
         <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge><Icon name="arrow"/>
       </button>; })}</div>}
   </section>;

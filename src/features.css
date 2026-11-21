@@ -1008,3 +1008,11 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 .tournament-menu .tiny-logo { width: 32px; height: 32px; }
 .tournament-menu-new, .tournament-menu-link { padding: 9px 10px; display: flex; align-items: center; gap: 8px; color: var(--brand); background: transparent; border: 0; border-top: 1px solid var(--border); font: inherit; font-size: 13px; font-weight: 650; text-decoration: none; cursor: pointer; }
 .tournament-menu-new:hover, .tournament-menu-link:hover { background: var(--surface-2); }
+
+/* ── Round times ── */
+.round-times { margin: 0; padding: 4px 18px 16px; border: 0; }
+.round-times legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.round-times legend small { margin-left: 6px; color: var(--muted); font-weight: 500; }
+.round-times-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.round-times-grid label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.round-times-grid input { min-height: 40px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font: inherit; font-size: 14px; }

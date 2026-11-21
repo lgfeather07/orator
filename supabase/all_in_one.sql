@@ -2601,6 +2601,12 @@ language sql immutable set search_path = '' as $$
   select (array['8:00 AM', '9:30 AM', '11:00 AM', '1:30 PM', '3:00 PM', '4:30 PM', '6:00 PM'])[least(greatest(round, 1), 7)];
 $$;
 
+-- The director's start time for a round (tournaments.settings.roundTimes), else the default above.
+create or replace function alerts_internal.round_time(target uuid, round int) returns text
+language sql stable security definer set search_path = '' as $$
+  select coalesce(nullif(btrim((select t.settings->'roundTimes'->>(round - 1) from public.tournaments t where t.id = target)), ''), alerts_internal.round_time(round));
+$$;
+
 create or replace function alerts_internal.ordinal(n int) returns text
 language sql immutable set search_path = '' as $$
   select n || case when n % 100 between 11 and 13 then 'th' when n % 10 = 1 then 'st' when n % 10 = 2 then 'nd' when n % 10 = 3 then 'rd' else 'th' end;
@@ -2702,14 +2708,14 @@ begin
       if r.user_id is null then unmatched := unmatched + 1; continue; end if;
       students := students + 1;
       select * into q from alerts_internal.enqueue(target, r.user_id, 'rooms',
-        format('Orator: %s - %s at %s. You speak %s.', label, s.room, alerts_internal.round_time(s.round), alerts_internal.ordinal(r.pos::int)),
+        format('Orator: %s - %s at %s. You speak %s.', label, s.room, alerts_internal.round_time(s.tournament_id, s.round), alerts_internal.ordinal(r.pos::int)),
         format('round:%s:%s:%s', round_number, s.id, r.entry_id));
       total := total + q.queued; again := again + q.repeated;
     end loop;
     if s.judge_id is not null then
       judges := judges + 1;
       select * into q from alerts_internal.enqueue(target, s.judge_id, 'ballots',
-        format('Orator: You''re judging %s in %s at %s. Open your ballot: %s', label, s.room, alerts_internal.round_time(s.round), alerts_internal.site_url()),
+        format('Orator: You''re judging %s in %s at %s. Open your ballot: %s', label, s.room, alerts_internal.round_time(s.tournament_id, s.round), alerts_internal.site_url()),
         format('round:%s:%s:judge', round_number, s.id));
       total := total + q.queued; again := again + q.repeated;
     end if;
@@ -2775,7 +2781,7 @@ begin
   label := alerts_internal.room_label(new, t.rounds);
   if new.judge_id is not null then
     perform alerts_internal.enqueue(t.id, new.judge_id, 'ballots',
-      format('Orator: You''re %sjudging %s in %s at %s. Open your ballot: %s', case when tg_op = 'UPDATE' then 'now ' else '' end, label, new.room, alerts_internal.round_time(new.round), alerts_internal.site_url()),
+      format('Orator: You''re %sjudging %s in %s at %s. Open your ballot: %s', case when tg_op = 'UPDATE' then 'now ' else '' end, label, new.room, alerts_internal.round_time(new.tournament_id, new.round), alerts_internal.site_url()),
       format('judge:%s:%s', new.id, stamp));
   end if;
   if tg_op = 'UPDATE' and old.judge_id is not null then

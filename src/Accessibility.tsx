@@ -10,7 +10,7 @@ import { Badge, Button, Icon } from './ui';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { ACCESS_NOTE_MAX, accessByRound, accessibleRoomsIn, misplaced, requestOf, requestsIn, roomsOf, sectionNeedsAccess, shortageText } from './accessibility';
-import { isAccessibleRoom, isFinal, roundLabel, roundTimes, sameSchool, type Entry, type Section } from './tournament';
+import { isAccessibleRoom, isFinal, roundLabel, sameSchool, type Entry, type Section, timeFor } from './tournament';
 import './accessibility.css';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
@@ -158,7 +158,7 @@ export function AccessRequestsPrint(): ReactNode {
         <h3>{request.student} <small>· {request.school}</small></h3>
         <p className="print-meta">Note: {request.note || '—'}</p>
         {rooms.length === 0 ? <p className="print-meta">Not scheduled yet.</p> : <table><thead><tr><th>Round</th><th>Event</th><th>Room</th><th>Accessible?</th></tr></thead>
-          <tbody>{rooms.map(section => <tr key={section.id}><td>{roundLabel(section, tournament)}{roundTimes[section.round - 1] ? ` · ${roundTimes[section.round - 1]}` : ''}</td><td>{section.division === 'novice' ? 'Novice ' : ''}{eventName(section.eventId)}</td><td><b>{section.room}</b></td><td>{isAccessibleRoom(tournament, section.room) ? 'Yes' : <b>NO: move this room</b>}</td></tr>)}</tbody></table>}
+          <tbody>{rooms.map(section => <tr key={section.id}><td>{roundLabel(section, tournament)}{timeFor(tournament, section.round) ? ` · ${timeFor(tournament, section.round)}` : ''}</td><td>{section.division === 'novice' ? 'Novice ' : ''}{eventName(section.eventId)}</td><td><b>{section.room}</b></td><td>{isAccessibleRoom(tournament, section.room) ? 'Yes' : <b>NO: move this room</b>}</td></tr>)}</tbody></table>}
       </section>;
     })}
   </div>;

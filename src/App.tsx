@@ -19,7 +19,7 @@ import { BallotEntryBoard } from './PaperBallots';
 import { CreateTournamentCard, JoinTournament, PeopleBoard, useAccess } from './Access';
 import { StudentGrowth, MyGrowth, finalsBreaks, teamGrowth } from './Growth';
 import { pastBallots } from './PastBallots';
-import { entryLoadByName, isFinal, loadLabel, roundLabel, roundTimes, sameSchool } from './tournament';
+import { entryLoadByName, isFinal, loadLabel, roundLabel, sameSchool, timeFor } from './tournament';
 import { ballotEvents as nsaaEvents } from './ballots';
 import { EventPreferences, JudgeConflicts, toPreferenceList } from './Preferences';
 import { preferenceFor } from './tournament';
@@ -469,7 +469,7 @@ function MyEntries() {
   const myRooms = (entryId: string) => sections.filter(section => section.entryIds.includes(entryId)).sort((a, b) => a.round - b.round).filter((section, index, list) => list.findIndex(other => other.round === section.round) === index);
   return <section className="my-entries">
     <div><Badge tone="info" icon="users">{loadLabel(mine.length) || 'One event'}</Badge><strong>{mine.length > 1 ? `You’re in ${mine.length} events${access.state === 'demo' ? ' this round' : ''}. You choose which room to go to first.` : 'You’re in one event.'}</strong>{mine.length > 1 && <small>Tell each judge you’re {loadLabel(mine.length).toLowerCase()} when you arrive. They can see it on their ballot too.</small>}</div>
-    <ul>{mine.map(entry => { const rooms = myRooms(entry.id); const shown = access.state === 'demo' ? rooms.filter(section => section.round === round) : rooms; return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && shown.length ? shown.map(section => `${roundLabel(section, tournament)} · ${roundTimes[section.round - 1]} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}`).join('  /  ') : 'Room posted when the schedule is published'}</small></li>; })}</ul>
+    <ul>{mine.map(entry => { const rooms = myRooms(entry.id); const shown = access.state === 'demo' ? rooms.filter(section => section.round === round) : rooms; return <li key={entry.id}><strong>{nsaaEvents.find(event => event.id === entry.eventId)?.name}</strong><small>{published && shown.length ? shown.map(section => `${roundLabel(section, tournament)} · ${timeFor(tournament, section.round)} · ${section.room} · speaker ${section.entryIds.indexOf(entry.id) + 1} of ${section.entryIds.length}`).join('  /  ') : 'Room posted when the schedule is published'}</small></li>; })}</ul>
     <MyAccessRequest entries={mine}/>
   </section>;
 }
@@ -530,7 +530,7 @@ function LiveJudgeHead({ onRooms, onPreferences, action }: { onRooms: () => void
   const top = store.myPreferences.find(item => item.level === 'top');
   const conflicts = store.myJudgeProfile.clean ? 'Clean' : store.myJudgeProfile.knows.length ? `${store.myJudgeProfile.knows.length} known` : 'None set';
   return <>
-    <section className="role-hero judge-hero"><div><Badge tone={state === 'approved' ? 'success' : 'neutral'} icon={state === 'approved' ? 'check' : 'clock'}>{state === 'approved' ? 'Approved to judge' : 'Waiting for approval'}</Badge><h2>{next ? 'Your rooms are ready' : store.tournament.name}</h2><p>{next ? `${roundLabel(next, store.tournament)} · ${nsaaEvents.find(event => event.id === next.eventId)?.name ?? next.eventId} · ${next.room} · ${roundTimes[next.round - 1] ?? ''}` : state === 'approved' ? 'Your rooms appear here once the director publishes the schedule.' : 'Ask to join above; the director approves judges.'}</p>
+    <section className="role-hero judge-hero"><div><Badge tone={state === 'approved' ? 'success' : 'neutral'} icon={state === 'approved' ? 'check' : 'clock'}>{state === 'approved' ? 'Approved to judge' : 'Waiting for approval'}</Badge><h2>{next ? 'Your rooms are ready' : store.tournament.name}</h2><p>{next ? `${roundLabel(next, store.tournament)} · ${nsaaEvents.find(event => event.id === next.eventId)?.name ?? next.eventId} · ${next.room} · ${timeFor(store.tournament, next.round) ?? ''}` : state === 'approved' ? 'Your rooms appear here once the director publishes the schedule.' : 'Ask to join above; the director approves judges.'}</p>
       <div className="hero-actions"><Button icon="ballot" onClick={onRooms}>Open my rooms</Button><Button variant="secondary" icon="sparkle" onClick={onPreferences}>Preferences and conflicts</Button></div></div></section>
     <div className="metric-grid"><Metric label="Rooms" value={String(rooms.length)} note={rooms.length ? 'Assigned to you' : 'None yet'} icon="clock"/><Metric label="Finals" value={String(rooms.filter(section => isFinal(section, store.tournament)).length)} note="Assigned by preference" icon="sparkle"/><Metric label="Top finals choice" value={top ? eventCodes[top.id] ?? top.id : '—'} note="Used for finals only" icon="growth"/><Metric label="Who you know" value={conflicts} note="Kept out of those rooms" icon="users"/></div>
     <div className="role-tabs" aria-label="Judge workspace sections"><button className={action === 'assignments' || action === 'mobileBallot' ? 'active' : ''} onClick={onRooms}>My rooms</button><button className={action === 'preferences' ? 'active' : ''} onClick={onPreferences}>Preferences</button></div>
