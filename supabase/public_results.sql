@@ -27,7 +27,11 @@ create table if not exists public.published_results (
   school text not null check (char_length(btrim(school)) between 1 and 120),
   constraint published_results_contest check (contest = case when division = 'novice' then event_id || ':novice' else event_id end)
 );
-create unique index if not exists published_results_one_per_student on public.published_results (tournament_id, contest, lower(school), lower(student));
+-- withheld: the student asked for their name to be kept off public results (supabase/privacy.sql).
+alter table public.published_results add column if not exists withheld boolean not null default false;
+-- One row per named student in each event. Withheld rows all read "Name withheld", so they are left out.
+drop index if exists public.published_results_one_per_student;
+create unique index if not exists published_results_one_per_named_student on public.published_results (tournament_id, contest, lower(school), lower(student)) where not withheld;
 create index if not exists published_results_by_school on public.published_results (lower(school));
 
 create table if not exists public.published_team_points (

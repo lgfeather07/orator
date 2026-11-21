@@ -5,7 +5,7 @@ import { authConfigured, useAuth } from './auth';
 import { useStore } from './store';
 import { ballotEvents } from './ballots';
 import { parseContest, sameSchool } from './tournament';
-import { loadPublished, newestFirst, sameName, seasonOf, whenOf, type PublishedPlacing, type PublishedResults, type PublishedTeam, type PublishedTournament } from './publicResultsApi';
+import { loadPublished, newestFirst, sameName, seasonOf, whenOf, WITHHELD, type PublishedPlacing, type PublishedResults, type PublishedTeam, type PublishedTournament } from './publicResultsApi';
 import { TeamCompare } from './TeamCompare';
 import { compareHref } from './teamCompare';
 import './publicResults.css';
@@ -182,9 +182,9 @@ function TournamentResults({ id }: { id: string }) {
             const rows = data.placings.filter(row => row.contest === contest).sort((a, b) => a.place - b.place || a.student.localeCompare(b.student));
             return <section key={contest} className="panel pr-contest" aria-labelledby={`contest-${contest}`}>
               <div className="pr-contest-head"><h2 id={`contest-${contest}`}>{contestName(contest)}</h2><small>{plural(rows.length, 'finalist')}</small></div>
-              <ol className="pr-placings">{rows.map(row => <li key={`${row.school}|${row.student}`} className={row.place === 1 ? 'first' : ''}>
+              <ol className="pr-placings">{rows.map(row => <li key={`${row.school}|${row.student}|${row.place}`} className={row.place === 1 ? 'first' : ''}>
                 <Place place={row.place}/>
-                <span className="pr-who"><a href={studentHref(row.school, row.student)}>{row.student}</a><a className="pr-school" href={schoolHref(row.school)}>{row.school}</a></span>
+                <span className="pr-who"><Who row={row}/><a className="pr-school" href={schoolHref(row.school)}>{row.school}</a></span>
                 {row.place === 1 && <Badge tone="warning">Champion</Badge>}
               </li>)}</ol>
             </section>;
@@ -199,6 +199,11 @@ function TournamentResults({ id }: { id: string }) {
       </div>
     </>;
   }}</Status>;
+}
+
+/** A finalist's name, linking to their record, or "Name withheld" (no link) when they asked for privacy. */
+function Who({ row }: { row: PublishedPlacing }) {
+  return row.withheld ? <span className="pr-withheld">{WITHHELD}</span> : <a href={studentHref(row.school, row.student)}>{row.student}</a>;
 }
 
 // ── #/school/<name> ──
@@ -218,7 +223,7 @@ function SchoolResults({ school }: { school: string }) {
     const inSeason = finishes.filter(finish => seasonOf(finish.tournament) === season);
     const rows = inSeason.flatMap(finish => finish.placings);
     const teamPlaces = inSeason.flatMap(finish => finish.team ? [finish.team.place] : []);
-    const students = [...new Map(rows.map(row => [row.student.toLowerCase(), row.student])).values()].map(student => {
+    const students = [...new Map(rows.filter(row => !row.withheld).map(row => [row.student.toLowerCase(), row.student])).values()].map(student => {
       const mine = rows.filter(row => sameName(row.student, student));
       return { student, finals: mine.length, titles: mine.filter(row => row.place === 1).length, best: Math.min(...mine.map(row => row.place)) };
     }).sort((a, b) => b.titles - a.titles || b.finals - a.finals || a.student.localeCompare(b.student));
@@ -235,9 +240,9 @@ function SchoolResults({ school }: { school: string }) {
           {inSeason.map(({ tournament, placings, team }) => <section key={tournament.id} className="panel pr-history" aria-labelledby={`t-${tournament.id}`}>
             <div className="pr-history-head"><div><h2 id={`t-${tournament.id}`}><a href={tournamentHref(tournament.id)}>{tournament.name}</a></h2><small>{[tournament.date, tournament.host && `Hosted by ${tournament.host}`].filter(Boolean).join(' · ')}</small></div>
               {team ? <Badge tone={team.place === 1 ? 'success' : 'info'}>{ordinal(team.place)} in team points · {team.points}</Badge> : <Badge>No team points</Badge>}</div>
-            {placings.length === 0 ? <p className="pr-none pr-pad">No finalists published.</p> : <ol className="pr-placings">{placings.map(row => <li key={`${row.contest}|${row.student}`} className={row.place === 1 ? 'first' : ''}>
+            {placings.length === 0 ? <p className="pr-none pr-pad">No finalists published.</p> : <ol className="pr-placings">{placings.map(row => <li key={`${row.contest}|${row.student}|${row.place}`} className={row.place === 1 ? 'first' : ''}>
               <Place place={row.place}/>
-              <span className="pr-who"><a href={studentHref(row.school, row.student)}>{row.student}</a><span className="pr-school">{contestName(row.contest)}</span></span>
+              <span className="pr-who"><Who row={row}/><span className="pr-school">{contestName(row.contest)}</span></span>
               {row.place === 1 && <Badge tone="warning">Champion</Badge>}
             </li>)}</ol>}
           </section>)}

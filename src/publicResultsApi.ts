@@ -13,7 +13,10 @@ import { NSAA_TEAM_POINTS, type Placing, type TeamScore } from './results';
 import { contestKey, defaultTournament, divisions, parseContest, sameSchool, seedEntries, type Division } from './tournament';
 
 export type PublishedTournament = { id: string; name: string; date: string; host: string; publishedAt: string };
-export type PublishedPlacing = { tournamentId: string; contest: string; eventId: string; division: Division; place: number; student: string; school: string };
+/** withheld: the student's coach or the student asked for the name to be kept off public results; student reads WITHHELD. */
+export type PublishedPlacing = { tournamentId: string; contest: string; eventId: string; division: Division; place: number; student: string; school: string; withheld?: boolean };
+/** What a withheld placing shows instead of the student's name. */
+export const WITHHELD = 'Name withheld';
 export type PublishedTeam = { tournamentId: string; school: string; points: number; place: number };
 export type PublishedResults = { tournaments: PublishedTournament[]; placings: PublishedPlacing[]; teams: PublishedTeam[] };
 
@@ -106,12 +109,51 @@ export function saveDemoPublished(value: DemoPublished | null) {
 
 function demoResults(includeDemoTournament: boolean): PublishedResults {
   const mine = includeDemoTournament ? loadDemoPublished() : null;
-  if (!mine) return sampleSeason;
+  const hidden = loadDemoWithheld();
+  const hide = (row: PublishedPlacing): PublishedPlacing => hidden.some(item => sameName(item.school, row.school) && sameName(item.student, row.student)) ? { ...row, student: WITHHELD, withheld: true } : row;
+  if (!mine) return { ...sampleSeason, placings: sampleSeason.placings.map(hide) };
   return {
     tournaments: [...sampleSeason.tournaments, mine.tournament],
-    placings: [...sampleSeason.placings, ...mine.snapshot.placings.map(row => ({ ...row, tournamentId: mine.tournament.id }))],
+    placings: [...sampleSeason.placings, ...mine.snapshot.placings.map(row => ({ ...row, tournamentId: mine.tournament.id }))].map(hide),
     teams: [...sampleSeason.teams, ...mine.snapshot.teams.map(row => ({ ...row, tournamentId: mine.tournament.id }))],
   };
+}
+
+// ── Keeping a student's name off public results (supabase/privacy.sql) ──
+
+/** In the demo, the list lives in this browser. */
+const DEMO_WITHHELD_KEY = 'orator-withheld-v1';
+type WithheldName = { school: string; student: string };
+function loadDemoWithheld(): WithheldName[] {
+  try { const raw = localStorage.getItem(DEMO_WITHHELD_KEY); return raw ? JSON.parse(raw) as WithheldName[] : []; } catch { return []; }
+}
+
+/** The students at this school whose names are kept off public results (that you can see: your team, or yourself). */
+export async function loadWithheld(school: string): Promise<string[]> {
+  if (!supabase) return loadDemoWithheld().filter(item => sameName(item.school, school)).map(item => item.student);
+  const { data, error } = await db().from('results_privacy').select('student').ilike('school', exactly(school));
+  if (error) fail(/results_privacy/.test(error.message) ? 'Name privacy needs the latest database update (supabase/all_in_one.sql).' : error.message);
+  return ((data ?? []) as { student: string }[]).map(row => row.student);
+}
+
+/**
+ * Keep a student's name off public results, or show it again. Withholding takes the name off results
+ * already published; showing it again takes effect when each director next publishes.
+ */
+export async function setWithheld(school: string, student: string, withheld: boolean): Promise<void> {
+  if (!supabase) {
+    const rest = loadDemoWithheld().filter(item => !(sameName(item.school, school) && sameName(item.student, student)));
+    try { localStorage.setItem(DEMO_WITHHELD_KEY, JSON.stringify(withheld ? [...rest, { school: school.trim(), student: student.trim() }] : rest)); } catch { /* storage off */ }
+    window.dispatchEvent(new Event('orator-published'));
+    return;
+  }
+  if (withheld) {
+    const { error } = await db().from('results_privacy').insert({ school: school.trim(), student: student.trim() });
+    if (error && !/duplicate|unique/i.test(error.message)) fail(error.message);
+  } else {
+    const { error } = await db().from('results_privacy').delete().ilike('school', exactly(school)).ilike('student', exactly(student));
+    if (error) fail(error.message);
+  }
 }
 
 /** The demo's published scoring rules: every sample meet, plus the demo tournament if it was published with them. */
@@ -124,9 +166,9 @@ export function demoScoring(includeDemoTournament: boolean): PublishedScoring[] 
 // ── Reading (anyone) ──
 
 type TournamentRecord = { id: string; name: string; date: string; host: string; published_at: string };
-type PlacingRecord = { tournament_id: string; contest: string; event_id: string; division: Division; place: number; student: string; school: string };
+type PlacingRecord = { tournament_id: string; contest: string; event_id: string; division: Division; place: number; student: string; school: string; withheld?: boolean };
 type TeamRecord = { tournament_id: string; school: string; points: number; place: number };
-const toPlacing = (row: PlacingRecord): PublishedPlacing => ({ tournamentId: row.tournament_id, contest: row.contest, eventId: row.event_id, division: row.division === 'novice' ? 'novice' : 'varsity', place: row.place, student: row.student, school: row.school });
+const toPlacing = (row: PlacingRecord): PublishedPlacing => ({ tournamentId: row.tournament_id, contest: row.contest, eventId: row.event_id, division: row.division === 'novice' ? 'novice' : 'varsity', place: row.place, student: row.withheld ? WITHHELD : row.student, school: row.school, ...(row.withheld ? { withheld: true } : {}) });
 const toTeam = (row: TeamRecord): PublishedTeam => ({ tournamentId: row.tournament_id, school: row.school, points: row.points, place: row.place });
 /** Match a name exactly but without caring about case: escape the wildcards ilike would otherwise read. */
 const exactly = (text: string) => text.trim().replace(/[\\%_]/g, match => `\\${match}`);
@@ -154,15 +196,23 @@ export async function loadPublished(filter: { tournamentId?: string; school?: st
     if (error) fail(error.message);
     return { tournaments, placings: [], teams: ((data ?? []) as TeamRecord[]).map(toTeam) };
   }
-  let placingQuery = db().from('published_results').select('tournament_id, contest, event_id, division, place, student, school');
+  const placingQuery = (privacy: boolean) => {
+    let query = db().from('published_results').select(`tournament_id, contest, event_id, division, place, student, school${privacy ? ', withheld' : ''}`);
+    if (filter.tournamentId) query = query.eq('tournament_id', filter.tournamentId);
+    if (filter.school) query = query.ilike('school', exactly(filter.school));
+    if (filter.student) query = query.ilike('student', exactly(filter.student));
+    if (filter.student && privacy) query = query.eq('withheld', false);
+    return query.order('place');
+  };
+  // Databases from before name privacy have no withheld column; read them without it.
+  const readPlacings = async () => { const first = await placingQuery(true); return first.error && /withheld/.test(first.error.message) ? placingQuery(false) : first; };
   let teamQuery = db().from('published_team_points').select('tournament_id, school, points, place');
-  if (filter.tournamentId) { placingQuery = placingQuery.eq('tournament_id', filter.tournamentId); teamQuery = teamQuery.eq('tournament_id', filter.tournamentId); }
-  if (filter.school) { placingQuery = placingQuery.ilike('school', exactly(filter.school)); teamQuery = teamQuery.ilike('school', exactly(filter.school)); }
-  if (filter.student) placingQuery = placingQuery.ilike('student', exactly(filter.student));
-  const [placings, teams] = await Promise.all([placingQuery.order('place'), filter.student ? Promise.resolve({ data: [], error: null }) : teamQuery.order('place')]);
+  if (filter.tournamentId) teamQuery = teamQuery.eq('tournament_id', filter.tournamentId);
+  if (filter.school) teamQuery = teamQuery.ilike('school', exactly(filter.school));
+  const [placings, teams] = await Promise.all([readPlacings(), filter.student ? Promise.resolve({ data: [], error: null }) : teamQuery.order('place')]);
   if (placings.error) fail(placings.error.message);
   if (teams.error) fail(teams.error.message);
-  return { tournaments, placings: ((placings.data ?? []) as PlacingRecord[]).map(toPlacing), teams: ((teams.data ?? []) as TeamRecord[]).map(toTeam) };
+  return { tournaments, placings: ((placings.data ?? []) as unknown as PlacingRecord[]).map(toPlacing), teams: ((teams.data ?? []) as TeamRecord[]).map(toTeam) };
 }
 
 // ── Publishing (the tournament's director) ──

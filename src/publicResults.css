@@ -64,6 +64,7 @@
 .pr-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; }
 .pr-who a, .pr-who span { overflow-wrap: anywhere; }
 .pr-who .pr-school { color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.pr-who .pr-withheld { color: var(--muted); font-style: italic; font-weight: 600; }
 .pr-who a.pr-school { color: var(--muted); font-weight: 500; }
 
 .pr-seasons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
