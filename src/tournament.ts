@@ -88,7 +88,7 @@ export type Fees = { entry: number; school: number; judge: number; entriesPerJud
 /**
  * What Orator charges the host for one tournament, billed after it ends and set by how many admitted entries it had.
  * Card processing is included: schools pay only the host's fees. Each tier is below SpeechWire's 2026–27 price
- * at every entry count it covers. A director's first tournament on Orator is free.
+ * at every entry count it covers.
  */
 export const ORATOR_PRICING: { upTo: number; fee: number }[] = [
   { upTo: 25, fee: 40 }, { upTo: 60, fee: 55 }, { upTo: 100, fee: 100 }, { upTo: 150, fee: 160 }, { upTo: 200, fee: 225 },

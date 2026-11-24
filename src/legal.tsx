@@ -129,7 +129,7 @@ const pages: Record<LegalPage, { title: string; intro: string; body: ReactNode }
         <p>You keep ownership of what you enter. You allow us to store it and show it to the people the tournament’s access rules permit, only to run the service.</p>
       </Section>
       <Section title="Fees">
-        <p>Tournament hosts set entry fees. Schools are invoiced after the tournament, based on their final entries and the judges they brought, and pay digitally. Orator keeps a fee per tournament from what is collected, sized by the number of entries and including card processing, and the rest goes to the host school. A director’s first tournament is free. See the <a href="#/refunds">refund policy</a>. Payments are currently simulated and no money is taken.</p>
+        <p>Tournament hosts set entry fees. Schools are invoiced after the tournament, based on their final entries and the judges they brought, and pay digitally. Orator keeps a fee per tournament from what is collected, sized by the number of entries and including card processing, and the rest goes to the host school. See the <a href="#/refunds">refund policy</a>. Payments are currently simulated and no money is taken.</p>
       </Section>
       <Section title="The service">
         <p>Orator is provided as is, while it is being developed. The demo uses fictional people, results and payments. To the extent the law allows, we are not liable for indirect losses, or for tournament decisions made using Orator.</p>
