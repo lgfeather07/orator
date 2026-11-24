@@ -16,7 +16,8 @@
     "test:drops": "tsc src/tournament.ts --outDir .test-out --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/drops.test.mjs",
     "test:access": "tsc src/tournament.ts src/results.ts src/semis.ts --outDir .test-out/access --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './results'#from './results.js'#; s#from './tournament'#from './tournament.js'#\" .test-out/access/*.js && node tests/access.test.mjs",
     "test:growth": "tsc src/growthStats.ts --outDir .test-out/growth --module es2022 --target es2022 --moduleResolution bundler --strict --skipLibCheck && node tests/growth.test.mjs",
-    "test:qualifying": "tsc src/tournament.ts --outDir .test-out/qualifying --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/qualifying.test.mjs"
+    "test:qualifying": "tsc src/tournament.ts --outDir .test-out/qualifying --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/qualifying.test.mjs",
+    "test:import": "tsc src/rosterImport.ts --outDir .test-out/import --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './ballots'#from './ballots.js'#\" .test-out/import/rosterImport.js && node tests/import.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

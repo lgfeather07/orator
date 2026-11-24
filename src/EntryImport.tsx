@@ -2,71 +2,12 @@ import { useState } from 'react';
 import { Badge, Button, Icon, downloadText } from './ui';
 import { useStore } from './store';
 import { ballotEvents, eventCodes } from './ballots';
+import { readRoster, type RosterRow as Row } from './rosterImport';
 import { useAccessDraft } from './Accessibility';
 import { accessFromCell } from './accessibility';
 import { divisionOf, entryLoad, loadLabel, sameSchool, type Division } from './tournament';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
-const normal = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-/** Match what a coach typed ("Extemp", "INF", "oral interp of drama") to an NSAA event id. */
-function findEvent(text: string): string | null {
-  const wanted = normal(text);
-  if (!wanted) return null;
-  const exact = ballotEvents.find(event => [event.id, event.name, event.short, eventCodes[event.id] ?? ''].some(label => normal(label) === wanted));
-  if (exact) return exact.id;
-  const starts = ballotEvents.filter(event => normal(event.name).startsWith(wanted) || wanted.startsWith(normal(event.name)));
-  return starts.length === 1 ? starts[0].id : null;
-}
-
-/** Split one CSV line, honouring quoted cells. */
-function cells(line: string): string[] {
-  const out: string[] = []; let cell = ''; let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (quoted) { if (char === '"' && line[i + 1] === '"') { cell += '"'; i++; } else if (char === '"') quoted = false; else cell += char; }
-    else if (char === '"') quoted = true;
-    else if (char === ',') { out.push(cell.trim()); cell = ''; }
-    else cell += char;
-  }
-  out.push(cell.trim());
-  return out;
-}
-
-type Row = { student: string; eventId: string | null; raw: string; problem: string; division: Division; access?: string };
-
-/**
- * Read a roster file into one row per student-event pair and say what is wrong with each.
- * Accepts a "student" (or "name") column and an "event" (or "events") column; several events
- * may share a cell separated by ; / | or "and". Any other columns are ignored.
- */
-function readCsv(text: string): { rows: Row[]; error: string } {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(line => line.trim());
-  if (lines.length === 0) return { rows: [], error: 'That file is empty.' };
-  const header = cells(lines[0]).map(normal);
-  let nameAt = header.findIndex(cell => ['student', 'studentname', 'name', 'fullname', 'competitor'].includes(cell));
-  let eventAt = header.findIndex(cell => ['event', 'events', 'entry', 'entries'].includes(cell));
-  const first = header.indexOf('firstname'), last = header.indexOf('lastname');
-  const divisionAt = header.findIndex(cell => ['division', 'level', 'div'].includes(cell));
-  // Optional: an "access" or "accessibility" column. Any value means the student needs an accessible room, and is the note.
-  const accessAt = header.findIndex(cell => ["access", "accessibility"].includes(cell));
-  const hasHeader = eventAt >= 0 && (nameAt >= 0 || (first >= 0 && last >= 0));
-  if (!hasHeader) { if (cells(lines[0]).length < 2) return { rows: [], error: 'We couldn’t find a student column and an event column. Download the template to see the layout.' }; nameAt = 0; eventAt = 1; }
-  const rows: Row[] = [];
-  lines.slice(hasHeader ? 1 : 0).forEach(line => {
-    const row = cells(line);
-    const student = (nameAt >= 0 ? row[nameAt] : `${row[first] ?? ''} ${row[last] ?? ''}`)?.trim() ?? '';
-    const events = (row[eventAt] ?? '').split(/[;|/]|\band\b/i).map(part => part.trim()).filter(Boolean);
-    if (!student && events.length === 0) return;
-    // "Novice", "N", or "nov" puts the student in the novice division; anything else is varsity.
-    const access = accessAt >= 0 ? (row[accessAt] ?? '').trim() : '';
-    const division: Division = divisionAt >= 0 && /^n(ov(ice)?)?$/i.test((row[divisionAt] ?? '').trim()) ? 'novice' : 'varsity';
-    if (events.length === 0) rows.push({ student, eventId: null, raw: '', problem: 'No event given', division, access });
-    events.forEach(raw => rows.push({ student, eventId: findEvent(raw), raw, problem: student ? '' : 'No student name', division, access }));
-  });
-  return { rows, error: rows.length ? '' : 'We found the columns but no students.' };
-}
-
 const template = 'student,event,division\nMaya Rodriguez,Informative; Persuasive; Poetry,Varsity\nEli Thompson,Extemporaneous,Varsity\nIris Chen,Poetry; Humorous,Novice\n';
 
 /** Add a team's entries by hand, one student with all their events at a time, or from a roster file. */
@@ -80,6 +21,8 @@ export function EntryImport({ school, onDone }: { school: string; onDone: () => 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [fileName, setFileName] = useState('');
   const [csvError, setCsvError] = useState('');
+  const [pasted, setPasted] = useState('');
+  const readPaste = () => { const result = readRoster(pasted); setFileName('Pasted rows'); setCsvError(result.error); setRows(result.error ? null : result.rows); if (!result.error) setPasted(''); };
   const open = entriesOpen;
   const mine = entries.filter(entry => sameSchool(entry.school, school));
   const has = (name: string, eventId: string) => mine.some(entry => entry.eventId === eventId && entry.student.trim().toLowerCase() === name.trim().toLowerCase());
@@ -114,7 +57,7 @@ export function EntryImport({ school, onDone }: { school: string; onDone: () => 
   const good = checked.filter(row => !row.problem);
   const readFile = async (file: File | undefined) => {
     if (!file) return;
-    const result = readCsv(await file.text());
+    const result = readRoster(await file.text());
     setFileName(file.name); setCsvError(result.error); setRows(result.error ? null : result.rows);
   };
   const addFromFile = () => { good.forEach(row => addEntry(row.student.trim(), school, row.eventId!, row.division));
@@ -125,7 +68,7 @@ export function EntryImport({ school, onDone }: { school: string; onDone: () => 
   return <section className="panel action-workspace entry-import">
     <div className="panel-head"><div><h2>Add students</h2><p>{school} · {tournament.name} · up to {tournament.maxEntries} events per student, one entry per event</p></div><Button variant="secondary" icon="arrow" onClick={onDone}>View team entries</Button></div>
     {!open ? <div className="entry-closed"><Icon name="lock"/><span><strong>Entries are closed.</strong> The director has closed entries for now. Report an issue if something needs to change.</span></div> : <>
-      <div className="import-modes"><div className="segmented"><button className={mode === 'hand' ? 'active' : ''} onClick={() => setMode('hand')}>Enter by hand</button><button className={mode === 'csv' ? 'active' : ''} onClick={() => setMode('csv')}>Upload a file</button></div></div>
+      <div className="import-modes"><div className="segmented"><button className={mode === 'hand' ? 'active' : ''} onClick={() => setMode('hand')}>Enter by hand</button><button className={mode === 'csv' ? 'active' : ''} onClick={() => setMode('csv')}>Upload or paste</button></div></div>
 
       {mode === 'hand' ? <form className="hand-entry" onSubmit={event => { event.preventDefault(); addByHand(); }}>
         <label className="hand-name"><span>Student</span><input value={student} onChange={event => { setStudent(event.target.value); setPicked([]); }} placeholder="Full name" autoComplete="off"/></label>
@@ -141,6 +84,11 @@ export function EntryImport({ school, onDone }: { school: string; onDone: () => 
       </form> : <div className="csv-entry">
         {rows === null ? <>
           <label className="dropzone"><input type="file" accept=".csv,text/csv" onChange={event => { readFile(event.target.files?.[0]); event.target.value = ''; }}/><Icon name="file" size={25}/><strong>Choose a CSV file</strong><small>Columns for the student, their event or events, and (optional) division: Varsity or Novice, and access: any note means the student needs an accessible room</small></label>
+          <form className="paste-entry" onSubmit={event => { event.preventDefault(); readPaste(); }}>
+            <label htmlFor="roster-paste"><strong>Or paste from a spreadsheet</strong><small>Copy the rows in Excel, Google Sheets or another tournament site’s export, header row included, and paste them here.</small></label>
+            <textarea id="roster-paste" rows={5} value={pasted} onChange={event => setPasted(event.target.value)} placeholder={'student\tevent\tdivision\nMaya Rodriguez\tInformative; Poetry\tVarsity'}/>
+            <button className="button button-secondary" type="submit" disabled={!pasted.trim()}><Icon name="check"/><span>Check pasted rows</span></button>
+          </form>
           {csvError && <p className="csv-error" role="alert"><Icon name="warning" size={15}/> {csvError}</p>}
           <div className="import-actions"><Badge tone="info" icon="info">Nothing is added until you review it</Badge><Button variant="secondary" icon="download" onClick={() => downloadText('orator-entries-template.csv', template)}>Download a template</Button></div>
         </> : <>

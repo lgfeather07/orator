@@ -1042,3 +1042,31 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 .run-after, .run-confirm { margin: 0; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--border); font-size: 13px; }
 .run-after span, .run-confirm span { flex: 1 1 260px; min-width: 0; }
 .run-confirm { background: var(--warning-soft, var(--brand-soft)); }
+
+/* Paste rows from a spreadsheet (EntryImport.tsx, CoachJudges.tsx) */
+.paste-entry { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.paste-entry label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.paste-entry label small { color: var(--muted); font-size: 12px; }
+.paste-entry textarea { width: 100%; min-height: 110px; padding: 10px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; resize: vertical; }
+.paste-entry .button { align-self: flex-start; }
+.cj-bulk .paste-entry { padding: 0 2px 4px; }
+.cj-bulk-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.cj-bulk-list li { padding: 7px 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.cj-bulk-list li span { color: var(--muted); font-size: 12px; }
+.cj-bulk-list li.skip { border-style: dashed; }
+.cj-bulk-list li em { color: var(--ink); font-size: 12px; font-style: normal; font-weight: 600; }
+
+/* Director's getting-started checklist (GettingStarted.tsx) */
+.getting-started .gs-hide { padding: 4px 8px; color: var(--muted); background: none; border: 0; font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; }
+.gs-steps { margin: 0; padding: 4px 18px 18px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.gs-steps li { padding: 12px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: start; border: 1px solid var(--border); border-radius: 10px; }
+.gs-steps li > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gs-steps li small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.gs-steps li.done { background: var(--surface-2, transparent); }
+.gs-steps li.done strong { color: var(--muted); }
+.gs-mark { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--muted); }
+.gs-steps li.done .gs-mark { color: #fff; background: var(--green); border-color: var(--green); }
+.gs-link { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+.gs-link input { flex: 1 1 260px; min-width: 0; min-height: 38px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.gs-warn { display: flex; gap: 6px; align-items: flex-start; }
+@media (max-width: 640px) { .gs-steps li { grid-template-columns: 28px minmax(0, 1fr); } .gs-steps li > .button { grid-column: 2; justify-self: start; } }

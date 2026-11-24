@@ -7,6 +7,7 @@ import { FeeSettings, PaymentsPanel } from './Payments';
 import { RoomsEditor } from './Rooms';
 import { RoundTimes } from './RoundTimes';
 import { StateQualifying } from './StateQualifying';
+import { GettingStarted } from './GettingStarted';
 import { EntryLimits, WaitlistPanel } from './Waitlist';
 import { ListingSettings } from './Calendar';
 import { RoundAlertsCard } from './Alerts';
@@ -63,6 +64,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
   const novices = entries.filter(entry => divisionOf(entry) === 'novice').length;
 
   return <div className="setup-main">
+    <GettingStarted onStep={setStep}/>
     <section className={`entries-switch ${entriesOpen ? 'open' : 'closed'}`} aria-label="Entries">
       <span className="entries-switch-icon"><Icon name={entriesOpen ? 'users' : 'lock'}/></span>
       <div><strong>{entriesOpen ? 'Entries are open' : 'Entries are closed'}</strong><small>{!editable ? 'The schedule is published, so entries stay closed. Reopen registration on the Review step to change them.' : entriesOpen ? `Coaches can add and drop students. ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} from ${schools.length} ${schools.length === 1 ? 'school' : 'schools'} so far.` : 'Coaches can’t add or drop students. You still can, from the Coach workspace or by reopening.'}</small></div>

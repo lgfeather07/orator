@@ -1,3 +1,4 @@
+import { readJudges, type JudgeRow } from './rosterImport';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Avatar, Badge, Button, Icon, Logo } from './ui';
 import { useStore } from './store';
@@ -90,6 +91,30 @@ function LinkTools({ seat, tournament, onNewLink, onRevoke, busy }: { seat: Coac
  * A coach's judges for the tournament. Each is approved at once and gets a private link to their own
  * rooms and ballots, with no account. The number entered is the number the invoice says the school brings.
  */
+/** Several judges at once, pasted from a spreadsheet: a name column, and optional email and phone columns. */
+function BulkJudges({ existing, busy, onAdd }: { existing: string[]; busy: boolean; onAdd: (rows: JudgeRow[]) => Promise<void> }) {
+  const [text, setText] = useState('');
+  const [rows, setRows] = useState<JudgeRow[] | null>(null);
+  const [error, setError] = useState('');
+  const known = (name: string) => existing.some(other => other.trim().toLowerCase() === name.trim().toLowerCase());
+  const checked = (rows ?? []).map(row => ({ ...row, problem: row.problem || (known(row.name) ? 'Already entered' : '') }));
+  const good = checked.filter(row => !row.problem);
+  const check = () => { const result = readJudges(text); setError(result.error); setRows(result.error ? null : result.rows); };
+  return <details className="cj-add cj-bulk">
+    <summary><Icon name="users" size={16}/> Add several judges at once</summary>
+    {rows === null ? <form className="paste-entry" onSubmit={event => { event.preventDefault(); check(); }}>
+      <label htmlFor="judges-paste"><strong>Paste from a spreadsheet</strong><small>One judge per row: name, then email and phone if you have them. Include the header row if there is one.</small></label>
+      <textarea id="judges-paste" rows={5} value={text} onChange={event => setText(event.target.value)} placeholder={'name\temail\tphone\nPat Rivera\tpat@example.org\t402-555-0134'}/>
+      {error && <p className="csv-error" role="alert"><Icon name="warning" size={15}/> {error}</p>}
+      <button className="button button-secondary" type="submit" disabled={!text.trim()}><Icon name="check"/><span>Check pasted judges</span></button>
+    </form> : <div className="paste-entry">
+      <p><Badge tone="success" icon="check">{good.length} ready to add</Badge>{checked.length > good.length && <> <Badge tone="warning" icon="warning">{checked.length - good.length} skipped</Badge></>}</p>
+      <ul className="cj-bulk-list">{checked.map((row, index) => <li key={index} className={row.problem ? 'skip' : ''}><strong>{row.name || '—'}</strong><span>{[row.email, row.phone].filter(Boolean).join(' · ') || 'No email or phone'}</span>{row.problem && <em>{row.problem}</em>}</li>)}</ul>
+      <div className="hand-actions"><Button variant="secondary" onClick={() => setRows(null)}>Edit pasted rows</Button><Button icon="plus" disabled={good.length === 0 || busy} onClick={async () => { await onAdd(good); setRows(null); setText(''); }}>{busy ? 'Adding…' : `Add ${good.length} ${good.length === 1 ? 'judge' : 'judges'}`}</Button></div>
+    </div>}
+  </details>;
+}
+
 export function CoachJudgesPanel({ school }: { school: string }) {
   const store = useStore();
   const { tournament, tournamentId, live, entries, coachJudges, setCoachJudges } = store;
@@ -156,6 +181,7 @@ export function CoachJudgesPanel({ school }: { school: string }) {
       <summary><Icon name="plus" size={16}/> Add a judge</summary>
       <JudgeForm idPrefix="add" initial={emptyInput} schools={schools} ownSchool={school} submitLabel="Add judge" busy={busy === 'add'} onSubmit={add}/>
     </details>}
+    {!finished && <BulkJudges existing={mine.map(seat => seat.name)} busy={busy === 'add'} onAdd={async rows => { for (const row of rows) { if (!(await add({ ...emptyInput, name: row.name, email: row.email, phone: row.phone }))) break; } }}/>}
     <p className="cj-note"><Icon name="info" size={14}/><span>Send each judge their own link and ask them not to share it. Opening it on a new phone moves them there. “Turn off link” signs out whoever opened it. Judges who’d rather have an account can still sign up and ask to join.</span></p>
   </section>;
 }
