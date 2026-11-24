@@ -87,12 +87,11 @@ export type SemiPlan = { size: number; judges: number; advance: number };
 export type Fees = { entry: number; school: number; judge: number; entriesPerJudge: number };
 /**
  * What Orator charges the host for one tournament, billed after it ends and set by how many admitted entries it had.
- * Card processing is included: schools pay only the host's fees. Each tier is below SpeechWire's 2026–27 price
- * at every entry count it covers.
+ * Card processing is included (Orator pays it out of this fee): schools pay only the host's fees.
  */
 export const ORATOR_PRICING: { upTo: number; fee: number }[] = [
-  { upTo: 25, fee: 40 }, { upTo: 60, fee: 55 }, { upTo: 100, fee: 100 }, { upTo: 150, fee: 160 }, { upTo: 200, fee: 225 },
-  { upTo: 300, fee: 300 }, { upTo: 400, fee: 380 }, { upTo: 600, fee: 430 }, { upTo: Infinity, fee: 480 },
+  { upTo: 25, fee: 80 }, { upTo: 60, fee: 95 }, { upTo: 100, fee: 140 }, { upTo: 150, fee: 200 }, { upTo: 200, fee: 265 },
+  { upTo: 300, fee: 340 }, { upTo: 400, fee: 420 }, { upTo: 600, fee: 470 }, { upTo: Infinity, fee: 520 },
 ];
 export const oratorFeeFor = (entries: number) => entries === 0 ? 0 : ORATOR_PRICING.find(tier => entries <= tier.upTo)!.fee;
 export const pricingTierLabel = (entries: number) => { const index = Math.max(0, ORATOR_PRICING.findIndex(tier => entries <= tier.upTo)); const low = index === 0 ? 1 : ORATOR_PRICING[index - 1].upTo + 1; const high = ORATOR_PRICING[index].upTo; return high === Infinity ? `${low}+ entries` : `${low}–${high} entries`; };
