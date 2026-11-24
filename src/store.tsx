@@ -82,6 +82,8 @@ type Store = {
   myPreferences: JudgePrefs; savePreferences: (preferences: JudgePrefs) => void;
   /** Set up an event's final round: one ballot per final-round judge for the six finalists. */
   createFinal: (contest: string) => void;
+  /** Drop an empty, unscored judge seat from a final that has more than one, when no judge is free for it. */
+  removeFinalSeat: (sectionId: string) => void;
   /** Set up every event's final at once, so each judge can be placed on the final they most want. */
   createAllFinals: () => void;
   /**
@@ -463,7 +465,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     myPreferences, savePreferences: setMyPreferences,
     roomResults,
     recordRoomResults: (sectionId, rows) => setRoomResults(all => [...all.filter(result => result.sectionId !== sectionId), ...rows.map(row => ({ ...row, sectionId }))]),
-    createFinal: () => undefined, createAllFinals: () => undefined, setCut: () => undefined, addNextIn: () => undefined,
+    createFinal: () => undefined, removeFinalSeat: () => undefined, createAllFinals: () => undefined, setCut: () => undefined, addNextIn: () => undefined,
     setSemis: () => undefined, createSemis: () => undefined, fillSampleSemis: () => undefined,
     payments,
     paymentFor: school => withEnteredJudges(school, payments[school.trim().toLowerCase()] ?? noPayment),
@@ -551,6 +553,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (finalSections.some(section => contestOf(section) === contest)) return;
     const built = planFinal(contest, store.sections);
     if (built.length && built[0].entryIds.length) addFinals(built);
+  };
+  store.removeFinalSeat = sectionId => {
+    const seat = store.sections.find(section => section.id === sectionId);
+    if (!seat || stageOf(seat, store.tournament) !== 'final' || seat.judgeId || store.roomResults.some(result => result.sectionId === sectionId)) return;
+    if (finalSections.filter(section => contestOf(section) === contestOf(seat)).length < 2) return;
+    if (live) api.deleteSection(sectionId).then(() => setLiveSections(all => all.filter(section => section.id !== sectionId))).catch(report);
+    else setSections(all => all.filter(section => section.id !== sectionId));
   };
   // A contest is ready for its next round only once every one of its preliminary rooms has results.
   const prelimsDone = (contest: string) => { const own = prelimSections.filter(section => contestOf(section) === contest); return own.length > 0 && own.every(section => mergedPrelims.some(result => result.sectionId === section.id)); };

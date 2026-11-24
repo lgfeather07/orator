@@ -61,8 +61,22 @@ const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n
 const clock = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
 /** Real ballots judges have submitted for speakers from the signed-in coach's school. */
+/**
+ * "Round 2", or "Semifinal" / "Final" for a round after the prelims. Other tournaments' ballots keep their
+ * round number: their round count isn't loaded here.
+ */
+function useRoundText() {
+  const { tournament } = useStore();
+  return (row: Pick<TeamBallotRow, 'round' | 'tournament' | 'eventId'>) => {
+    if (row.tournament !== tournament.name || row.round <= tournament.rounds) return `Round ${row.round}`;
+    const semis = Object.keys(tournament.semisByContest ?? {}).some(contest => contest.split(':')[0] === row.eventId);
+    return semis && row.round === tournament.rounds + 1 ? 'Semifinal' : 'Final';
+  };
+}
+
 export function TeamBallots() {
   const { profile } = useAuth();
+  const roundText = useRoundText();
   const [rows, setRows] = useState<TeamBallotRow[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -84,7 +98,7 @@ export function TeamBallots() {
       const event = ballotEvents.find(item => item.id === row.eventId);
       return <article key={row.key} className={open === row.key ? 'open' : ''}>
         <button onClick={() => setOpen(open === row.key ? null : row.key)} aria-expanded={open === row.key}>
-          <span><strong>{row.speaker}</strong><small>{event?.name ?? row.eventId} · {row.tournament} · Round {row.round}</small></span>
+          <span><strong>{row.speaker}</strong><small>{event?.name ?? row.eventId} · {row.tournament} · {roundText(row)}</small></span>
           <span><small>Judge</small><strong>{row.judge || 'Judge'}</strong></span>
           {row.present === false ? <Badge tone="danger">No-show</Badge> : <Badge tone={row.rank === 1 ? 'success' : 'neutral'}>{row.rank ? ordinal(row.rank) : '—'} · {row.rating ?? '—'}</Badge>}
           <Icon name="chevron"/>
@@ -115,6 +129,7 @@ export function ReleaseResults() {
 /** A signed-in student's own ballots from this tournament, once their coach has released them. */
 export function MyTournamentBallots() {
   const { tournament, tournamentId } = useStore();
+  const roundText = useRoundText();
   const [rows, setRows] = useState<TeamBallotRow[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
@@ -132,7 +147,7 @@ export function MyTournamentBallots() {
       const event = ballotEvents.find(item => item.id === row.eventId);
       return <article key={row.key} className={open === row.key ? 'open' : ''}>
         <button onClick={() => setOpen(open === row.key ? null : row.key)} aria-expanded={open === row.key}>
-          <span><strong>{event?.name ?? row.eventId}</strong><small>Round {row.round}</small></span>
+          <span><strong>{event?.name ?? row.eventId}</strong><small>{roundText(row)}</small></span>
           <span><small>Judge</small><strong>{row.judge || 'Judge'}</strong></span>
           {row.present === false ? <Badge tone="danger">No-show</Badge> : <Badge tone={row.rank === 1 ? 'success' : 'neutral'}>{row.rank ? ordinal(row.rank) : '—'} · {row.rating ?? '—'}</Badge>}
           <Icon name="chevron"/>

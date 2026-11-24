@@ -140,7 +140,8 @@ function RoundButtons({ onSent, selected, compact = false }: { onSent: (round: n
   return <div className={`al-rounds ${compact ? 'compact' : ''}`}>
     <div className="al-round-buttons">{rounds.map(item => <Button key={item.round} variant={selected === item.round ? 'primary' : 'secondary'} icon="send" disabled={busy !== null || (live && (!published || item.rooms === 0))} onClick={() => send(item.round)}>
       {busy === item.round ? 'Queueing…' : `${live ? 'Send' : 'Preview'} room alerts for ${item.label}`}</Button>)}</div>
-    {live && !published && <small className="al-hint">Publish the schedule first. Then send each round’s alerts just before it starts.</small>}
+    {live && tournament.status === 'registration' && <small className="al-hint">Publish the schedule first. Then send each round’s alerts just before it starts.</small>}
+    {live && tournament.status === 'finished' && <small className="al-hint">The tournament has ended, so room alerts are off.</small>}
     {error && <p className="al-error" role="alert">{error}</p>}
   </div>;
 }

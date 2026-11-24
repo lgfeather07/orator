@@ -825,6 +825,16 @@ do $$ begin
   end if;
 end $$;
 
+-- ── A student sees their own entries while registration is open (found in the Nov 2026 dry run).
+-- Before, members other than coaches saw entries only once the schedule was out, so a student's page
+-- said "No events entered yet" even after their coach had entered them.
+drop policy if exists "Who can see entries" on public.entries;
+create policy "Who can see entries" on public.entries for select to authenticated
+  using (private.is_director(tournament_id)
+    or lower(school) = (select private.approved_coach_school(tournament_id))
+    or (private.is_approved_member(tournament_id) and private.tournament_status(tournament_id) <> 'registration')
+    or (private.is_approved_member(tournament_id) and private.is_student(school, student)));
+
 
 -- ═════════ supabase/calendar.sql ═════════
 -- Orator public tournament calendar and open coach registration.

@@ -497,10 +497,10 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; flex: n
 /* ── Director: review and run ─────────────────────────────────── */
 .run-steps { margin: 4px 18px 18px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .run-steps > div { padding: 13px 14px; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-.run-steps > div > span { width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); border-radius: 50%; font-size: 12px; font-weight: 750; }
-.run-steps > div.done > span { color: #fff; background: var(--green); border-color: var(--green); }
+.run-steps > div > span:first-child { width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); border-radius: 50%; font-size: 12px; font-weight: 750; }
+.run-steps > div.done > span:first-child { color: #fff; background: var(--green); border-color: var(--green); }
 .run-steps > div.next { background: var(--brand-soft); }
-.run-steps > div.next > span { color: #fff; background: var(--brand); border-color: var(--brand); }
+.run-steps > div.next > span:first-child { color: #fff; background: var(--brand); border-color: var(--brand); }
 .run-steps > div > div { display: flex; flex-direction: column; gap: 3px; }
 .run-steps strong { font-size: 14px; }
 .run-steps small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
@@ -1037,3 +1037,8 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 .state-qualifying-grid label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .state-qualifying-grid select { min-height: 40px; padding: 0 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font: inherit; font-size: 14px; }
 .qualifier-tag { display: inline-flex; }
+
+/* After the tournament ends, and the reopen check (DirectorSetup.tsx) */
+.run-after, .run-confirm { margin: 0; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--border); font-size: 13px; }
+.run-after span, .run-confirm span { flex: 1 1 260px; min-width: 0; }
+.run-confirm { background: var(--warning-soft, var(--brand-soft)); }

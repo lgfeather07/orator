@@ -40,6 +40,7 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
   const { conflict, doubleBooked, problems } = useScheduleChecks();
   const [step, setStep] = useState(0);
   const [round, setRound] = useState(1);
+  const [confirmReopen, setConfirmReopen] = useState(false);
   const [search, setSearch] = useState('');
 
   const schools = [...new Set(entries.map(entry => entry.school))].sort();
@@ -165,12 +166,15 @@ export function DirectorSetup({ judges }: { judges: ReactNode }) {
         return <div key={target} className={done ? 'done' : next ? 'next' : ''}><span>{done ? <Icon name="check" size={16}/> : index + 1}</span><div><strong>{title}</strong><small>{detail}</small></div>
           {done ? <Badge tone="success" icon="check">Done</Badge> : <Button disabled={!next || (target === 'scheduled' && !built)} onClick={() => updateTournament({ status: target })}>{title.split(' ')[0]}</Button>}</div>;
       })}
-        {tournament.status !== 'registration' && <button className="run-undo" onClick={() => updateTournament({ status: 'registration' })}>Reopen registration and start over</button>}
+        {tournament.status === 'finished' && <div className="run-after"><Icon name="file" size={16}/><span>Invoices went to each school. Track what each has paid under <strong>Fees and payments</strong> on the Entries step.</span><Button variant="secondary" onClick={() => setStep(1)}>See payments</Button></div>}
+        {tournament.status !== 'registration' && (confirmReopen
+          ? <div className="run-confirm" role="alert"><span><strong>Reopen registration?</strong> {tournament.status === 'finished' ? 'Published results come down and ballots unlock.' : 'Judges lose access to ballots until you publish again.'} Rooms stay as they are.</span><Button variant="secondary" onClick={() => setConfirmReopen(false)}>Keep it as it is</Button><Button onClick={() => { setConfirmReopen(false); updateTournament({ status: 'registration' }); }}>Reopen registration</Button></div>
+          : <button className="run-undo" onClick={() => setConfirmReopen(true)}>Reopen registration and start over</button>)}
       </div>
 
       <div className="visibility">
         <div className="visibility-head"><span className="eyebrow">WHO SEES WHAT, AND WHEN</span><h3>Students see results only when their coach releases them</h3><p>Rankings and judge comments are hidden from students for the whole tournament. Once you end the tournament, each coach decides when to release their own team’s results. Coaches and the tab room see ballots as they are submitted.</p></div>
-        <div className="visibility-note"><Icon name="info"/><span>Try it: end the tournament here, open the <strong>Coach</strong> workspace and release results under Ballot review, then look at the <strong>Student</strong> workspace.</span></div>
+        {!store.live && <div className="visibility-note"><Icon name="info"/><span>Try it: end the tournament here, open the <strong>Coach</strong> workspace and release results under Ballot review, then look at the <strong>Student</strong> workspace.</span></div>}
       </div>
 
       <RoundAlertsCard/>

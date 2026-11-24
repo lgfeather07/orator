@@ -214,6 +214,12 @@ export async function addSections(tournamentId: string, sections: Section[], sta
   return ((data ?? []) as SectionRecord[]).sort((a, b) => a.position - b.position).map(toSection);
 }
 
+/** Remove one room (a final judge's seat that no one can fill). Only the director can. */
+export async function deleteSection(sectionId: string): Promise<void> {
+  const { error } = await db().from('sections').delete().eq('id', sectionId);
+  if (error) fail(error.message);
+}
+
 export async function saveSectionRoom(sectionId: string, room: string): Promise<void> {
   const { error } = await db().from('sections').update({ room }).eq('id', sectionId);
   if (error) fail(error.message);
