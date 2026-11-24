@@ -1,0 +1,68 @@
+# Runs on every push and pull request: the app builds, the unit tests pass, the database scripts install
+# cleanly (twice) and keep their permission rules, and the demo works in a real browser.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  app:
+    name: Build and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check and build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: supabase/all_in_one.sql matches the separate scripts
+        run: npm run sql:bundle && git diff --exit-code supabase/all_in_one.sql
+
+  database:
+    name: Database scripts and permissions
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install every script twice, then check the rules
+        run: npm run test:db
+
+  browser:
+    name: Demo in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the demo (no accounts connected)
+        run: npm run build
+      - name: Install Playwright and axe for this run only
+        run: npm install --no-save playwright@1.49.1 axe-core@4.10.2 && npx playwright install --with-deps chromium
+      - name: Serve the build
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ > /dev/null && break; sleep 1; done
+      - name: Browser checks
+        run: npm run test:e2e

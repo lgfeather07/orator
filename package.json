@@ -17,7 +17,10 @@
     "test:access": "tsc src/tournament.ts src/results.ts src/semis.ts --outDir .test-out/access --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './results'#from './results.js'#; s#from './tournament'#from './tournament.js'#\" .test-out/access/*.js && node tests/access.test.mjs",
     "test:growth": "tsc src/growthStats.ts --outDir .test-out/growth --module es2022 --target es2022 --moduleResolution bundler --strict --skipLibCheck && node tests/growth.test.mjs",
     "test:qualifying": "tsc src/tournament.ts --outDir .test-out/qualifying --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && node tests/qualifying.test.mjs",
-    "test:import": "tsc src/rosterImport.ts --outDir .test-out/import --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './ballots'#from './ballots.js'#\" .test-out/import/rosterImport.js && node tests/import.test.mjs"
+    "test:import": "tsc src/rosterImport.ts --outDir .test-out/import --module es2022 --target es2022 --moduleResolution bundler --skipLibCheck && sed -i \"s#from './ballots'#from './ballots.js'#\" .test-out/import/rosterImport.js && node tests/import.test.mjs",
+    "test": "npm run -s test:paper && npm run -s test:cuts && npm run -s test:alerts && npm run -s test:semis && npm run -s test:prelims && npm run -s test:drops && npm run -s test:access && npm run -s test:growth && npm run -s test:qualifying && npm run -s test:import",
+    "test:db": "psql -v ON_ERROR_STOP=1 -q -f tests/db/supabase_stub.sql && psql -v ON_ERROR_STOP=1 -q -f supabase/all_in_one.sql && psql -v ON_ERROR_STOP=1 -q -f supabase/all_in_one.sql && psql -v ON_ERROR_STOP=1 -q -f tests/db/checks.sql",
+    "test:e2e": "node tests/e2e/smoke.cjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

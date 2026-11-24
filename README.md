@@ -18,6 +18,22 @@ Without any configuration the app runs as a demo with sample data.
 
 The demo includes a full tournament setup: a coach enters students, the director builds the schedule, publishes it, runs the day, and ends it; the coach then releases results to students. That setup state is kept in the browser (not the database) and can be reset from the director's Details step.
 
+## Checks
+
+Every push and pull request runs `.github/workflows/checks.yml` on GitHub:
+
+- **Build and unit tests:** `npm run build`, then `npm test` (every `test:*` suite), and a check that `supabase/all_in_one.sql` matches the separate scripts.
+- **Database scripts and permissions:** installs `supabase/all_in_one.sql` twice on a fresh Postgres (with a small stand-in for Supabase's auth, `tests/db/supabase_stub.sql`), then `tests/db/checks.sql` confirms the access rules: who sees entries, name privacy, settings locks, publishing, qualifiers and the coach plan. Locally: `PGHOST=… PGDATABASE=… npm run test:db` against an empty database.
+- **Demo in a browser:** builds the demo, serves it and runs `tests/e2e/smoke.cjs` in Chromium: scheduling, district qualifiers, the format lock, pasting a roster and judges, and the public pages, with accessibility scans. Locally: `npm run test:e2e -- http://localhost:5173/` with Playwright and axe-core installed.
+
+## Coach plan
+
+Season-long growth stats, team comparisons and students' own growth pages are part of the coach plan ($99 per school per season). Each tournament's entries, judges, ballots and results stay free. A coach can start one 30-day free trial for their school from the locked tab. To add a paid plan after a school pays by check, run this in the SQL Editor (change the school and end date):
+
+```sql
+insert into public.coach_plans (school, kind, ends_at) values ('Wrenfield High', 'paid', '2027-08-01');
+```
+
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
