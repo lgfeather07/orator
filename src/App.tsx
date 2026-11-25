@@ -678,6 +678,8 @@ function DocsHeader({title,subtitle}:{title:string;subtitle:string}) {
 function Workspace() {
   const { loading, profile, recovering } = useAuth();
   const [page, setPage] = useState<Page>('auth');
+  // A different workspace starts at its top, not wherever the last one was scrolled to.
+  useEffect(() => { window.scrollTo(0, 0); }, [page]);
   const [dark, setDark] = useState(false);
   /** Visitors can explore every role with sample data without an account, even when accounts are connected. */
   const [demo, setDemo] = useState(false);

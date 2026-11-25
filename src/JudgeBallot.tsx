@@ -71,6 +71,16 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const ballotKey = room?.key ?? THIS_ROUND;
   const link = room ? { tournamentId: room.tournamentId, sectionId: room.sectionId } : undefined;
   const { speakerPresence, setSpeakerPresence, entries, tournament } = useStore();
+  // On a phone the ballot opens below the workspace header: bring it into view so the judge sees it open.
+  const sectionId = room?.sectionId;
+  useEffect(() => {
+    const ballot = document.querySelector('.jb');
+    if (!ballot) return;
+    const top = ballot.getBoundingClientRect().top;
+    if (top >= 0 && top < window.innerHeight * 0.4) return;
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: Math.max(0, top + window.scrollY - 72), behavior: smooth ? 'smooth' : 'auto' });
+  }, [sectionId]);
   // Most judges would rather not see a rating: it is still worked out from the marks for tiebreaks, just not shown.
   const showRating = tournament.showRating ?? false;
   // Section marks are optional unless the director requires them. A judge's choice is remembered on this device.

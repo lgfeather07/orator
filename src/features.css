@@ -1082,3 +1082,14 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
 .plan-note { margin: 0; padding: 0 18px 16px; color: var(--muted); font-size: 12.5px; line-height: 1.45; max-width: 70ch; }
 .plan-actions .plan-note { padding: 0; }
 .plan-trial { margin: 0 0 12px; padding: 10px 14px; display: flex; gap: 8px; align-items: flex-start; color: var(--ink); background: var(--brand-soft); border-radius: 10px; font-size: 13px; }
+
+/* Touch screens: give small controls a finger-sized target (found in the phone check). */
+@media (pointer: coarse) {
+  .rooms-actions button { width: 40px; height: 40px; }
+  .jb-arrows button { width: 44px; height: 44px; font-size: 16px; }
+  .jb-tabs button { min-height: 44px; }
+  .people-undo { min-height: 36px; padding-inline: 4px; }
+  .legal-footer a { display: inline-block; padding-block: 8px; }
+  .icon-button { min-width: 40px; min-height: 40px; }
+  .pr-school-links a, .pr-top-links a, .legal-back, .listing-settings .field-label a { display: inline-flex; align-items: center; min-height: 36px; }
+}

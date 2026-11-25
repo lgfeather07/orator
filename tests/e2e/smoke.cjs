@@ -15,6 +15,7 @@ const check = (ok, rule) => { console.log(`${ok ? 'ok' : 'FAILED'} - ${rule}`); 
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   const axe = async (name, selector) => {
+    await page.waitForTimeout(600); // let entrance animations finish, or colors read faded
     await page.addScriptTag({ content: axeSource });
     const found = await page.evaluate(async target => (await window.axe.run(document.querySelector(target), { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(v => `${v.id} (${v.nodes.length})`), selector);
     check(found.length === 0, `no accessibility violations: ${name}${found.length ? ` → ${found.join(', ')}` : ''}`);
@@ -68,6 +69,25 @@ const check = (ok, rule) => { console.log(`${ok ? 'ok' : 'FAILED'} - ${rule}`); 
   await axe('public results', 'main');
   await page.goto(SITE + '#/calendar'); await page.waitForTimeout(800);
   await axe('public calendar', 'main');
+
+  // Phone: nothing scrolls sideways, and an opened ballot comes into view.
+  const { devices } = require('playwright');
+  const phone = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
+  phone.on('pageerror', error => errors.push(`phone: ${error}`));
+  const sideways = async name => { const [scroll, width] = await phone.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]); check(scroll <= width, `phone: ${name} does not scroll sideways (${scroll}px in ${width}px)`); };
+  await phone.goto(SITE); await phone.evaluate(() => localStorage.clear()); await phone.reload();
+  await phone.getByRole('button', { name: /Explore the demo/ }).click();
+  await phone.locator('.preview-roles button', { hasText: 'Director' }).first().click(); await sideways('director setup');
+  await phone.getByRole('tab', { name: 'Schedule' }).click(); await phone.getByRole('button', { name: 'Build schedule' }).first().click(); await sideways('schedule');
+  await phone.getByRole('tab', { name: 'Review' }).click();
+  for (const step of [/^Publish/, /^Start/]) await phone.locator('.run-steps button', { hasText: step }).first().click();
+  await phone.locator('.preview-roles button', { hasText: 'Judge' }).first().click(); await sideways('judge');
+  await phone.locator('.demo-rooms button', { hasText: 'Open ballot' }).first().click();
+  await phone.waitForSelector('.jb-strip'); await phone.waitForTimeout(900);
+  const top = await phone.evaluate(() => document.querySelector('.jb').getBoundingClientRect().top);
+  check(top >= 0 && top < 300, `phone: an opened ballot is in view (top at ${Math.round(top)}px)`);
+  await sideways('ballot');
+  await phone.goto(SITE + '#/results'); await phone.waitForTimeout(600); await sideways('public results');
 
   check(errors.length === 0, `no page errors${errors.length ? ` → ${errors.join(' | ')}` : ''}`);
   await browser.close();
