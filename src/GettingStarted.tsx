@@ -31,7 +31,7 @@ export function GettingStarted({ onStep }: { onStep: (step: number) => void }) {
   };
   const hide = () => { const next = [...hidden, tournamentId]; writeHidden(next); setHidden(next); };
   return <section className="panel getting-started" aria-labelledby="getting-started-title">
-    <div className="panel-head"><div><h2 id="getting-started-title">Getting started</h2><p>Running your first tournament on Orator, step by step. Coming from SpeechWire? Nothing needs to be re-typed: coaches paste their rosters.</p></div>
+    <div className="panel-head"><div><h2 id="getting-started-title">Getting started</h2><p>Running your first tournament on Orator, step by step. Coming from SpeechWire? Nothing needs to be re-typed: coaches paste their rosters. The Print tab has a one-page director guide and a judge quick-start to hand out.</p></div>
       <span className="panel-head-actions"><Badge tone={left ? 'info' : 'success'} icon={left ? undefined : 'check'}>{left ? `${steps.length - left} of ${steps.length} done` : 'All set'}</Badge><button type="button" className="gs-hide" onClick={hide}>Hide</button></span></div>
     <ol className="gs-steps">{steps.map((step, index) => <li key={step.title} className={step.done ? 'done' : ''}>
       <span className="gs-mark" aria-hidden="true">{step.done ? <Icon name="check" size={14}/> : index + 1}</span>

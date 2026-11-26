@@ -36,12 +36,31 @@
 .print-sign-foot { margin: 28px 0 0; font-size: 12px; color: #555; }
 .print-award { margin-bottom: 12px; break-inside: avoid; }
 .print-award ol { margin: 0; padding-left: 20px; }
+/* One-page handouts (PilotGuides.tsx): two columns of small, plain type that collapse to one on a phone. */
+.print-guide { font-size: 10.5px; line-height: 1.38; }
+.print-guide .print-head { margin-bottom: 8px; }
+.pg-large { font-size: 12.5px; }
+.pg-large .pg-block { margin-bottom: 11px; }
+.pg-large .pg-block h4 { font-size: 12.5px; }
+.pg-title { margin: 0 0 2px; font-size: 16px; }
+.pg-lead { margin: 0 0 8px; color: #333; }
+.pg-cols { columns: 2 250px; column-gap: 22px; }
+.pg-block { margin: 0 0 8px; break-inside: avoid; }
+.pg-block h4 { margin: 0 0 4px; padding-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #999; }
+.pg-block p { margin: 0 0 4px; }
+.pg-steps, .pg-list { margin: 0; padding-left: 16px; }
+.pg-steps { list-style: decimal; }
+.pg-list { list-style: disc; }
+.pg-steps li, .pg-list li { display: list-item; margin-bottom: 3px; overflow-wrap: anywhere; }
+.pg-box { padding: 6px 8px; border: 1.5px solid #1a1a1a; border-radius: 4px; }
 @media (max-width: 720px) { .print-center { padding: 4px 14px 30px; } .print-page { padding: 18px; } .print-ballot-top { grid-template-columns: 1fr 1fr; } .print-sign-room { font-size: 40px; } .print-sign-event { font-size: 24px; } .print-page table { font-size: 11px; } }
 
 @media print {
   @page { margin: 0.5in; }
   body * { visibility: hidden; }
   .print-doc, .print-doc * { visibility: visible; }
+  /* Lay out only the document and what holds it, so the hidden app adds no trailing blank pages. */
+  body *:not(:has(.print-doc)):not(.print-doc):not(.print-doc *) { display: none !important; }
   .print-doc { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; }
   .print-page { margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; break-after: page; }
   .print-page:last-child { break-after: auto; }
