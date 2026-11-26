@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Badge, Button, Icon, Progress } from './ui';
 import { useStore } from './store';
 import { ballotEvents, MARK_MAX } from './ballots';
-import { loadTeamBallots } from './ballotApi';
+import { loadSeasonBallots, loadTeamBallots } from './ballotApi';
 import { pastBallots } from './PastBallots';
 import { sameSchool, type PracticeGoal } from './tournament';
 
@@ -52,9 +52,19 @@ export function CoachPractice({ school, students, initial = '' }: { school: stri
   const store = useStore();
   const [chosen, setChosen] = useState(initial);
   const student = students.find(item => item.name === chosen) ?? students[0];
-  // Real ballots for a signed-in coach; sample ballots in the demo.
+  // Real ballots for a signed-in coach: the whole season with the coach plan, otherwise this tournament's (free).
+  // Sample ballots in the demo.
   const [teamRows, setTeamRows] = useState<{ speaker: string; eventId: string; marks: number[] }[] | null>(store.live ? null : pastBallots.map(ballot => ({ speaker: ballot.student, eventId: ballot.eventId, marks: ballot.marks })));
-  useEffect(() => { if (store.live) loadTeamBallots(school).then(rows => setTeamRows(rows.map(row => ({ speaker: row.speaker, eventId: row.eventId, marks: row.marks })))).catch(() => setTeamRows([])); }, [store.live, school]);
+  const tournamentId = store.tournamentId;
+  useEffect(() => {
+    if (!store.live) return;
+    let active = true;
+    const thisTournament = () => tournamentId ? loadTeamBallots(school, tournamentId) : Promise.resolve([]);
+    loadSeasonBallots(school).catch(thisTournament)
+      .then(rows => active && setTeamRows(rows.map(row => ({ speaker: row.speaker, eventId: row.eventId, marks: row.marks }))))
+      .catch(() => active && setTeamRows([]));
+    return () => { active = false; };
+  }, [store.live, school, tournamentId]);
   const insight = useMemo(() => student && teamRows ? weakestSection(teamRows.filter(row => same(row.speaker, student.name))) : null, [student, teamRows]);
   if (!student) return <section className="panel practice-empty"><span className="upload-illustration"><Icon name="users" size={28}/></span><h3>No students yet</h3><p>Add students under Entries. Each one gets their own practice goals here, and they see them on their own Practice tab.</p></section>;
   const first = student.name.split(' ')[0];

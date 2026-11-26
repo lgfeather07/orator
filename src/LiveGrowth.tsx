@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Badge, Button, Icon } from './ui';
 import { ballotEvents } from './ballots';
-import { loadTeamBallots, type TeamBallotRow } from './ballotApi';
+import { loadSeasonBallots, PlanRequiredError } from './ballotApi';
+import { PlanLocked } from './CoachPlan';
 import { GrowthChart, type Scale } from './Growth';
 import { weakestSection } from './Practice';
 import { loadPublished, sameName } from './publicResultsApi';
-import { buildGrowth, highlights, trend, type GrowthPoint, type StudentGrowthStats } from './growthStats';
+import { buildGrowth, highlights, trend, type GrowthBallot, type GrowthPoint, type StudentGrowthStats } from './growthStats';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
@@ -51,13 +52,22 @@ function Charts({ points }: { points: GrowthPoint[] }) {
   return <div className="growth-charts"><Measure points={points} pick={point => point.rating} kind="rating"/><Measure points={points} pick={point => point.rank} kind="rank"/></div>;
 }
 
-function useTeamBallots(school: string) {
-  const [rows, setRows] = useState<TeamBallotRow[] | null>(null);
+/**
+ * The school's ballots from every tournament, from the database's season sweep (coach plan only). `locked` is set
+ * when the database says the school has no plan running; `reload` asks again (after a trial starts).
+ */
+function useSeasonBallots(school: string) {
+  const [rows, setRows] = useState<GrowthBallot[] | null>(null);
   const [error, setError] = useState('');
-  useEffect(() => { let active = true; setRows(null); setError('');
-    loadTeamBallots(school).then(data => active && setRows(data)).catch(caught => { if (!active) return; setRows([]); setError(caught instanceof Error ? caught.message : 'Couldn’t load ballots.'); });
-    return () => { active = false; }; }, [school]);
-  return { rows, error };
+  const [locked, setLocked] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => { let active = true; setRows(null); setError(''); setLocked(false);
+    loadSeasonBallots(school).then(data => active && setRows(data)).catch(caught => {
+      if (!active) return; setRows([]);
+      if (caught instanceof PlanRequiredError) setLocked(true); else setError(caught instanceof Error ? caught.message : 'Couldn’t load ballots.');
+    });
+    return () => { active = false; }; }, [school, attempt]);
+  return { rows, error, locked, reload: () => setAttempt(value => value + 1) };
 }
 
 /** Final rounds each student reached, from published results. */
@@ -70,16 +80,18 @@ function useFinals(school: string) {
 const Loading = ({ title }: { title: string }) => <section className="panel growth-panel"><div className="panel-head"><div><h2>{title}</h2><p>Loading ballots…</p></div></div></section>;
 
 /**
- * Signed-in coach: each student's real growth, from every submitted ballot their team can see, across tournaments.
+ * Signed-in coach: each student's real growth, from every submitted ballot for their school across tournaments
+ * (the database's season sweep, coach plan only).
  * The coaching opportunity points at the section judges mark lowest and opens Practice for that student.
  */
 export function LiveStudentGrowth({ school, onPractice }: { school: string; onPractice: (student: string) => void }) {
-  const { rows, error } = useTeamBallots(school);
+  const { rows, error, locked, reload } = useSeasonBallots(school);
   const finals = useFinals(school);
   const stats = useMemo(() => buildGrowth(rows ?? []), [rows]);
   const [chosen, setChosen] = useState('');
   const [eventId, setEventId] = useState('');
   if (!rows) return <Loading title="Student growth"/>;
+  if (locked) return <PlanLocked school={school} role="coach" feature="Student growth" onStarted={reload}/>;
   if (stats.length === 0) return <section className="panel growth-panel growth-empty"><div className="panel-head"><div><h2>Student growth</h2><p>From your team’s real ballots</p></div></div>
     {error && <p className="sync-inline" role="alert"><Icon name="warning" size={14}/> {error}</p>}
     <p className="growth-note"><Icon name="growth" size={14}/> Growth appears once judges submit ballots for {school}. Each tournament adds a point to every student’s chart, event by event.</p></section>;
@@ -114,10 +126,11 @@ export function LiveStudentGrowth({ school, onPractice }: { school: string; onPr
  * so tournaments appear here once results are released.
  */
 export function LiveMyGrowth({ school, student }: { school: string; student: string }) {
-  const { rows, error } = useTeamBallots(school);
+  const { rows, error, locked } = useSeasonBallots(school);
   const mine = useMemo(() => buildGrowth((rows ?? []).filter(row => sameName(row.speaker, student)))[0], [rows, student]);
   const [eventId, setEventId] = useState('');
   if (!rows) return <Loading title="My growth"/>;
+  if (locked) return <PlanLocked school={school} role="student" feature="My growth"/>;
   if (!mine) return <section className="panel growth-panel my-growth growth-empty"><div className="panel-head"><div><h2>My growth</h2><p>Your average rating and rank in each event</p></div></div>
     {error && <p className="sync-inline" role="alert"><Icon name="warning" size={14}/> {error}</p>}
     <p className="growth-note"><Icon name="lock" size={14}/> Your growth appears after a tournament, once your coach releases results. Each tournament adds a point, event by event.</p></section>;

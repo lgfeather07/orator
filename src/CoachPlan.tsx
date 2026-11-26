@@ -56,14 +56,28 @@ const FEATURES = [
 export function PlanGate({ school, role, feature, children }: { school: string; role: 'coach' | 'student'; feature: string; children: ReactNode }) {
   const { plan, trialUsed, error, loading, refresh } = usePlan(school);
   const { live } = useStore();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState('');
   if (!live) return <>{children}</>;
   if (loading) return <section className="panel plan-card"><p className="plan-note">Checking your school’s plan…</p></section>;
   if (plan) return <>
     {plan.kind === 'trial' && <p className="plan-trial" role="status"><Icon name="clock" size={14}/> <span>Free trial of the coach plan: {daysLeft(plan.endsAt)} {daysLeft(plan.endsAt) === 1 ? 'day' : 'days'} left (until {day(plan.endsAt)}).{role === 'coach' ? ` Keep it for $${COACH_PLAN_PRICE} for the season.` : ''}</span></p>}
     {children}
   </>;
+  return <PlanOffer school={school} role={role} feature={feature} trialUsed={trialUsed} error={error} refresh={refresh}/>;
+}
+
+/**
+ * The plan card on its own, for when the database refuses a plan-only read (supabase/plan_lock.sql) although the
+ * screen thought the school had a plan, for example a plan that ended while the page was open. `onStarted` runs
+ * after a coach starts the trial from it.
+ */
+export function PlanLocked({ school, role, feature, onStarted }: { school: string; role: 'coach' | 'student'; feature: string; onStarted?: () => void }) {
+  const { trialUsed, error, refresh } = usePlan(school);
+  return <PlanOffer school={school} role={role} feature={feature} trialUsed={trialUsed} error={error} refresh={() => { refresh(); onStarted?.(); }}/>;
+}
+
+function PlanOffer({ school, role, feature, trialUsed, error, refresh }: { school: string; role: 'coach' | 'student'; feature: string; trialUsed: boolean; error: string; refresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState('');
   const start = async () => { setBusy(true); setFailed(''); try { await startTrial(school); refresh(); } catch (caught) { setFailed(caught instanceof Error ? caught.message : 'Couldn’t start the trial.'); } finally { setBusy(false); } };
   return <section className="panel plan-card" aria-labelledby="plan-title">
     <div className="panel-head"><div><span className="eyebrow">Coach plan · ${COACH_PLAN_PRICE} per school, per season</span><h2 id="plan-title">{feature} is part of the coach plan</h2>
