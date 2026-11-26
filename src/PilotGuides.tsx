@@ -63,7 +63,7 @@ export function DirectorGuidePrint() {
           <li><b>Judge assignments:</b> one page per school.</li>
           <li>Reprint any round you change after printing, and keep copies of the judge quick-start.</li>
         </ul>
-        <p><b>During the outage:</b> judges whose ballot is open can keep working; tell them not to reload. Phones on cellular data still work. Anyone who can’t get in uses their room’s paper ballot and returns it to the tab room.</p>
+        <p><b>During the outage:</b> judges keep judging; their laptops save everything and send ballots by themselves when the connection is back (a room shows “Waiting for internet” until then). Phones on cellular data still work. Anyone who can’t get in uses their room’s paper ballot and returns it to the tab room.</p>
         <p><b>Afterward:</b> Ballots tab → Status: Missing → Start with the first missing room. Type ranks, points (35–50) or section marks, times, no-shows and time penalties in speaking order; Enter moves on, Ctrl+Enter saves. Tick Double-entry check to catch typos. Orator catches ties and ranks that don’t match points.</p>
         <p><b>Results still work:</b> saved paper ballots count in breaks, finals and placings exactly like e-ballots. Enter them before you create finals and before you end, because ending locks ballots. Comments stay on the paper; return the sheets to coaches.</p>
       </section>
@@ -115,7 +115,7 @@ export function JudgeQuickStartPrint() {
       <section className="pg-block pg-box" aria-labelledby="jq-down">
         <h4 id="jq-down">If the laptop or wifi dies</h4>
         <ul className="pg-list">
-          <li><b>“Not saved” on screen:</b> keep the page open; your work is still there. When the connection is back, make any change or press Submit ballot again.</li>
+          <li><b>Wifi drops (“No internet”):</b> keep judging. Everything is saved on your laptop and syncs when the connection is back. You can even press Submit ballot: it shows “Waiting for internet” and sends by itself later. Don’t clear your browser.</li>
           <li><b>Can’t get back in:</b> use the <b>paper ballot</b> for your room (in your packet or from the tab room). Fill in each speaker’s time, score out of 50 and rank (1 is best, no ties; “NS” for no-shows; anyone more than 30 seconds outside the time limit goes one place lower), write comments on the back, sign it and return it to the tab room.</li>
           <li>The director enters your paper ballot in Orator, and it counts exactly like an e-ballot.</li>
           <li>Already pressed Submit ballot? You’re done; don’t fill in a paper one too.</li>
