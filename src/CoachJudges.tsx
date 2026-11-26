@@ -6,6 +6,7 @@ import { supabase, useAuth } from './auth';
 import { ballotEvents, eventCodes } from './ballots';
 import { invoiceFor, isFinal, roundLabel, sameSchool, type Section, timeFor } from './tournament';
 import { listMyBallotStatus } from './ballotApi';
+import { localKey, readPending, useBallotOutbox } from './offlineBallots';
 import { JudgeBallot, type BallotRoom } from './JudgeBallot';
 import type { Member } from './tournamentApi';
 import * as links from './judgeLinks';
@@ -247,9 +248,13 @@ function GuestMessage({ title, children, tone = 'info' }: { title: string; child
 function GuestRooms({ judgeId, seat }: { judgeId: string; seat: { name: string; school: string } }) {
   const { sections, entries, tournament, tournamentId, live, roomResults, recordRoomResults, refresh } = useStore();
   const [status, setStatus] = useState<Record<string, 'draft' | 'submitted'>>({});
+  const { profile } = useAuth();
+  const [sentTick, setSentTick] = useState(0);
+  const waiting = useBallotOutbox(live, () => setSentTick(tick => tick + 1));
+  const waitingFor = (section: { round: number; room: string }) => waiting > 0 && !!profile && readPending(localKey(profile.id, { tournament: tournament.name, round: section.round, room: section.room })) !== null;
   const [open, setOpen] = useState<BallotRoom | null>(null);
   const top = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (!live) return; let active = true; listMyBallotStatus(tournament.name).then(found => active && setStatus(found)).catch(() => undefined); return () => { active = false; }; }, [live, tournament.name, sections.length, open]);
+  useEffect(() => { if (!live) return; let active = true; listMyBallotStatus(tournament.name).then(found => active && setStatus(found)).catch(() => undefined); return () => { active = false; }; }, [live, tournament.name, sections.length, open, sentTick]);
   const mine = sections.filter(section => section.judgeId === judgeId).sort((a, b) => a.round - b.round);
   const stateOf = (section: Section) => live ? status[`${section.round}|${section.room}`] : roomResults.some(result => result.sectionId === section.id) ? 'submitted' as const : undefined;
   const openRoom = (section: Section) => {
@@ -270,7 +275,7 @@ function GuestRooms({ judgeId, seat }: { judgeId: string; seat: { name: string; 
       : <div className="assignment-desktop guest-room-list">{mine.map(section => { const state = stateOf(section); return <button key={section.id} className={state === 'submitted' ? '' : 'featured'} onClick={() => openRoom(section)}>
         <span className="event-code">{eventCodes[section.eventId] ?? section.eventId.slice(0, 3).toUpperCase()}</span>
         <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{timeFor(tournament, section.round)} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
-        <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge><Icon name="arrow"/>
+        {waitingFor(section) ? <Badge tone="warning" icon="clock">Waiting for internet</Badge> : <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge>}<Icon name="arrow"/>
       </button>; })}</div>}
   </section>;
 }

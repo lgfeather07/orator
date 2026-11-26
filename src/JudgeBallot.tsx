@@ -5,6 +5,7 @@ import { entryLoadByName, loadLabel } from './tournament';
 import { ballotEvents, MARK_MAX, RATING_BANDS, RATING_MIN, TIME_GRACE_SECONDS, type BallotEvent } from './ballots';
 import { useAuth } from './auth';
 import { loadBallot, saveBallot, type BallotKey, type EntryInput } from './ballotApi';
+import { clearDraft, isConnectionProblem, localKey, outboxRefusal, queueSubmit, readDraft, readPending, useBallotOutbox, useOnline, writeDraft, type LocalDraft } from './offlineBallots';
 import { ballotRoundLabel } from './semis';
 
 /** `score` is the judge's points out of 50. `marks` are optional 1–10 section marks; when all five are given, they make the score. */
@@ -102,7 +103,12 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   const [classA, setClassA] = useState(false);
   const [ballotId, setBallotId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'failed'>(remote ? 'loading' : 'ready');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed' | 'offline'>('idle');
+  // Offline: a copy on this device, a submission waiting to send, and a tick that retries the save.
+  const draftId = remote && profile ? localKey(profile.id, ballotKey) : null;
+  const [queued, setQueued] = useState(() => draftId ? readPending(draftId) !== null : false);
+  const [retry, setRetry] = useState(0);
+  const online = useOnline();
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const dirty = useRef(false);
@@ -189,8 +195,17 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   useEffect(() => {
     if (!remote) return;
     let active = true;
+    const local = draftId ? readDraft<SpeakerBallot>(draftId) : null;
+    const restore = (draft: LocalDraft<SpeakerBallot>) => {
+      setBallotId(draft.ballotId); setEventId(draft.eventId); setClassA(draft.classA);
+      setBallots({ ...emptyRound(speakers), ...Object.fromEntries(Object.entries(draft.ballots).filter(([code]) => speakers.some(item => item.code === code))) });
+      setOrder([...draft.order.filter(code => speakers.some(item => item.code === code)), ...speakers.map(item => item.code).filter(code => !draft.order.includes(code))]);
+      speakers.forEach(item => setSpeakerPresence(item.code, draft.presence[item.code]));
+    };
     loadBallot(ballotKey).then(saved => {
       if (!active) return;
+      // Changes made on this device that never reached the server win over the server's older copy.
+      if (local?.unsynced && saved?.status !== 'submitted') { restore(local); if (saved) setBallotId(saved.id); dirty.current = true; setLoadState('ready'); return; }
       if (saved) {
         setBallotId(saved.id); setEventId(saved.eventId); setClassA(saved.classA); setSubmitted(saved.status === 'submitted');
         const next = emptyRound(speakers);
@@ -216,7 +231,12 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
         speakers.forEach(item => setSpeakerPresence(item.code, undefined));
       }
       setLoadState('ready');
-    }).catch(() => active && setLoadState('failed'));
+    }).catch(() => {
+      if (!active) return;
+      // No connection: carry on from this device's copy if there is one.
+      if (local) { restore(local); dirty.current = local.unsynced; setSaveState('offline'); setLoadState('ready'); }
+      else setLoadState('failed');
+    });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remote]);
@@ -226,22 +246,62 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
     if (!remote || loadState !== 'ready' || submitted || submitting || !dirty.current) return;
     const timer = setTimeout(async () => {
       dirty.current = false; setSaveState('saving');
-      try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), false, link)); setSaveState('saved'); setSaveError(''); }
-      catch (caught) { dirty.current = true; setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not save.'); }
+      try { const id = await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), false, link); setBallotId(id); setSaveState('saved'); setSaveError(''); keepLocal(id, false); }
+      catch (caught) { dirty.current = true; if (isConnectionProblem(caught)) { setSaveState('offline'); setSaveError(''); } else { setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not save.'); } }
     }, 900);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ballots, order, eventId, classA, speakerPresence, loadState, submitted, submitting]);
+  }, [ballots, order, eventId, classA, speakerPresence, loadState, submitted, submitting, retry]);
+
+  // Every change is also kept on this device, so a dropped connection or a reload loses nothing.
+  const keepLocal = (id: string | null, unsynced: boolean) => {
+    if (!draftId) return;
+    const presence = Object.fromEntries(speakers.map(item => [item.code, speakerPresence[item.code]]));
+    writeDraft<SpeakerBallot>(draftId, { ballots, order, eventId, classA, ballotId: id, presence, unsynced, at: Date.now() });
+  };
+  useEffect(() => {
+    if (!draftId || loadState !== 'ready' || submitted) return;
+    keepLocal(ballotId, dirty.current || saveState === 'offline' || saveState === 'failed');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ballots, order, eventId, classA, speakerPresence, loadState]);
+
+  // While offline, try the save again when the connection returns, and every 15 seconds.
+  useEffect(() => {
+    if (saveState !== 'offline' || queued) return;
+    const again = () => setRetry(count => count + 1);
+    window.addEventListener('online', again);
+    const timer = window.setInterval(again, 15000);
+    return () => { window.removeEventListener('online', again); window.clearInterval(timer); };
+  }, [saveState, queued]);
+
+  // A ballot submitted offline goes out by itself; this screen hears when it has.
+  useBallotOutbox(remote, () => { if (draftId && queued && !readPending(draftId)) { setQueued(false); setSubmitted(true); dirty.current = false; } });
+  // A queued ballot the server refused comes back here as a draft to fix.
+  useEffect(() => {
+    if (!queued || !draftId) return;
+    const check = () => { if (!readPending(draftId) && outboxRefusal()) { setQueued(false); dirty.current = true; setSaveState('failed'); setSaveError(outboxRefusal()); } };
+    const timer = window.setInterval(check, 3000);
+    return () => window.clearInterval(timer);
+  }, [queued, draftId]);
 
   const submit = async () => {
     const announce = () => onSubmitted?.(toEntries().filter(entry => entry.present && entry.rank && entry.rating).map(entry => ({ entryId: entry.code, rank: entry.rank!, rating: entry.rating! })));
     if (!remote) { setSubmitted(true); announce(); return; }
     setSubmitting(true); setSaveError('');
-    try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), true, link)); dirty.current = false; setSubmitted(true); announce(); }
-    catch (caught) { setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not submit the ballot.'); }
+    try { setBallotId(await saveBallot(ballotKey, ballotId, eventId, classA, toEntries(), true, link)); dirty.current = false; setSubmitted(true); if (draftId) clearDraft(draftId); announce(); }
+    catch (caught) {
+      if (draftId && isConnectionProblem(caught)) {
+        // Offline: keep the finished ballot on this device and send it the moment the connection is back.
+        keepLocal(ballotId, true);
+        queueSubmit(draftId, { key: ballotKey, ballotId, eventId, classA, entries: toEntries(), link, at: Date.now() });
+        dirty.current = false; setQueued(true); setSaveState('offline'); setSaveError('');
+      } else { setSaveState('failed'); setSaveError(caught instanceof Error ? caught.message : 'Could not submit the ballot.'); }
+    }
     finally { setSubmitting(false); }
   };
   const saveLine = !remote ? <span><Icon name="check" size={15}/> Autosaved just now</span>
+    : queued ? <span className="jb-save-offline" role="status"><Icon name="clock" size={15}/> Submitted on this laptop. It sends automatically when the internet is back.</span>
+    : saveState === 'offline' || !online ? <span className="jb-save-offline" role="status"><Icon name="clock" size={15}/> No internet. Saved on this laptop; it syncs when the connection is back.</span>
     : saveState === 'failed' ? <span className="jb-save-failed" role="alert"><Icon name="warning" size={15}/> Not saved: {saveError}</span>
     : saveState === 'saving' ? <span className="jb-saving">Saving…</span>
     : <span><Icon name="check" size={15}/> {saveState === 'saved' ? 'Draft saved to your account' : 'Changes save automatically'}</span>;
@@ -265,6 +325,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
   </div>;
 
   return <div className="jb">
+    {remote && (queued || saveState === 'offline' || !online) && <div className="jb-offline-banner"><Icon name="clock" size={18}/><span><strong>{queued ? 'Your ballot is submitted on this laptop.' : 'No internet right now. Keep judging.'}</strong> {queued ? 'It sends to the tab room by itself as soon as the connection is back. You can open your next room.' : 'Everything you enter is saved on this laptop and syncs when the connection returns. If the laptop itself fails, finish on a paper ballot and give it to the tab room.'}</span></div>}
     <div className="jb-top">
       <div><span className="jb-badges"><Badge tone="info">{ballotRoundLabel(room, ballotKey.round)}</Badge><Badge tone="success" icon="check">NSAA ballot format</Badge></span><strong>{room ? event.name : `Varsity ${event.name}`}</strong><span>{ballotKey.room} · {room?.time ?? '9:30 AM'} · {speakers.length} {speakers.length === 1 ? 'speaker' : 'speakers'} · {limitText(event, classA)}</span></div>
       <div className="jb-selects">{event.time.classAMax && <label><span>School class</span><select aria-label="School class" value={classA ? 'a' : 'other'} onChange={change => { dirty.current = true; setClassA(change.target.value === 'a'); }}><option value="other">Classes B–D · {clock(event.time.max)}</option><option value="a">Class A · {clock(event.time.classAMax)}</option></select></label>}
@@ -389,7 +450,7 @@ export function JudgeBallot({ room, onSubmitted }: { room?: BallotRoom; onSubmit
       </div>
       <p className="jb-rule jb-rank-rule"><Icon name="info" size={14}/> Rank speakers on performance. Anyone more than 30 seconds outside the time limit is placed one rank lower automatically, so they can finish below a speaker with {lower}.</p>
 
-      <div className="jb-nav"><Button variant="secondary" onClick={() => setTab('score')}>Back to scoring</Button>{saveLine}<Button disabled={!canSubmit || submitting} onClick={submit}>{submitting ? 'Submitting…' : 'Submit ballot'}</Button></div>
+      <div className="jb-nav"><Button variant="secondary" onClick={() => setTab('score')}>Back to scoring</Button>{saveLine}<Button disabled={!canSubmit || submitting || queued} onClick={submit}>{submitting ? 'Submitting…' : queued ? 'Waiting for internet' : 'Submit ballot'}</Button></div>
     </>}
   </div>;
 }

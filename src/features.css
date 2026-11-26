@@ -1093,3 +1093,9 @@ button.tournament-chip:hover, button.tournament-chip[aria-expanded="true"] { bor
   .icon-button { min-width: 40px; min-height: 40px; }
   .pr-school-links a, .pr-top-links a, .legal-back, .listing-settings .field-label a { display: inline-flex; align-items: center; min-height: 36px; }
 }
+
+/* Ballots without internet (offlineBallots.ts) */
+.jb-nav > span.jb-save-offline { color: var(--ink); max-width: 46ch; }
+.jb-offline-banner { margin-bottom: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; color: var(--ink); background: var(--accent-soft, var(--brand-soft)); border: 1px solid var(--accent, var(--brand)); border-radius: 12px; font-size: 13.5px; line-height: 1.45; }
+.jb-offline-banner svg { flex: none; margin-top: 2px; color: var(--accent-ink, var(--brand)); }
+.room-waiting { color: var(--ink); }

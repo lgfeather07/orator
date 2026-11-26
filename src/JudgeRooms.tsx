@@ -6,6 +6,7 @@ import { ballotEvents, eventCodes } from './ballots';
 import { roundLabel, stageOf, timeFor } from './tournament';
 import { listMyBallotStatus } from './ballotApi';
 import type { BallotRoom } from './JudgeBallot';
+import { localKey, readPending, useBallotOutbox } from './offlineBallots';
 
 const eventName = (id: string) => ballotEvents.find(event => event.id === id)?.name ?? id;
 
@@ -14,7 +15,11 @@ export function MyRooms({ onOpen }: { onOpen: (room: BallotRoom) => void }) {
   const { sections, entries, tournament, tournamentId, refresh, live, roomResults } = useStore();
   const { profile } = useAuth();
   const [status, setStatus] = useState<Record<string, 'draft' | 'submitted'>>({});
-  useEffect(() => { if (!live) return; let active = true; listMyBallotStatus(tournament.name).then(found => active && setStatus(found)).catch(() => undefined); return () => { active = false; }; }, [live, tournament.name, sections.length]);
+  const [sentTick, setSentTick] = useState(0);
+  useEffect(() => { if (!live) return; let active = true; listMyBallotStatus(tournament.name).then(found => active && setStatus(found)).catch(() => undefined); return () => { active = false; }; }, [live, tournament.name, sections.length, sentTick]);
+  // Ballots submitted without internet keep trying from here too, and show as waiting until they go through.
+  const waiting = useBallotOutbox(live, () => setSentTick(tick => tick + 1));
+  const waitingFor = (section: { round: number; room: string }) => waiting > 0 && !!profile && readPending(localKey(profile.id, { tournament: tournament.name, round: section.round, room: section.room })) !== null;
   // In the demo the judge is Judge Leather from the sample pool.
   const judgeId = live ? profile?.id : 'jl';
   const mine = sections.filter(section => section.judgeId === judgeId).sort((a, b) => a.round - b.round);
@@ -32,7 +37,7 @@ export function MyRooms({ onOpen }: { onOpen: (room: BallotRoom) => void }) {
       return <button key={section.id} className={state === 'submitted' ? '' : 'featured'} onClick={() => open(section.id)}>
         <span className="event-code">{eventCodes[section.eventId] ?? section.eventId.slice(0, 3).toUpperCase()}</span>
         <span><strong>{roundLabel(section, tournament)} · {eventName(section.eventId)}</strong><small>{timeFor(tournament, section.round)} · {section.room} · {section.entryIds.length} {section.entryIds.length === 1 ? 'speaker' : 'speakers'}</small></span>
-        <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge><Icon name="arrow"/>
+        {waitingFor(section) ? <Badge tone="warning" icon="clock">Waiting for internet</Badge> : <Badge tone={state === 'submitted' ? 'success' : state === 'draft' ? 'warning' : 'info'} icon={state === 'submitted' ? 'lock' : undefined}>{state === 'submitted' ? 'Submitted' : state === 'draft' ? 'Draft saved' : 'Open ballot'}</Badge>}<Icon name="arrow"/>
       </button>;
     })}</div>}
   </section>;
