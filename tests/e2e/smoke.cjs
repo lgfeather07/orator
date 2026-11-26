@@ -48,6 +48,15 @@ const check = (ok, rule) => { console.log(`${ok ? 'ok' : 'FAILED'} - ${rule}`); 
   await page.locator('.director-tabs button', { hasText: 'Setup' }).click();
   await page.getByRole('tab', { name: 'Review' }).click();
   for (const step of [/^Publish/, /^Start/]) { const button = page.locator('.run-steps button', { hasText: step }).first(); if (await button.isEnabled()) await button.click(); await page.waitForTimeout(200); }
+  // Director: the tab-room status board on the Issues tab, with an error recorded in this session.
+  await page.locator('.director-tabs button', { hasText: 'Issues' }).click();
+  await page.waitForSelector('.status-board');
+  // Every room has sample results by now, so the board says so rather than listing rooms.
+  check(/Ballots in/i.test(await page.locator('.sb-counts').innerText()) && /Every ballot for .+ is in/.test(await page.locator('.status-board').innerText()), 'the status board shows every ballot is in');
+  await page.getByRole('button', { name: 'Record a sample error' }).click();
+  check(/Sample error from the demo/.test(await page.locator('.sb-error-list').innerText()), 'the status board shows recorded errors');
+  await axe('status board', '.status-board');
+  await page.locator('.director-tabs button', { hasText: 'Setup' }).click();
   await page.getByRole('tab', { name: 'Details' }).click();
   check(await page.getByLabel('Final round').isDisabled(), 'the final-round format locks once the tournament starts');
 
@@ -87,6 +96,7 @@ const check = (ok, rule) => { console.log(`${ok ? 'ok' : 'FAILED'} - ${rule}`); 
   await phone.getByRole('tab', { name: 'Schedule' }).click(); await phone.getByRole('button', { name: 'Build schedule' }).first().click(); await sideways('schedule');
   await phone.getByRole('tab', { name: 'Review' }).click();
   for (const step of [/^Publish/, /^Start/]) await phone.locator('.run-steps button', { hasText: step }).first().click();
+  await phone.locator('.director-tabs button', { hasText: 'Issues' }).click(); await phone.waitForSelector('.status-board'); await sideways('status board');
   await phone.locator('.preview-roles button', { hasText: 'Judge' }).first().click(); await sideways('judge');
   await phone.locator('.demo-rooms button', { hasText: 'Open ballot' }).first().click();
   await phone.waitForSelector('.jb-strip'); await phone.waitForTimeout(900);

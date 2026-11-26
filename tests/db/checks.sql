@@ -152,4 +152,45 @@ set role anon;
 select pg_temp.check(pg_temp.refused($q$select * from season_ballots('Cedar')$q$), 'the public cannot call season_ballots');
 set role authenticated;
 
+-- ── Error reports and the status board
+select pg_temp.as_user('coach');
+insert into app_errors (tournament_id, role, area, kind, message) values (:'tid', 'coach', 'Entries', 'request', 'POST entries failed (403, 42501)');
+select pg_temp.check(pg_temp.refused(format($q$insert into app_errors (tournament_id, created_by, role, area, message) values (%L, '00000000-0000-4000-8000-0000000000c2', 'coach', 'Entries', 'Pretending to be Olive')$q$, :'tid')), 'nobody can record an error as someone else');
+select pg_temp.check((select count(*) from app_errors) = 0, 'a coach cannot read error reports, even their own');
+select pg_temp.check(pg_temp.refused('update app_errors set message = ''changed'''), 'error reports cannot be changed');
+select pg_temp.check(pg_temp.refused('delete from app_errors'), 'error reports cannot be deleted');
+insert into app_errors (tournament_id, role, area, message) values (:'tid', 'coach', 'Entries', repeat('x', 500));
+select pg_temp.as_user('student');
+select pg_temp.check((select count(*) from app_errors) = 0, 'a student cannot read error reports');
+select pg_temp.as_user('other');
+select pg_temp.check((select count(*) from app_errors) = 0, 'another coach cannot read error reports');
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-4000-8000-0000000000f1', 'stranger@ci');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-0000000000f1', false);
+select pg_temp.check(pg_temp.refused(format($q$insert into app_errors (tournament_id, message) values (%L, 'Not my tournament')$q$, :'tid')), 'someone outside a tournament cannot add errors to it');
+insert into app_errors (message) values ('An error with no tournament');
+select pg_temp.as_user('director');
+select pg_temp.check((select count(*) from app_errors where tournament_id = :'tid') = 2, 'the director reads their tournament''s error reports');
+select pg_temp.check((select max(char_length(message)) from app_errors) = 300, 'long error messages are cut to 300 characters');
+select pg_temp.check((select count(*) from app_errors where tournament_id is null) = 0, 'the director does not see errors from outside their tournament');
+select pg_temp.as_user('student');
+insert into app_errors (tournament_id, role, area, message) select :'tid', 'student', 'Practice', 'Loop ' || n from generate_series(1, 40) n;
+select pg_temp.as_user('director');
+select pg_temp.check((select count(*) from app_errors where created_by = '00000000-0000-4000-8000-0000000000a1') = 30, 'one person can add at most 30 error reports in ten minutes');
+insert into sections (tournament_id, round, event_id, label, room) values (:'tid', 1, 'info', 'Section A', 'Room 1'), (:'tid', 1, 'info', 'Section B', 'Room 2'), (:'tid', 1, 'poetry', 'Section A', 'Room 3');
+reset role;
+select pg_temp.as_user('other');
+update sections set judge_id = '00000000-0000-4000-8000-0000000000c2' where tournament_id = :'tid';
+insert into ballots (judge_id, tournament, round, room, event_id, tournament_id, section_id, status)
+  select '00000000-0000-4000-8000-0000000000c2', 'CI Invitational', 1, s.room, s.event_id, s.tournament_id, s.id, 'draft'
+  from sections s where s.tournament_id = :'tid' and s.room in ('Room 1', 'Room 2');
+-- Mark Room 2's ballot submitted without speakers (skipping the submission checks, which aren't under test here).
+set session_replication_role = replica; update ballots set status = 'submitted', submitted_at = now() where room = 'Room 2' and tournament_id = :'tid'; set session_replication_role = origin;
+set role authenticated;
+select pg_temp.as_user('director');
+select pg_temp.check((select string_agg(s.room || ':' || p.status, ',' order by s.room) from ballot_progress(:'tid') p join sections s on s.id = p.section_id) = 'Room 1:draft,Room 2:submitted', 'the director sees which rooms have a draft or a submitted ballot');
+select pg_temp.as_user('coach');
+select pg_temp.check((select count(*) from ballot_progress(:'tid')) = 0, 'only the director sees ballot progress');
+
 \echo All database checks passed.

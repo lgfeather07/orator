@@ -23,8 +23,8 @@ The demo includes a full tournament setup: a coach enters students, the director
 Every push and pull request runs `.github/workflows/checks.yml` on GitHub:
 
 - **Build and unit tests:** `npm run build`, then `npm test` (every `test:*` suite), and a check that `supabase/all_in_one.sql` matches the separate scripts.
-- **Database scripts and permissions:** installs `supabase/all_in_one.sql` twice on a fresh Postgres (with a small stand-in for Supabase's auth, `tests/db/supabase_stub.sql`), then `tests/db/checks.sql` confirms the access rules: who sees entries, name privacy, settings locks, publishing, qualifiers and the coach plan. Locally: `PGHOST=… PGDATABASE=… npm run test:db` against an empty database.
-- **Demo in a browser:** builds the demo, serves it and runs `tests/e2e/smoke.cjs` in Chromium: scheduling, district qualifiers, the format lock, pasting a roster and judges, and the public pages, with accessibility scans. Locally: `npm run test:e2e -- http://localhost:5173/` with Playwright and axe-core installed.
+- **Database scripts and permissions:** installs `supabase/all_in_one.sql` twice on a fresh Postgres (with a small stand-in for Supabase's auth, `tests/db/supabase_stub.sql`), then `tests/db/checks.sql` confirms the access rules: who sees entries, name privacy, settings locks, publishing, qualifiers, the coach plan, error reports and ballot progress. Locally: `PGHOST=… PGDATABASE=… npm run test:db` against an empty database.
+- **Demo in a browser:** builds the demo, serves it and runs `tests/e2e/smoke.cjs` in Chromium: scheduling, district qualifiers, the format lock, pasting a roster and judges, the director's status board, and the public pages, with accessibility scans. Locally: `npm run test:e2e -- http://localhost:5173/` with Playwright and axe-core installed.
 
 ## Coach plan
 
@@ -37,7 +37,7 @@ insert into public.coach_plans (school, kind, ends_at) values ('Wrenfield High',
 ## Turn on real accounts (Supabase)
 
 1. Create a project at supabase.com.
-2. In the Supabase dashboard, open SQL Editor → New query, paste the whole of `supabase/all_in_one.sql`, and click Run. That file is every script below in order (rebuild it with `npm run sql:bundle` after editing any of them). Or run these files one at a time in this order: `supabase/schema.sql`, `supabase/ballots.sql`, `supabase/tournaments.sql`, `supabase/fixes.sql` (saved director settings, linking student accounts, speech titles), `supabase/calendar.sql`, `supabase/public_results.sql`, `supabase/team_compare.sql`, `supabase/semifinals.sql`, `supabase/waitlist.sql` (entry limits and waitlist), `supabase/accessibility.sql` (room-accessibility requests), `supabase/judges.sql` (coach-entered judges), `supabase/drops.sql` (drop deadlines and drop fees), `supabase/paper_ballots.sql` (tab-room paper ballots), `supabase/tabsheet.sql` (live tab sheets), `supabase/alerts.sql` (alerts). Every file is safe to run again. **If you re-run any file, re-run every file after it in this list.**
+2. In the Supabase dashboard, open SQL Editor → New query, paste the whole of `supabase/all_in_one.sql`, and click Run. That file is every script below in order (rebuild it with `npm run sql:bundle` after editing any of them). Or run these files one at a time in this order: `supabase/schema.sql`, `supabase/ballots.sql`, `supabase/tournaments.sql`, `supabase/fixes.sql` (saved director settings, linking student accounts, speech titles), `supabase/calendar.sql`, `supabase/public_results.sql`, `supabase/team_compare.sql`, `supabase/semifinals.sql`, `supabase/waitlist.sql` (entry limits and waitlist), `supabase/accessibility.sql` (room-accessibility requests), `supabase/judges.sql` (coach-entered judges), `supabase/drops.sql` (drop deadlines and drop fees), `supabase/paper_ballots.sql` (tab-room paper ballots), `supabase/tabsheet.sql` (live tab sheets), `supabase/privacy.sql`, `supabase/locks.sql`, `supabase/coach_plans.sql`, `supabase/errors.sql` (error reports and the status board), `supabase/alerts.sql` (alerts). Every file is safe to run again. **If you re-run any file, re-run every file after it in this list.**
 3. Copy `.env.example` to `.env.local` and fill in the project URL and publishable (anon) key from Project Settings → API.
 4. Restart `npm run dev`.
 5. In Supabase, open **Authentication → Sign In / Providers** and turn on **Allow anonymous sign-ins**. Judge sign-in links need it (see below); without it a judge link says “Guest judge sign-in is turned off”. Nothing else changes: anonymous users can only claim a judge seat.
@@ -50,7 +50,16 @@ Run `supabase/paper_ballots.sql` last, and again whenever you re-run `ballots.sq
 
 Then run `supabase/tabsheet.sql` (after `paper_ballots.sql`, and again whenever you re-run `tournaments.sql`). Until it is run, the Tab sheet and Live tab pages ask for the update.
 
+Run `supabase/errors.sql` (error reports and the tab-room status board) after `coach_plans.sql`. Until it is run, the status board on the director's Issues tab asks for the update.
+
 Run `supabase/alerts.sql` again too after any of the files above: it must come last.
+
+## Tab-room status and error reports
+
+The director's **Issues** tab opens with a tab-room status board: for the round under way (and any later round already started), how many ballots are in, and every room still out, with its judge and whether that judge has saved a draft or not started (and whether they've checked in). Below it are the latest app errors. Signed in, it refreshes every minute and has a Refresh button; in the demo, rooms count as in once they have results and the drafts are sample data.
+
+- `src/errorReporting.ts` records uncaught page errors and failed Supabase requests (the Supabase client uses its `watchedFetch`), with the tournament, the person's role, the page or tab, and a short technical message. It keeps no student names, ballot text or comments: request reports carry only the method, the table or function, the status and the database's error code; page errors keep JavaScript's own message (quoted text, emails and long numbers removed) or, for any other error, only its type (`src/errorLog.ts`). The same message is recorded at most once a minute and at most 30 times per page load. Signed in, each report is saved to `app_errors`; in the demo it stays in memory.
+- `supabase/errors.sql` adds `app_errors`: anyone signed in may add rows as themselves, for a tournament they direct or have asked to join (or none); a trigger stamps the time, cuts the message to 300 characters and quietly drops rows past 30 per person in ten minutes; only the tournament's director can read its rows; nobody can change or delete them. It also adds `ballot_progress(tournament)`, which tells the director each room's ballot state (none, draft, submitted) and when it was last saved, never its content.
 
 ## Text and email alerts
 
@@ -182,4 +191,5 @@ Early-season meets often run three preliminary rounds and stop. In Setup → Det
 - `src/store.tsx` — demo data shared across roles
 - `src/TabSheet.tsx`, `src/tabSheetApi.ts`, `src/tabsheet.css` — live tab sheets: the director's Tab sheet tab, coaches' Live tab, the People tab's tab-room staff switch, and the demo's ballot simulator (`supabase/tabsheet.sql`)
 - `src/Alerts.tsx`, `src/alerts.ts`, `src/alertsApi.ts`, `src/alerts.css` — text and email alert settings, the director's Alerts tab and round buttons, message wording, and the demo preview
+- `src/StatusBoard.tsx`, `src/statusBoard.ts`, `src/status.css`, `src/errorReporting.ts`, `src/errorLog.ts`, `src/errorsApi.ts`, `supabase/errors.sql` — the director's tab-room status board and tournament-day error reports
 - `supabase/alerts.sql`, `supabase/functions/send-notifications/` — the alerts outbox and the Edge Function that delivers it
