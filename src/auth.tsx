@@ -147,7 +147,7 @@ export function AuthPage({ onDemo, initialMode = 'signin', notice }: { onDemo?: 
     <main id="main" className="auth-main">
       <aside className="auth-pitch">
         <span className="eyebrow">Speech tournament software</span>
-        <h2>Every round, every ballot, <em>one place.</em></h2>
+        <h2>Compete today. <em>Improve all season.</em></h2>
         <p>Orator runs the tournament day for students, judges, coaches, and directors, built around the NSAA ballot.</p>
         <ul>
           <li><b>01</b><span>E-ballots with criteria, timing, and ranking built in</span></li>
