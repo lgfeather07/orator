@@ -17,6 +17,7 @@ import { dropFor, type EntryDrop } from './tournament';
 import * as dropsApi from './dropsApi';
 import { applyAccess, withRequest, type AccessRequest } from './accessibility';
 import { listAccessRequests, saveAccessRequest } from './accessApi';
+import { setErrorContext } from './errorReporting';
 
 export type Presence = 'present' | 'absent';
 
@@ -307,6 +308,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [userId, refresh]);
+
+  // Error reports name the tournament; only signed-in reports are sent to the database.
+  useEffect(() => { setErrorContext({ live, tournamentId: live ? tournamentId : null }); }, [live, tournamentId]);
 
   const liveTournament = tournaments.find(item => item.id === tournamentId) ?? null;
   const isDirector = live && liveTournament !== null && liveTournament.directorId === userId;

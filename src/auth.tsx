@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type FormEvent, type Re
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Badge, Button, Icon, Logo, type IconName } from './ui';
 import { BUSINESS } from './legal';
+import { watchedFetch } from './errorReporting';
 
 export type Role = 'student' | 'judge' | 'coach' | 'director';
 export const allRoles: Role[] = ['student', 'judge', 'coach', 'director'];
@@ -12,7 +13,8 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /** Null until a Supabase project is configured in .env.local; the app then runs as a demo without accounts. */
-export const supabase = url && key ? createClient(url, key) : null;
+// Failed requests are recorded for the director's status board (errorReporting.ts).
+export const supabase = url && key ? createClient(url, key, { global: { fetch: watchedFetch } }) : null;
 export const authConfigured = supabase !== null;
 
 type AuthState = {
