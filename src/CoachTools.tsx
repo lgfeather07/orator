@@ -60,7 +60,6 @@ export function StudentRecordExtras({ student }: { student: string }) {
 const ordinal = (n: number) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : Math.min(n % 10, 4) % 4]}`;
 const clock = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
-/** Real ballots judges have submitted for speakers from the signed-in coach's school. */
 /**
  * "Round 2", or "Semifinal" / "Final" for a round after the prelims. Other tournaments' ballots keep their
  * round number: their round count isn't loaded here.
@@ -74,22 +73,24 @@ function useRoundText() {
   };
 }
 
-export function TeamBallots() {
+/** Submitted ballots for the coach's school at the tournament they are working in. Free: no plan needed. */
+export function TeamBallots({ school: forSchool }: { school?: string } = {}) {
   const { profile } = useAuth();
+  const { tournamentId, tournament } = useStore();
   const roundText = useRoundText();
   const [rows, setRows] = useState<TeamBallotRow[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
-  const school = profile?.school ?? '';
+  const school = forSchool ?? profile?.school ?? '';
   useEffect(() => {
-    if (!profile || !school) return;
-    let active = true;
-    loadTeamBallots(school).then(data => active && setRows(data)).catch(caught => active && setError(caught instanceof Error ? caught.message : 'Could not load ballots.'));
+    if (!profile || !school || !tournamentId) return;
+    let active = true; setRows(null); setError('');
+    loadTeamBallots(school, tournamentId).then(data => active && setRows(data)).catch(caught => active && setError(caught instanceof Error ? caught.message : 'Could not load ballots.'));
     return () => { active = false; };
-  }, [profile, school]);
+  }, [profile, school, tournamentId]);
   if (!profile) return null;
   return <section className="panel team-ballots">
-    <div className="panel-head"><div><h2>Submitted ballots · {school || 'your school'}</h2><p>Live from judges. A ballot appears here as soon as it is submitted.</p></div>{rows && <Badge tone={rows.length ? 'success' : 'neutral'}>{rows.length} ballot{rows.length === 1 ? '' : 's'}</Badge>}</div>
+    <div className="panel-head"><div><h2>Submitted ballots · {school || 'your school'}</h2><p>From {tournament.name}, live from judges. A ballot appears here as soon as it is submitted.</p></div>{rows && <Badge tone={rows.length ? 'success' : 'neutral'}>{rows.length} ballot{rows.length === 1 ? '' : 's'}</Badge>}</div>
     {!school ? <p className="team-ballots-empty">Your account has no school yet, so Orator can’t match ballots to your team. Add your school to see them here.</p>
     : error ? <p className="team-ballots-empty" role="alert">We couldn’t load ballots: {error}</p>
     : rows === null ? <p className="team-ballots-empty">Loading ballots…</p>

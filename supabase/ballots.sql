@@ -2,8 +2,8 @@
 -- SQL Editor → New query → paste → Run. Safe to run again.
 --
 -- A judge owns one ballot per tournament, round, and room. They can edit it until they
--- submit it; after that it is locked. Coaches can read submitted ballot entries for
--- speakers from their own school. Private notes are readable by the judge alone.
+-- submit it; after that it is locked. Coaches read submitted ballot entries for speakers
+-- from their own school, tournament by tournament (plan_lock.sql). Private notes are readable by the judge alone.
 
 create schema if not exists private;
 
@@ -151,9 +151,9 @@ drop policy if exists "Judges read own ballots" on public.ballots;
 create policy "Judges read own ballots" on public.ballots for select to authenticated
   using (judge_id = (select auth.uid()));
 
+-- Coaches read their school's ballots by tournament: see plan_lock.sql. The old rule (any tournament, by the
+-- school on the coach's profile) is dropped here so running this file again never brings it back.
 drop policy if exists "Coaches read submitted ballots for their school" on public.ballots;
-create policy "Coaches read submitted ballots for their school" on public.ballots for select to authenticated
-  using (status = 'submitted' and private.ballot_has_school(id, (select private.my_coach_school())));
 
 drop policy if exists "Judges create ballots" on public.ballots;
 create policy "Judges create ballots" on public.ballots for insert to authenticated
@@ -172,9 +172,8 @@ drop policy if exists "Judges read own entries" on public.ballot_entries;
 create policy "Judges read own entries" on public.ballot_entries for select to authenticated
   using (private.owns_ballot(ballot_id, false));
 
+-- Coaches read their school's entries by tournament: see plan_lock.sql.
 drop policy if exists "Coaches read submitted entries for their school" on public.ballot_entries;
-create policy "Coaches read submitted entries for their school" on public.ballot_entries for select to authenticated
-  using (lower(school) = (select private.my_coach_school()) and private.ballot_is_submitted(ballot_id));
 
 drop policy if exists "Judges add entries to draft ballots" on public.ballot_entries;
 create policy "Judges add entries to draft ballots" on public.ballot_entries for insert to authenticated

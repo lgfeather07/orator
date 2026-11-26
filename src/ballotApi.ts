@@ -1,4 +1,5 @@
 import { supabase } from './auth';
+import type { GrowthBallot } from './growthStats';
 
 /** Which ballot this is. A judge has one per tournament, round, and room. */
 export type BallotKey = { tournament: string; round: number; room: string };
@@ -83,12 +84,15 @@ export type TeamBallotRow = {
   judge: string; tournament: string; round: number; eventId: string; submittedAt: string | null;
 };
 
-/** Submitted ballot entries for speakers from the given school, newest first. */
-export async function loadTeamBallots(school: string): Promise<TeamBallotRow[]> {
+/**
+ * Submitted ballot entries for speakers from the given school at one tournament, newest first. Free for the
+ * tournament's approved coaches (the database returns only tournaments the coach is approved for).
+ */
+export async function loadTeamBallots(school: string, tournamentId: string): Promise<TeamBallotRow[]> {
   const db = supabase ?? fail('Accounts are not connected.');
   const { data, error } = await db.from('ballot_entries')
-    .select('ballot_id, speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications, ballots!inner(judge_name, tournament, round, event_id, status, submitted_at)')
-    .eq('ballots.status', 'submitted').ilike('school', school.replace(/[%_\\]/g, '\\$&'));
+    .select('ballot_id, speaker_code, speaker_name, school, present, rank, rating, time_seconds, time_penalty, section_marks, comments, reason, disqualifications, ballots!inner(judge_name, tournament, tournament_id, round, event_id, status, submitted_at)')
+    .eq('ballots.status', 'submitted').eq('ballots.tournament_id', tournamentId).ilike('school', school.replace(/[%_\\]/g, '\\$&'));
   if (error) fail(error.message);
   type Parent = { judge_name: string; tournament: string; round: number; event_id: string; submitted_at: string | null };
   return (data ?? []).map(row => {
@@ -100,6 +104,31 @@ export async function loadTeamBallots(school: string): Promise<TeamBallotRow[]> 
       judge: parent.judge_name, tournament: parent.tournament, round: parent.round, eventId: parent.event_id, submittedAt: parent.submitted_at,
     };
   }).sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''));
+}
+
+/** The database refused the season sweep because the school has no coach plan running. */
+export class PlanRequiredError extends Error {
+  constructor(message = 'Season-long ballots are part of the coach plan.') { super(message); this.name = 'PlanRequiredError'; }
+}
+
+/**
+ * One school's submitted ballot entries from every tournament, with only what growth needs (supabase/plan_lock.sql).
+ * Coach plan only: throws PlanRequiredError when the school has no plan running. Coaches get the whole team;
+ * students get their own released entries.
+ */
+export async function loadSeasonBallots(school: string): Promise<GrowthBallot[]> {
+  const db = supabase ?? fail('Accounts are not connected.');
+  const { data, error } = await db.rpc('season_ballots', { school: school.trim() });
+  if (error) {
+    if (error.hint === 'coach_plan_required') throw new PlanRequiredError(error.message);
+    if (/season_ballots|could not find|schema cache/i.test(error.message)) throw new Error('Season growth needs the latest database update (supabase/all_in_one.sql).');
+    throw new Error(error.message);
+  }
+  type Row = { speaker: string; event_id: string; tournament: string; round: number; rank: number | null; rating: number | null; section_marks: number[] | null; present: boolean | null; submitted_at: string | null };
+  return ((data ?? []) as Row[]).map(row => ({
+    speaker: row.speaker, eventId: row.event_id, tournament: row.tournament, round: row.round, rank: row.rank, rating: row.rating,
+    marks: row.section_marks ?? [], present: row.present, submittedAt: row.submitted_at,
+  }));
 }
 
 /** Status of each ballot the signed-in judge has started, keyed "round|room". */
