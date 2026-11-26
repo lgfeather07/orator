@@ -39,6 +39,12 @@ const check = (ok, rule) => { console.log(`${ok ? 'ok' : 'FAILED'} - ${rule}`); 
   const rows = await page.locator('.results-row:not(.results-head)').allInnerTexts();
   check(rows.some(row => /State qualifier/.test(row)) && rows.some(row => /Alternate/.test(row)), 'district results mark State qualifiers and an alternate');
   await axe('results', '.results-layout');
+  await page.locator('.director-tabs button', { hasText: 'Print' }).click();
+  for (const label of ['Director guide', 'Judge quick-start']) {
+    await page.getByRole('tab', { name: label }).click();
+    check(await page.locator('.print-doc .print-guide').count() === 1, `the Print center has the ${label.toLowerCase()}`);
+  }
+  await axe('print center guides', '.print-center');
   await page.locator('.director-tabs button', { hasText: 'Setup' }).click();
   await page.getByRole('tab', { name: 'Review' }).click();
   for (const step of [/^Publish/, /^Start/]) { const button = page.locator('.run-steps button', { hasText: step }).first(); if (await button.isEnabled()) await button.click(); await page.waitForTimeout(200); }
